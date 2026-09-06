@@ -8,6 +8,7 @@ tools/__pycache__/
 /frontend/node_modules/
 /frontend/dist/
 /.env
+/frontend/.env*
 /deployment/certs/
 /AGENTS.md
 /CLAUDE.md

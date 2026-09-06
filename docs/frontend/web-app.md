@@ -38,6 +38,17 @@
 
 复盘项目、当前项目、最后选中的视图和手动交易记录保存在浏览器本地。
 
+## Clerk 认证
+
+前端使用 `@clerk/vue` 提供登录、注册和账户管理 UI。`frontend/src/main.ts` 在应用入口注册 `clerkPlugin`，Publishable Key 通过 `VITE_CLERK_PUBLISHABLE_KEY` 注入；该变量可以出现在浏览器构建产物中，但 `CLERK_SECRET_KEY` 不得放入前端代码或 `VITE_` 变量。
+
+顶栏在 Clerk 加载完成后显示以下状态：
+
+- 未登录：显示“登录”和“注册”按钮，使用 Clerk 的 modal 预置流程。
+- 已登录：显示 `UserButton`，可打开账户管理菜单并退出登录。
+
+本次改动只接入账户认证控件和会话上下文，不把复盘项目从 `localStorage` 迁移到服务端，也不改变行情和回测 API 的鉴权边界。后续如果需要按用户隔离项目或保护 API，应单独增加服务端会话校验和数据归属设计。
+
 ## 交互与可访问性
 
 - 所有输入使用可见 `label`，错误显示在对应字段附近。

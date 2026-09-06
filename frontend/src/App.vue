@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { ClerkLoaded, ClerkLoading, Show, SignInButton, SignUpButton, UserButton } from '@clerk/vue'
 import {
   ArrowLeft,
   ChartCandlestick,
@@ -613,9 +614,30 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div class="service-state">
-        <span class="status-dot" aria-hidden="true" />
-        <span>{{ appStatusLabel }}</span>
+      <div class="topbar-actions">
+        <div class="service-state">
+          <span class="status-dot" aria-hidden="true" />
+          <span>{{ appStatusLabel }}</span>
+        </div>
+
+        <div class="auth-controls" aria-label="账户操作">
+          <ClerkLoading>
+            <span class="auth-loading" aria-live="polite">账户加载中…</span>
+          </ClerkLoading>
+          <ClerkLoaded>
+            <Show when="signed-out">
+              <SignInButton mode="modal">
+                <button type="button" class="auth-button auth-button-secondary">登录</button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button type="button" class="auth-button auth-button-primary">注册</button>
+              </SignUpButton>
+            </Show>
+            <Show when="signed-in">
+              <UserButton />
+            </Show>
+          </ClerkLoaded>
+        </div>
       </div>
     </header>
 
