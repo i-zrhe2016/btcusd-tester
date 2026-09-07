@@ -24,6 +24,10 @@ services:
         source: ${TLS_CERT_DIR:-./deployment/certs}
         target: /etc/nginx/certs
         read_only: true
+      - type: bind
+        source: ./deployment/nginx/xray-panel.conf
+        target: /etc/nginx/conf.d/xray-panel.conf
+        read_only: true
     networks:
       - public
       - private
