@@ -11,24 +11,36 @@ user -> web : 打开项目
 web -> api : GET /api/market/snapshot
 note right
   项目起点窗口
-  limit=240
+  limit=60
 end note
 api -> parquet : 过滤 from/to 并聚合周期
 parquet --> api : 当前窗口 OHLCV
-api --> web : 最多 240 根 K 线
+api --> web : 最多 60 根 K 线
 web -> web : 渲染当前窗口
 
-alt 点击“加载更多”
+alt 剩余 15 根未播放
+  web -> api : 后台请求下一窗口
+  api -> parquet : 过滤并聚合下一窗口
+  parquet --> api : 下一窗口 OHLCV
+  api --> web : 最多 60 根 K 线
+  web -> web : 按 timestamp 去重、排序并追加
+else 点击“加载更多”
   user -> web : 请求下一窗口
   web -> api : GET snapshot(from=上次窗口末尾)
   api -> parquet : 过滤并聚合下一窗口
   parquet --> api : 下一窗口 OHLCV
-  api --> web : 最多 240 根 K 线
-  web -> web : 追加并去重
+  api --> web : 最多 60 根 K 线
+  web -> web : 按 timestamp 去重、排序并追加
 else 播放到窗口末尾
-  web -> api : 自动请求下一窗口
-  api --> web : 返回下一窗口
-  web -> web : 继续播放
+  alt 请求成功
+    web -> api : 自动请求下一窗口
+    api --> web : 返回下一窗口
+    web -> web : 追加并继续播放
+  else 请求进行中
+    web -> web : 等待请求完成
+  else 请求失败
+    web -> web : 暂停播放并显示手动重试
+  end
 end
 
 @enduml

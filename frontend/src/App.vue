@@ -27,6 +27,7 @@ import {
   loadActiveReplayProjectId,
   loadReplayProjects,
   nextReplayWindowStart,
+  normalizeSpeed,
   projectRangeLabel,
   reconcileReplayProject,
   replayCursorIndexAtOrBefore,
@@ -36,6 +37,7 @@ import {
   replayProgressLabel,
   saveActiveReplayProjectId,
   saveReplayProjects,
+  shouldPrefetchReplay,
   summarizeManualTrades,
   timeframeStepSeconds,
   type ManualTradeAction,
@@ -74,6 +76,7 @@ const replayError = ref('')
 const replayWindowLoading = ref(false)
 const replayWindowError = ref('')
 const replayNextFrom = ref<number | null>(null)
+const resumePlaybackAfterWindowRetry = ref(false)
 const notice = ref('')
 const pageError = ref('')
 const projectError = ref('')
@@ -237,13 +240,18 @@ function updateProjectCursor(projectId: string, cursorIndex: number, cursorTimes
 
 function updateActiveProjectSpeed(speed: number) {
   if (!activeProject.value) return
-  const normalized = Number.isFinite(speed) ? speed : 1
+  const normalized = normalizeSpeed(speed)
   projectDraft.speed = normalized
   updateProject({
     ...activeProject.value,
     speed: normalized,
     updatedAt: new Date().toISOString(),
   })
+}
+
+function changePlaybackSpeed(event: Event) {
+  const input = event.target as HTMLInputElement
+  updateActiveProjectSpeed(input.valueAsNumber)
 }
 
 function clearPlaybackTimer() {
@@ -427,6 +435,7 @@ async function loadReplaySnapshot(
   replayWindowLoading.value = false
   replayWindowError.value = ''
   replayNextFrom.value = null
+  resumePlaybackAfterWindowRetry.value = false
   replaySnapshot.value = null
 
   try {
@@ -472,16 +481,25 @@ async function loadReplaySnapshot(
   }
 }
 
-async function loadMoreReplay() {
+async function loadMoreReplay(options: { retry?: boolean } = {}) {
+  if (options.retry) {
+    replayWindowError.value = ''
+  }
   const project = activeProject.value
   const from = replayNextFrom.value
-  if (!project || from === null || from >= project.to || replayWindowLoading.value) return
+  if (
+    !project ||
+    from === null ||
+    from >= project.to ||
+    replayWindowLoading.value ||
+    replayWindowError.value
+  ) return
 
   const requestId = snapshotRequestId
   const projectId = project.id
   const requestedTo = replayWindowEnd(from, project.to, project.timeframe)
+  const shouldResumeAfterRetry = options.retry && resumePlaybackAfterWindowRetry.value
   replayWindowLoading.value = true
-  replayWindowError.value = ''
 
   try {
     const snapshot = await getMarketSnapshot({
@@ -492,20 +510,48 @@ async function loadMoreReplay() {
       lengths: replayLengths,
     })
     if (requestId !== snapshotRequestId || activeProject.value?.id !== projectId) return
-    replaySnapshot.value = replaySnapshot.value
-      ? mergeMarketSnapshots(replaySnapshot.value, snapshot)
+    const currentSnapshot = replaySnapshot.value
+    const previousLastTimestamp = currentSnapshot?.candles.at(-1)?.timestamp
+    const incomingLastTimestamp = snapshot.candles.at(-1)?.timestamp
+    const mergedSnapshot = currentSnapshot
+      ? mergeMarketSnapshots(currentSnapshot, snapshot)
       : snapshot
-    replayNextFrom.value = nextReplayRequestFrom(snapshot, project, requestedTo)
+    const hasNewCandles = Boolean(
+      snapshot.candles.length &&
+      incomingLastTimestamp !== undefined &&
+      (previousLastTimestamp === undefined || incomingLastTimestamp > previousLastTimestamp) &&
+      mergedSnapshot.candles.length > (currentSnapshot?.candles.length ?? 0),
+    )
+    const nextFrom = nextReplayRequestFrom(mergedSnapshot, project, requestedTo)
+    if (!hasNewCandles || (nextFrom !== null && nextFrom <= from)) {
+      replayWindowError.value = '更多行情没有返回新的 K 线，请重试。'
+      resumePlaybackAfterWindowRetry.value = Boolean(shouldResumeAfterRetry || playbackPlaying.value)
+      if (playbackPlaying.value) pausePlayback()
+      return
+    }
+    replaySnapshot.value = mergedSnapshot
+    replayNextFrom.value = nextFrom
+    replayWindowError.value = ''
+    resumePlaybackAfterWindowRetry.value = false
+    if (shouldResumeAfterRetry) playbackPlaying.value = true
     setNotice(`按需加载了 ${snapshot.candles.length} 根 ${project.timeframe} K 线。`)
   } catch (caught) {
     if (requestId === snapshotRequestId && activeProject.value?.id === projectId) {
       replayWindowError.value = caught instanceof Error ? caught.message : '更多行情加载失败。'
+      resumePlaybackAfterWindowRetry.value = Boolean(
+        resumePlaybackAfterWindowRetry.value || playbackPlaying.value,
+      )
+      if (playbackPlaying.value) pausePlayback()
     }
   } finally {
     if (requestId === snapshotRequestId && activeProject.value?.id === projectId) {
       replayWindowLoading.value = false
     }
   }
+}
+
+function retryLoadMoreReplay() {
+  void loadMoreReplay({ retry: true })
 }
 
 async function initialize() {
@@ -605,9 +651,21 @@ watch([playbackPlaying, () => activeProject.value?.speed, () => activeProjectId.
       pausePlayback()
       return
     }
+    if (
+      shouldPrefetchReplay(current.cursorIndex, total, replayHasMore.value) &&
+      !replayWindowLoading.value &&
+      !replayWindowError.value
+    ) {
+      void loadMoreReplay()
+    }
     const nextIndex = current.cursorIndex + 1
     if (nextIndex >= total) {
       if (replayHasMore.value) {
+        if (replayWindowLoading.value) return
+        if (replayWindowError.value) {
+          pausePlayback()
+          return
+        }
         void loadMoreReplay()
         return
       }
@@ -878,6 +936,23 @@ onBeforeUnmount(() => {
               </select>
             </label>
 
+            <label class="replay-speed-control">
+              <span>速度</span>
+              <input
+                v-if="activeProject"
+                type="range"
+                aria-label="播放速度"
+                data-testid="replay-speed"
+                min="0.25"
+                max="8"
+                step="0.25"
+                :value="activeProject.speed"
+                :disabled="replayLoading"
+                @input="changePlaybackSpeed"
+              />
+              <output>{{ speedToText(activeProject?.speed ?? 1) }}</output>
+            </label>
+
             <button class="primary-button console-play" type="button" :disabled="!totalReplayCandles" @click="togglePlayback">
               <Pause v-if="playbackPlaying" :size="18" aria-hidden="true" />
               <Play v-else :size="18" aria-hidden="true" />
@@ -899,9 +974,20 @@ onBeforeUnmount(() => {
               <span>{{ currentProgressLabel }}</span>
               <span>{{ currentTimeLabel }}</span>
               <span>{{ positionLabel }}</span>
-              <span v-if="replayWindowLoading">行情加载中</span>
-              <span v-else-if="replayWindowError" :title="replayWindowError">行情加载失败</span>
             </div>
+          </div>
+          <div v-if="replayHasMore" class="replay-load-status" aria-live="polite">
+            <span v-if="replayWindowLoading">正在加载下一批 K 线…</span>
+            <span v-else-if="replayWindowError" :title="replayWindowError">{{ replayWindowError }}</span>
+            <button
+              class="text-button"
+              type="button"
+              data-testid="replay-load-more"
+              :disabled="replayWindowLoading"
+              @click="replayWindowError ? retryLoadMoreReplay() : loadMoreReplay()"
+            >
+              {{ replayWindowLoading ? '加载中…' : replayWindowError ? '重试加载' : '加载更多' }}
+            </button>
           </div>
         </div>
       </section>

@@ -1099,8 +1099,8 @@ select {
 
 .console-strip {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto minmax(156px, auto) minmax(240px, auto);
-  grid-template-areas: "summary timeframe play trades stats";
+  grid-template-columns: minmax(180px, 1fr) auto auto auto minmax(156px, auto) minmax(240px, auto);
+  grid-template-areas: "summary timeframe speed play trades stats";
   gap: 10px;
   align-items: center;
   min-height: 44px;
@@ -1152,6 +1152,28 @@ select {
   font: 700 12px/1 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
+.replay-speed-control {
+  grid-area: speed;
+  display: grid;
+  grid-template-columns: auto minmax(76px, 112px) auto;
+  gap: 6px;
+  align-items: center;
+  min-height: 44px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.replay-speed-control input {
+  width: 100%;
+  accent-color: var(--accent-strong);
+}
+
+.replay-speed-control output {
+  color: var(--text);
+  font: 700 11px/1 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
 .console-play {
   min-height: 40px;
   white-space: nowrap;
@@ -1196,6 +1218,32 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.replay-load-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 28px;
+  padding-top: 4px;
+  color: var(--text-muted);
+  font: 700 11px/1.2 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.replay-load-status span {
+  max-width: min(60vw, 520px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-load-status .text-button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
 }
 
 .console-body {
@@ -1520,8 +1568,8 @@ select {
 
 @media (max-width: 1320px) {
   .console-strip {
-    grid-template-columns: minmax(160px, 1fr) auto auto minmax(148px, auto) minmax(96px, auto);
-    grid-template-areas: "summary timeframe play trades stats";
+    grid-template-columns: minmax(140px, 1fr) auto auto auto minmax(148px, auto) minmax(96px, auto);
+    grid-template-areas: "summary timeframe speed play trades stats";
   }
 
   .console-quick-stats span:not(:first-child) {
@@ -1567,8 +1615,8 @@ select {
   }
 
   .console-strip {
-    grid-template-columns: minmax(0, 1fr) auto auto minmax(148px, auto) minmax(96px, auto);
-    grid-template-areas: "summary timeframe play trades stats";
+    grid-template-columns: minmax(0, 1fr) auto auto auto minmax(148px, auto) minmax(96px, auto);
+    grid-template-areas: "summary timeframe speed play trades stats";
   }
 
   .timeframe-control {
@@ -1689,7 +1737,9 @@ select {
 
   .console-strip {
     grid-template-columns: minmax(0, 1fr) auto minmax(104px, auto) auto;
-    grid-template-areas: "summary timeframe trades play";
+    grid-template-areas:
+      "summary timeframe trades play"
+      "speed speed speed speed";
     gap: 8px;
   }
 
@@ -1714,6 +1764,10 @@ select {
     min-width: 72px;
     padding-right: 8px;
     padding-left: 8px;
+  }
+
+  .replay-speed-control {
+    justify-self: end;
   }
 
   .console-trade-actions {
