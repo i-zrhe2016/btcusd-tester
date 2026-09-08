@@ -1,9 +1,19 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import {
-  CandlestickSeries,
+  ChartController,
+  DrawingController,
+  DrawingEngine,
+  MeasurementController,
+  type Bar,
+  type ChartTheme,
+  type Drawing as CandleKitDrawing,
+  type DrawingPoint,
+  type DrawingToolId,
+  type MeasurementResult,
+} from '@getcandlekit/charts'
+import {
   ColorType,
-  createChart,
   createSeriesMarkers,
   type IChartApi,
   type ISeriesMarkersPluginApi,
@@ -12,8 +22,34 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts'
-import { RotateCcw, Spline, Trash2, X, ZoomIn, ZoomOut } from '@lucide/vue'
-import { createTrendLine, type ManualTrade, type TrendLine, type TrendLinePoint } from '../replay'
+import {
+  ArrowUpRight,
+  Circle,
+  GitBranch,
+  Lock,
+  Minus,
+  MoveUpRight,
+  MousePointer2,
+  Ruler,
+  RotateCcw,
+  Square,
+  Spline,
+  Trash2,
+  Triangle,
+  Unlock,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from '@lucide/vue'
+import {
+  DEFAULT_REPLAY_DRAWING_STYLE,
+  REPLAY_DRAWING_TOOL_IDS,
+  replayDrawingPointsNeeded,
+  type ManualTrade,
+  type ReplayDrawing,
+  type ReplayDrawingStyle,
+  type ReplayDrawingTool,
+} from '../replay'
 import type { MarketSnapshot } from '../types'
 import { formatUtc } from '../format'
 
@@ -25,53 +61,98 @@ const props = withDefaults(defineProps<{
   projectName?: string
   showHeader?: boolean
   manualTrades?: ManualTrade[]
-  trendLines?: TrendLine[]
+  drawings?: ReplayDrawing[]
 }>(), {
   playbackIndex: undefined,
   playing: false,
   projectName: '',
   showHeader: true,
   manualTrades: () => [],
-  trendLines: () => [],
+  drawings: () => [],
 })
 
 const emit = defineEmits<{
-  (event: 'trendline-created', line: TrendLine): void
-  (event: 'trendlines-cleared'): void
+  (event: 'drawings-changed', drawings: ReplayDrawing[]): void
 }>()
 
+interface DrawingToolOption {
+  id: ReplayDrawingTool
+  label: string
+  icon: Component
+}
+
+interface DrawingToolGroup {
+  label: string
+  tools: DrawingToolOption[]
+}
+
+const drawingToolGroups: DrawingToolGroup[] = [
+  {
+    label: '线条',
+    tools: [
+      { id: 'TrendLine', label: '趋势线', icon: Spline },
+      { id: 'Ray', label: '射线', icon: MoveUpRight },
+      { id: 'ExtendedLine', label: '延长线', icon: Minus },
+      { id: 'HorizontalLine', label: '水平线', icon: Minus },
+      { id: 'HorizontalRay', label: '水平射线', icon: ArrowUpRight },
+      { id: 'VerticalLine', label: '垂直线', icon: Minus },
+      { id: 'CrossLine', label: '十字线', icon: MousePointer2 },
+      { id: 'Arrow', label: '箭头', icon: ArrowUpRight },
+    ],
+  },
+  {
+    label: '形状',
+    tools: [
+      { id: 'Rectangle', label: '矩形', icon: Square },
+      { id: 'Circle', label: '椭圆', icon: Circle },
+      { id: 'Triangle', label: '三角形', icon: Triangle },
+      { id: 'ParallelChannel', label: '平行通道', icon: GitBranch },
+    ],
+  },
+  {
+    label: '测绘',
+    tools: [
+      { id: 'PriceRange', label: '价格区间', icon: Ruler },
+      { id: 'DateRange', label: '日期区间', icon: Ruler },
+      { id: 'FibRetracement', label: 'Fib 回撤', icon: MoveUpRight },
+      { id: 'FibExtension', label: 'Fib 扩展', icon: MoveUpRight },
+    ],
+  },
+]
+
 const priceContainer = ref<HTMLElement | null>(null)
+let chartController: ChartController | null = null
 let priceChart: IChartApi | null = null
 let candleSeries: ISeriesApi<'Candlestick'> | null = null
 let tradeMarkers: ISeriesMarkersPluginApi<Time> | null = null
+let drawingEngine: DrawingEngine | null = null
+let drawingController: DrawingController | null = null
+let measurementController: MeasurementController | null = null
+let drawingChangeUnsubscribe: (() => void) | null = null
 let resizeObserver: ResizeObserver | null = null
 let visibleRangeHandler: (() => void) | null = null
 let feedbackTimer: number | null = null
-let activePointerId: number | null = null
-let pointerMoved = false
-let pointerStartedWithAnchor = false
-let pointerStartClientX = 0
-let pointerStartClientY = 0
+let lastDrawingSnapshot = ''
 
-const chartDimensions = ref({ width: 0, height: 0 })
-const renderRevision = ref(0)
-const drawingMode = ref(false)
-const drawingAnchor = ref<TrendLinePoint | null>(null)
-const previewPoint = ref<TrendLinePoint | null>(null)
-const lineFeedback = ref('')
+const measurementResult = ref<MeasurementResult | null>(null)
+const toolbarRevision = ref(0)
+const toolFeedback = ref('')
 
-const chartTheme = {
+const chartTheme: ChartTheme = {
+  mode: 'dark',
   background: '#000000',
   text: '#dbe4ee',
-  border: '#334155',
+  grid: 'rgba(0, 0, 0, 0)',
+  axis: '#334155',
   crosshair: '#cbd5e1',
-  candleUp: 'transparent',
-  candleUpBorder: '#ffffff',
-  candleDown: '#ffffff',
-  candleDownBorder: '#ffffff',
-  markerBuy: '#ffffff',
-  markerSell: '#dbe4ee',
-  trendline: '#facc15',
+  crosshairLabelBg: '#111827',
+  up: '#ffffff',
+  down: '#ffffff',
+  line: '#facc15',
+  volumeUp: '#ffffff',
+  volumeDown: '#dbe4ee',
+  fontFamily: '"Fira Code", "IBM Plex Mono", "SFMono-Regular", Consolas, monospace',
+  fontSize: 12,
 }
 
 const totalCandles = computed(() => props.snapshot?.candles.length ?? 0)
@@ -93,51 +174,50 @@ const visibleTradeMarkers = computed<SeriesMarker<Time>[]>(() =>
       time: trade.timestamp as UTCTimestamp,
       position: trade.side === 'buy' ? 'belowBar' : 'aboveBar',
       shape: trade.side === 'buy' ? 'arrowUp' : 'arrowDown',
-      color: trade.side === 'buy' ? chartTheme.markerBuy : chartTheme.markerSell,
+      color: trade.side === 'buy' ? '#ffffff' : '#dbe4ee',
       text: trade.side === 'buy' ? 'BUY' : 'SELL',
       size: 1.25,
     })),
 )
 
-function toScreenPoint(point: TrendLinePoint) {
-  if (!priceChart || !candleSeries) return null
-  const x = priceChart.timeScale().timeToCoordinate(point.timestamp as UTCTimestamp)
-  const y = candleSeries.priceToCoordinate(point.price)
-  if (x === null || y === null) return null
-  return { x: Number(x), y: Number(y) }
-}
-
-const renderedTrendLines = computed(() => {
-  renderRevision.value
-  return props.trendLines
-    .map((line) => {
-      const start = toScreenPoint(line.start)
-      const end = toScreenPoint(line.end)
-      return start && end ? { ...line, start, end } : null
-    })
-    .filter((line): line is NonNullable<typeof line> => Boolean(line))
+const activeTool = computed<ReplayDrawingTool | null>(() => {
+  toolbarRevision.value
+  const tool = drawingEngine?.getActiveTool()
+  return isReplayDrawingTool(tool) ? tool : null
 })
 
-const selectedAnchor = computed(() => {
-  renderRevision.value
-  return drawingAnchor.value ? toScreenPoint(drawingAnchor.value) : null
-})
-
-const previewLine = computed(() => {
-  renderRevision.value
-  if (!drawingAnchor.value || !previewPoint.value) return null
-  const start = toScreenPoint(drawingAnchor.value)
-  const end = toScreenPoint(previewPoint.value)
-  return start && end ? { start, end } : null
+const activeToolLabel = computed(() => {
+  const tool = activeTool.value
+  if (!tool) return ''
+  return drawingToolGroups.flatMap((group) => group.tools).find((item) => item.id === tool)?.label ?? tool
 })
 
 const drawingHint = computed(() => {
-  if (lineFeedback.value) return lineFeedback.value
-  if (drawingAnchor.value) return '已选择第一个锚点，点击或拖到另一根 K 线完成趋势线。'
-  return '点击两根 K 线设置锚点；按 Esc 取消。'
+  const tool = activeTool.value
+  return tool
+    ? activeToolLabel.value + '已启用；点击图表放置 ' + replayDrawingPointsNeeded(tool) + ' 个锚点。按 Esc 取消。'
+    : ''
 })
 
-const chartViewBox = computed(() => `0 0 ${chartDimensions.value.width} ${chartDimensions.value.height}`)
+const isLocked = computed(() => {
+  toolbarRevision.value
+  return drawingEngine?.isLocked() ?? false
+})
+
+const hasSelection = computed(() => {
+  toolbarRevision.value
+  return Boolean(drawingEngine?.getSelectedId())
+})
+
+const measurementSummary = computed(() => {
+  const result = measurementResult.value
+  if (!result) return ''
+  const direction = result.direction === 'up' ? '上涨' : result.direction === 'down' ? '下跌' : '持平'
+  const sign = result.priceDiff > 0 ? '+' : ''
+  return '测量：' + direction + ' ' + sign + result.priceDiff.toFixed(2) +
+    ' (' + sign + result.pricePct.toFixed(2) + '%) · ' + result.barCount +
+    ' 根 K 线 · ' + formatMeasurementDuration(result.timeDiffSeconds)
+})
 
 const summary = computed(() => {
   const candles = visibleCandles.value
@@ -145,10 +225,29 @@ const summary = computed(() => {
   const first = candles[0]
   const last = currentCandle.value ?? candles[candles.length - 1]
   const change = ((last.close / first.open) - 1) * 100
-  const progress = totalCandles.value ? `${candles.length}/${totalCandles.value}` : `${candles.length}`
-  const trendlineSummary = props.trendLines.length ? `，已绘制 ${props.trendLines.length} 条趋势线` : ''
-  return `${props.projectName ? `${props.projectName} · ` : ''}${progress} 根 ${props.snapshot?.timeframe} K 线，从 ${formatUtc(first.timestamp)} 至 ${formatUtc(last.timestamp)} UTC，区间涨跌 ${change >= 0 ? '上涨' : '下跌'} ${Math.abs(change).toFixed(2)}%${trendlineSummary}。`
+  const progress = totalCandles.value
+    ? String(candles.length) + '/' + String(totalCandles.value)
+    : String(candles.length)
+  const drawingSummary = props.drawings.length ? '，已绘制 ' + props.drawings.length + ' 个图形' : ''
+  return (props.projectName ? props.projectName + ' · ' : '') + progress + ' 根 ' + props.snapshot?.timeframe +
+    ' K 线，从 ' + formatUtc(first.timestamp) + ' 至 ' + formatUtc(last.timestamp) +
+    ' UTC，区间涨跌 ' + (change >= 0 ? '上涨' : '下跌') + ' ' + Math.abs(change).toFixed(2) +
+    '%' + drawingSummary + '。'
 })
+
+function isReplayDrawingTool(value: unknown): value is ReplayDrawingTool {
+  return typeof value === 'string' && (REPLAY_DRAWING_TOOL_IDS as readonly string[]).includes(value)
+}
+
+function formatMeasurementDuration(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds))
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  if (days) return days + '天' + (hours ? ' ' + hours + '小时' : '')
+  if (hours) return hours + '小时' + (minutes ? ' ' + minutes + '分' : '')
+  return minutes + '分'
+}
 
 function containerSize() {
   const container = priceContainer.value
@@ -158,33 +257,31 @@ function containerSize() {
   }
 }
 
-function bumpRender() {
-  renderRevision.value += 1
-}
-
 function chartOptions() {
   const size = containerSize()
   return {
+    autoSize: false,
     width: size.width,
     height: size.height,
     layout: {
       background: { type: ColorType.Solid, color: chartTheme.background },
       textColor: chartTheme.text,
-      fontFamily: '"Fira Code", "IBM Plex Mono", "SFMono-Regular", Consolas, monospace',
+      fontFamily: chartTheme.fontFamily,
+      fontSize: chartTheme.fontSize,
     },
     grid: {
       vertLines: { color: 'rgba(0, 0, 0, 0)', visible: false },
       horzLines: { color: 'rgba(0, 0, 0, 0)', visible: false },
     },
     rightPriceScale: {
-      borderColor: chartTheme.border,
+      borderColor: chartTheme.axis,
       scaleMargins: {
         top: 0.08,
         bottom: 0.1,
       },
     },
     timeScale: {
-      borderColor: chartTheme.border,
+      borderColor: chartTheme.axis,
       timeVisible: true,
       secondsVisible: false,
       rightOffset: 8,
@@ -197,6 +294,103 @@ function chartOptions() {
   }
 }
 
+function toCandleKitBar(candle: { timestamp: number; open: number; high: number; low: number; close: number; volume: number }): Bar {
+  return {
+    ts: candle.timestamp * 1000,
+    open: candle.open,
+    high: candle.high,
+    low: candle.low,
+    close: candle.close,
+    volume: candle.volume,
+  }
+}
+
+function toCandleKitDrawing(drawing: ReplayDrawing): CandleKitDrawing {
+  return {
+    id: drawing.id,
+    tool: drawing.tool as DrawingToolId,
+    points: drawing.points.map((point): DrawingPoint => ({
+      time: point.timestamp,
+      price: point.price,
+    })),
+    style: { ...drawing.style },
+  }
+}
+
+function fromCandleKitDrawing(drawing: CandleKitDrawing): ReplayDrawing | null {
+  const tool = drawing.tool
+  if (!isReplayDrawingTool(tool)) return null
+  const pointsNeeded = replayDrawingPointsNeeded(tool)
+  if (!Array.isArray(drawing.points) || drawing.points.length < pointsNeeded) return null
+  const points = drawing.points.slice(0, pointsNeeded).map((point) => ({
+    timestamp: Math.floor(point.time),
+    price: point.price,
+  }))
+  if (points.some((point) => !Number.isFinite(point.timestamp) || !Number.isFinite(point.price) || point.price <= 0)) {
+    return null
+  }
+  const sourceStyle = drawing.style as Partial<ReplayDrawingStyle>
+  const width = typeof sourceStyle.width === 'number' && Number.isFinite(sourceStyle.width)
+    ? Math.min(Math.max(sourceStyle.width, 1), 8)
+    : DEFAULT_REPLAY_DRAWING_STYLE.width
+  return {
+    id: drawing.id,
+    tool,
+    points,
+    style: {
+      color: typeof sourceStyle.color === 'string' && sourceStyle.color.trim()
+        ? sourceStyle.color
+        : DEFAULT_REPLAY_DRAWING_STYLE.color,
+      width,
+      dashed: typeof sourceStyle.dashed === 'boolean' ? sourceStyle.dashed : DEFAULT_REPLAY_DRAWING_STYLE.dashed,
+      fill: sourceStyle.fill === null || typeof sourceStyle.fill === 'string'
+        ? sourceStyle.fill
+        : DEFAULT_REPLAY_DRAWING_STYLE.fill,
+    },
+  }
+}
+
+function serializeReplayDrawings(drawings: readonly ReplayDrawing[]): string {
+  return JSON.stringify(drawings.map((drawing) => ({
+    id: drawing.id,
+    tool: drawing.tool,
+    points: drawing.points.map((point) => ({
+      timestamp: point.timestamp,
+      price: point.price,
+    })),
+    style: { ...drawing.style },
+  })))
+}
+
+function engineDrawings(): ReplayDrawing[] {
+  return drawingEngine
+    ? drawingEngine.getDrawings().map(fromCandleKitDrawing).filter((drawing): drawing is ReplayDrawing => Boolean(drawing))
+    : []
+}
+
+function bumpToolbar() {
+  toolbarRevision.value += 1
+}
+
+function syncDrawingChange() {
+  bumpToolbar()
+  const drawings = engineDrawings()
+  const snapshot = serializeReplayDrawings(drawings)
+  if (snapshot === lastDrawingSnapshot) return
+  lastDrawingSnapshot = snapshot
+  emit('drawings-changed', drawings)
+}
+
+function syncDrawingsFromProps() {
+  if (!drawingEngine) return
+  const snapshot = serializeReplayDrawings(props.drawings)
+  if (snapshot === lastDrawingSnapshot) return
+  lastDrawingSnapshot = snapshot
+  drawingEngine.import(JSON.stringify(props.drawings.map(toCandleKitDrawing)))
+  lastDrawingSnapshot = serializeReplayDrawings(engineDrawings())
+  bumpToolbar()
+}
+
 function disposeCharts() {
   resizeObserver?.disconnect()
   resizeObserver = null
@@ -204,12 +398,18 @@ function disposeCharts() {
     priceChart.timeScale().unsubscribeVisibleLogicalRangeChange(visibleRangeHandler)
   }
   visibleRangeHandler = null
-  priceChart?.remove()
+  drawingChangeUnsubscribe?.()
+  drawingChangeUnsubscribe = null
+  measurementController = null
+  drawingController = null
+  drawingEngine = null
+  chartController?.destroy()
+  chartController = null
   priceChart = null
   candleSeries = null
   tradeMarkers = null
-  chartDimensions.value = { width: 0, height: 0 }
-  cancelPendingLine()
+  measurementResult.value = null
+  lastDrawingSnapshot = ''
 }
 
 function playbackWindowBars() {
@@ -232,48 +432,76 @@ function setPlaybackRange() {
 }
 
 function setSeriesData() {
-  if (!priceChart || !candleSeries) return
-
-  candleSeries.setData(visibleCandles.value.map((candle) => ({
-    time: candle.timestamp as UTCTimestamp,
-    open: candle.open,
-    high: candle.high,
-    low: candle.low,
-    close: candle.close,
-  })))
-
+  if (!chartController || !candleSeries) return
+  chartController.setData(visibleCandles.value.map(toCandleKitBar))
   tradeMarkers?.setMarkers(visibleTradeMarkers.value)
   setPlaybackRange()
-  bumpRender()
 }
 
 function resizeChart() {
   if (!priceChart) return
   const size = containerSize()
-  chartDimensions.value = size
   priceChart.applyOptions(size)
   setPlaybackRange()
-  bumpRender()
 }
 
 function buildCharts() {
   if (!priceContainer.value || !props.snapshot?.candles.length) return
   disposeCharts()
-  priceChart = createChart(priceContainer.value, chartOptions())
-  candleSeries = priceChart.addSeries(CandlestickSeries, {
-    upColor: chartTheme.candleUp,
-    downColor: chartTheme.candleDown,
-    borderUpColor: chartTheme.candleUpBorder,
-    borderDownColor: chartTheme.candleDownBorder,
-    wickUpColor: chartTheme.candleUpBorder,
-    wickDownColor: chartTheme.candleDownBorder,
+
+  const controller = new ChartController(priceContainer.value, {
+    theme: chartTheme,
+    seriesType: 'candlestick',
+    showVolume: false,
+    autoFit: false,
+    chartOptions: chartOptions(),
+  })
+  chartController = controller
+  priceChart = controller.getChart()
+  candleSeries = controller.getSeries() as ISeriesApi<'Candlestick'>
+  candleSeries.applyOptions({
+    upColor: 'transparent',
+    downColor: '#ffffff',
+    borderUpColor: '#ffffff',
+    borderDownColor: '#ffffff',
+    wickUpColor: '#ffffff',
+    wickDownColor: '#ffffff',
     priceLineVisible: false,
   })
   tradeMarkers = createSeriesMarkers(candleSeries, [], { autoScale: true, zOrder: 'top' })
-  visibleRangeHandler = () => bumpRender()
+
+  const engine = new DrawingEngine()
+  engine.setDefaultStyle({ ...DEFAULT_REPLAY_DRAWING_STYLE })
+  engine.import(JSON.stringify(props.drawings.map(toCandleKitDrawing)))
+  drawingEngine = engine
+  drawingController = new DrawingController({
+    engine,
+    storageKey: null,
+    hitTolerance: 6,
+  })
+  measurementController = new MeasurementController({
+    modifier: 'shift',
+    colors: {
+      up: '#facc15',
+      down: '#fb7185',
+      flat: '#94a3b8',
+      fillUp: 'rgba(250, 204, 21, 0.08)',
+      fillDown: 'rgba(251, 113, 133, 0.08)',
+      fillFlat: 'rgba(148, 163, 184, 0.06)',
+    },
+    onMeasure: (result) => {
+      measurementResult.value = result
+      bumpToolbar()
+    },
+  })
+  controller.use(drawingController)
+  controller.use(measurementController)
+  lastDrawingSnapshot = serializeReplayDrawings(props.drawings)
+  drawingChangeUnsubscribe = engine.onChange(syncDrawingChange)
+
+  visibleRangeHandler = () => bumpToolbar()
   priceChart.timeScale().subscribeVisibleLogicalRangeChange(visibleRangeHandler)
 
-  resizeObserver?.disconnect()
   if (typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(() => {
       resizeChart()
@@ -292,13 +520,13 @@ function zoom(factor: number) {
   const center = (range.from + range.to) / 2
   const half = ((range.to - range.from) / 2) * factor
   scale.setVisibleLogicalRange({ from: center - half, to: center + half })
-  bumpRender()
+  bumpToolbar()
 }
 
 function resetView() {
   resizeChart()
   setPlaybackRange()
-  bumpRender()
+  bumpToolbar()
 }
 
 function clearFeedbackTimer() {
@@ -308,164 +536,64 @@ function clearFeedbackTimer() {
   }
 }
 
-function setLineFeedback(message: string) {
+function setToolFeedback(message: string) {
   clearFeedbackTimer()
-  lineFeedback.value = message
+  toolFeedback.value = message
   if (!message) return
   feedbackTimer = window.setTimeout(() => {
-    lineFeedback.value = ''
+    toolFeedback.value = ''
     feedbackTimer = null
-  }, 2200)
+  }, 2400)
 }
 
-function cancelPendingLine() {
-  drawingAnchor.value = null
-  previewPoint.value = null
-  activePointerId = null
-  pointerMoved = false
-  pointerStartedWithAnchor = false
-  pointerStartClientX = 0
-  pointerStartClientY = 0
-}
-
-function toggleDrawingMode() {
-  drawingMode.value = !drawingMode.value
-  cancelPendingLine()
-  setLineFeedback('')
-}
-
-function cancelDrawing() {
-  if (drawingAnchor.value) {
-    cancelPendingLine()
-    setLineFeedback('待完成的趋势线已取消。')
+function selectTool(tool: ReplayDrawingTool) {
+  if (!drawingEngine || isLocked.value) return
+  if (activeTool.value === tool) {
+    stopDrawingTool()
     return
   }
-  drawingMode.value = false
-  setLineFeedback('')
+  drawingEngine.startTool(tool)
+  setToolFeedback(activeToolLabel.value + '已启用，点击图表放置锚点。')
 }
 
-function completeTrendLine(end: TrendLinePoint) {
-  const start = drawingAnchor.value
-  if (!start) return
-  if (start.timestamp === end.timestamp) {
-    setLineFeedback('请选择不同的 K 线作为第二个锚点。')
-    previewPoint.value = null
-    return
-  }
-  const line = createTrendLine({ start, end })
-  if (!line) return
-  emit('trendline-created', line)
-  cancelPendingLine()
-  setLineFeedback('趋势线已添加，可继续绘制。')
+function stopDrawingTool() {
+  drawingEngine?.cancelDraft()
+  drawingEngine?.stopTool()
+  drawingEngine?.select(null)
+  setToolFeedback('已返回选择工具。')
 }
 
-function clearTrendLines() {
-  if (!props.trendLines.length) return
-  if (typeof window !== 'undefined' && !window.confirm('确定清除当前项目的全部趋势线吗？')) return
-  emit('trendlines-cleared')
-  drawingMode.value = false
-  cancelPendingLine()
-  setLineFeedback('趋势线已清除。')
+function toggleLock() {
+  if (!drawingEngine) return
+  drawingEngine.setLocked(!drawingEngine.isLocked())
+  setToolFeedback(drawingEngine.isLocked() ? '绘图已锁定。' : '绘图已解锁。')
 }
 
-function pointFromPointer(event: PointerEvent): TrendLinePoint | null {
-  if (!priceChart || !candleSeries || !priceContainer.value) return null
-  const rect = priceContainer.value.getBoundingClientRect()
-  const x = event.clientX - rect.left
-  const y = event.clientY - rect.top
-  if (x < 0 || x > rect.width || y < 0 || y > rect.height) return null
-
-  const timeScale = priceChart.timeScale()
-  if (x > timeScale.width()) return null
-  const timeScaleHeight = timeScale.height()
-  if (y > rect.height - timeScaleHeight) return null
-
-  const logical = timeScale.coordinateToLogical(x)
-  if (logical === null) return null
-  const index = Math.round(Number(logical))
-  const candle = visibleCandles.value[index]
-  if (!candle) return null
-
-  const price = candleSeries.coordinateToPrice(y)
-  if (price === null || !Number.isFinite(Number(price))) return null
-  return {
-    timestamp: candle.timestamp,
-    price: Number(price),
-  }
+function deleteSelected() {
+  if (!drawingEngine || isLocked.value || !drawingEngine.getSelectedId()) return
+  drawingEngine.removeSelected()
+  setToolFeedback('已删除选中的图形。')
 }
 
-function handleDrawingPointerDown(event: PointerEvent) {
-  if (!drawingMode.value || event.button !== 0) return
-  const point = pointFromPointer(event)
-  if (!point) return
-  event.preventDefault()
-  event.stopPropagation()
-  activePointerId = event.pointerId
-  pointerMoved = false
-  pointerStartedWithAnchor = Boolean(drawingAnchor.value)
-  pointerStartClientX = event.clientX
-  pointerStartClientY = event.clientY
-  if (!drawingAnchor.value) {
-    drawingAnchor.value = point
-  } else {
-    previewPoint.value = point
-  }
-  const target = event.currentTarget as SVGElement | null
-  target?.setPointerCapture?.(event.pointerId)
+function clearDrawings() {
+  if (!drawingEngine || !props.drawings.length || isLocked.value) return
+  if (typeof window !== 'undefined' && !window.confirm('确定清除当前项目的全部绘图吗？')) return
+  drawingEngine.removeAll()
+  drawingEngine.stopTool()
+  setToolFeedback('当前项目的绘图已清除。')
 }
 
-function handleDrawingPointerMove(event: PointerEvent) {
-  if (!drawingMode.value) return
-  if (activePointerId !== null && event.pointerId !== activePointerId) return
-  if (
-    activePointerId !== null &&
-    (event.clientX - pointerStartClientX) ** 2 + (event.clientY - pointerStartClientY) ** 2 > 36
-  ) {
-    pointerMoved = true
-  }
-  if (!drawingAnchor.value) return
-  previewPoint.value = pointFromPointer(event)
-}
-
-function releasePointer(event: PointerEvent) {
-  const target = event.currentTarget as SVGElement | null
-  if (target?.hasPointerCapture?.(event.pointerId)) {
-    target.releasePointerCapture(event.pointerId)
-  }
-  activePointerId = null
-  pointerMoved = false
-  pointerStartedWithAnchor = false
-}
-
-function handleDrawingPointerUp(event: PointerEvent) {
-  if (!drawingMode.value || event.button !== 0) return
-  if (activePointerId !== null && event.pointerId !== activePointerId) return
-  const point = pointFromPointer(event)
-  const shouldComplete = Boolean(drawingAnchor.value && (pointerStartedWithAnchor || pointerMoved))
-  if (shouldComplete && point) {
-    completeTrendLine(point)
-  } else if (drawingAnchor.value) {
-    previewPoint.value = null
-  }
-  releasePointer(event)
-}
-
-function handleDrawingPointerCancel(event: PointerEvent) {
-  if (activePointerId !== null && event.pointerId !== activePointerId) return
-  previewPoint.value = null
-  releasePointer(event)
-}
-
-function handleDrawingPointerLeave(event: PointerEvent) {
-  if (activePointerId === null || event.pointerId !== activePointerId) {
-    previewPoint.value = null
-  }
+function clearMeasurement() {
+  measurementController?.clear()
+  setToolFeedback('测量已清除。')
 }
 
 function handleKeyDown(event: KeyboardEvent) {
-  if (event.key !== 'Escape' || !drawingMode.value) return
-  event.preventDefault()
-  cancelDrawing()
+  if (event.key !== 'Escape') return
+  measurementController?.clear()
+  if (drawingEngine?.getActiveTool() || drawingEngine?.getDraft()) {
+    drawingEngine.cancelDraft()
+  }
 }
 
 watch(() => props.snapshot, async () => {
@@ -483,12 +611,16 @@ watch([() => props.playbackIndex, () => props.playing, () => props.manualTrades]
   setSeriesData()
 })
 
-watch(() => props.trendLines, () => {
-  bumpRender()
-})
+watch(() => props.drawings, () => {
+  syncDrawingsFromProps()
+}, { deep: true })
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown)
+  await nextTick()
+  if (props.snapshot?.candles.length && !chartController) {
+    buildCharts()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -532,86 +664,96 @@ onBeforeUnmount(() => {
     <div v-else class="chart-stage">
       <div ref="priceContainer" class="price-chart" aria-hidden="true" />
 
-      <svg
-        class="trendline-layer"
-        :class="{ 'is-drawing': drawingMode }"
-        :viewBox="chartViewBox"
-        preserveAspectRatio="none"
-        aria-hidden="true"
-        @pointerdown="handleDrawingPointerDown"
-        @pointermove="handleDrawingPointerMove"
-        @pointerup="handleDrawingPointerUp"
-        @pointercancel="handleDrawingPointerCancel"
-        @pointerleave="handleDrawingPointerLeave"
-      >
-        <g v-for="line in renderedTrendLines" :key="line.id" class="trendline-render">
-          <line
-            class="trendline-line"
-            :x1="line.start.x"
-            :y1="line.start.y"
-            :x2="line.end.x"
-            :y2="line.end.y"
-          />
-          <circle class="trendline-endpoint" :cx="line.start.x" :cy="line.start.y" r="4" />
-          <circle class="trendline-endpoint" :cx="line.end.x" :cy="line.end.y" r="4" />
-        </g>
-        <line
-          v-if="previewLine"
-          class="trendline-line trendline-preview"
-          :x1="previewLine.start.x"
-          :y1="previewLine.start.y"
-          :x2="previewLine.end.x"
-          :y2="previewLine.end.y"
-        />
-        <circle
-          v-if="selectedAnchor"
-          class="trendline-endpoint trendline-anchor"
-          :cx="selectedAnchor.x"
-          :cy="selectedAnchor.y"
-          r="5"
-        />
-      </svg>
+      <div class="chart-toolbox" role="toolbar" aria-label="绘图工具栏">
+        <div class="chart-tool-group chart-tool-group-primary">
+          <button
+            class="chart-tool-button"
+            :class="{ active: !activeTool }"
+            type="button"
+            data-testid="drawing-tool-cursor"
+            aria-label="选择工具"
+            title="选择工具"
+            @click="stopDrawingTool"
+          >
+            <MousePointer2 :size="16" aria-hidden="true" />
+          </button>
+        </div>
 
-      <div class="chart-toolbox" aria-label="趋势线工具">
-        <button
-          class="chart-tool-button"
-          :class="{ active: drawingMode }"
-          type="button"
-          :aria-pressed="drawingMode"
-          :disabled="loading || !totalCandles"
-          :title="drawingMode ? '退出趋势线绘制' : '绘制趋势线'"
-          @click="toggleDrawingMode"
-        >
-          <Spline :size="16" aria-hidden="true" />
-          <span>{{ drawingMode ? '退出绘制' : '趋势线' }}</span>
-          <small v-if="trendLines.length">{{ trendLines.length }}</small>
-        </button>
-        <button
-          v-if="trendLines.length"
-          class="chart-tool-button chart-tool-clear"
-          type="button"
-          aria-label="清除全部趋势线"
-          title="清除全部趋势线"
-          @click="clearTrendLines"
-        >
-          <Trash2 :size="16" aria-hidden="true" />
-          <span>清除</span>
-        </button>
-        <button
-          v-if="drawingAnchor"
-          class="chart-tool-button chart-tool-cancel"
-          type="button"
-          aria-label="取消当前趋势线"
-          title="取消当前趋势线"
-          @click="cancelPendingLine"
-        >
-          <X :size="16" aria-hidden="true" />
-          <span>取消</span>
-        </button>
+        <div v-for="group in drawingToolGroups" :key="group.label" class="chart-tool-group" :aria-label="group.label">
+          <span class="chart-tool-group-label">{{ group.label }}</span>
+          <button
+            v-for="tool in group.tools"
+            :key="tool.id"
+            class="chart-tool-button"
+            :class="{ active: activeTool === tool.id }"
+            type="button"
+            :data-testid="'drawing-tool-' + tool.id"
+            :aria-label="tool.label"
+            :aria-pressed="activeTool === tool.id"
+            :title="tool.label"
+            @click="selectTool(tool.id)"
+          >
+            <component :is="tool.icon" :size="16" aria-hidden="true" />
+            <span class="chart-tool-tooltip">{{ tool.label }}</span>
+          </button>
+        </div>
+
+        <div class="chart-tool-group chart-tool-group-actions" aria-label="绘图操作">
+          <button
+            class="chart-tool-button"
+            type="button"
+            data-testid="drawing-measurement"
+            aria-label="测量（Shift 加拖动）"
+            title="测量：按住 Shift 拖动"
+            @click="setToolFeedback('按住 Shift 并在图表上拖动即可测量。')"
+          >
+            <Ruler :size="16" aria-hidden="true" />
+          </button>
+          <button
+            class="chart-tool-button"
+            type="button"
+            data-testid="drawing-lock"
+            :aria-pressed="isLocked"
+            :aria-label="isLocked ? '解锁绘图' : '锁定绘图'"
+            :title="isLocked ? '解锁绘图' : '锁定绘图'"
+            @click="toggleLock"
+          >
+            <Unlock v-if="!isLocked" :size="16" aria-hidden="true" />
+            <Lock v-else :size="16" aria-hidden="true" />
+          </button>
+          <button
+            class="chart-tool-button"
+            type="button"
+            data-testid="drawing-delete"
+            aria-label="删除选中图形"
+            title="删除选中图形（Delete）"
+            :disabled="!hasSelection || isLocked"
+            @click="deleteSelected"
+          >
+            <Trash2 :size="16" aria-hidden="true" />
+          </button>
+          <button
+            class="chart-tool-button chart-tool-clear"
+            type="button"
+            data-testid="drawing-clear"
+            aria-label="清除全部绘图"
+            title="清除全部绘图"
+            :disabled="!drawings.length || isLocked"
+            @click="clearDrawings"
+          >
+            <X :size="16" aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
-      <p v-if="drawingMode || lineFeedback" class="trendline-hint" role="status" aria-live="polite">
-        {{ drawingHint }}
+      <p v-if="activeTool || toolFeedback" class="drawing-hint" role="status" aria-live="polite">
+        {{ toolFeedback || drawingHint }}
+      </p>
+      <p v-if="measurementSummary" class="measurement-readout" role="status" aria-live="polite">
+        {{ measurementSummary }}
+        <button type="button" class="measurement-clear" aria-label="清除测量" @click="clearMeasurement">
+          <X :size="14" aria-hidden="true" />
+        </button>
       </p>
     </div>
   </section>

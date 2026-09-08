@@ -3,7 +3,6 @@ import {
   applyManualTrade,
   clampReplayCursor,
   createReplayProjectFromDraft,
-  createTrendLine,
   loadReplayProjects,
   nextReplayWindowStart,
   reconcileReplayProject,
@@ -13,6 +12,7 @@ import {
   summarizeManualTrades,
   timeframeStepSeconds,
   type ReplayProject,
+  type ReplayDrawing,
 } from './replay'
 
 function createMemoryStorage() {
@@ -75,31 +75,35 @@ describe('replay helpers', () => {
       speed: 2,
       cursorIndex: 0,
       trades: [],
-      trendLines: [],
+      drawings: [],
     })
   })
 
-  it('persists trend lines and keeps them when the project settings stay unchanged', () => {
+  it('persists CandleKit drawings and keeps them when the project settings stay unchanged', () => {
     const storage = createMemoryStorage()
     const project = createReplayProjectFromDraft({
-      name: 'Trend Replay',
+      name: 'Drawing Replay',
       symbol: 'BTCUSD',
       timeframe: '1m',
       fromInput: '2026-08-27T00:00',
       toInput: '2026-08-27T01:00',
       speed: 1,
     })
-    const line = createTrendLine({
-      start: { timestamp: project.from + 60, price: 100 },
-      end: { timestamp: project.from + 300, price: 110 },
-    })
-    expect(line).not.toBeNull()
-    const projectWithLine = { ...project, trendLines: line ? [line] : [] }
+    const drawing: ReplayDrawing = {
+      id: 'drawing-1',
+      tool: 'TrendLine',
+      points: [
+        { timestamp: project.from + 60, price: 100 },
+        { timestamp: project.from + 300, price: 110 },
+      ],
+      style: { color: '#facc15', width: 2, dashed: false, fill: null },
+    }
+    const projectWithDrawing = { ...project, drawings: [drawing] }
 
-    saveReplayProjects([projectWithLine], storage)
+    saveReplayProjects([projectWithDrawing], storage)
     const loaded = loadReplayProjects(storage)[0]
     const edited = createReplayProjectFromDraft({
-      name: 'Trend Replay',
+      name: 'Drawing Replay',
       symbol: 'BTCUSD',
       timeframe: '1m',
       fromInput: '2026-08-27T00:00',
@@ -107,11 +111,11 @@ describe('replay helpers', () => {
       speed: 1.5,
     }, loaded)
 
-    expect(loaded.trendLines).toEqual([line])
-    expect(edited.trendLines).toEqual([line])
+    expect(loaded.drawings).toEqual([drawing])
+    expect(edited.drawings).toEqual([drawing])
   })
 
-  it('loads old replay projects without manual trades', () => {
+  it('loads old v1 replay projects, preserves trades, and clears old trend lines', () => {
     const storage = createMemoryStorage()
     storage.setItem('btcusd.replay.projects.v1', JSON.stringify([{
       id: 'legacy-project',
@@ -122,6 +126,11 @@ describe('replay helpers', () => {
       to: 1787796000,
       speed: 1,
       cursorIndex: 12,
+      trendLines: [{
+        id: 'legacy-line',
+        start: { timestamp: 1787788860, price: 100 },
+        end: { timestamp: 1787789160, price: 110 },
+      }],
       createdAt: '2026-08-27T00:00:00.000Z',
       updatedAt: '2026-08-27T00:00:00.000Z',
     }]))
@@ -129,7 +138,9 @@ describe('replay helpers', () => {
     expect(loadReplayProjects(storage)[0]).toMatchObject({
       id: 'legacy-project',
       trades: [],
+      drawings: [],
     })
+    expect(storage.getItem('btcusd.replay.projects.v1')).toContain('legacy-line')
   })
 
   it('clamps replay cursors to the available candle range', () => {

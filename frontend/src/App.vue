@@ -42,7 +42,7 @@ import {
   type ManualTradeSide,
   type ReplayProject,
   type ReplayProjectDraft,
-  type TrendLine,
+  type ReplayDrawing,
 } from './replay'
 import type { MarketMetadata, MarketSnapshot } from './types'
 
@@ -179,26 +179,15 @@ function ensureReplayAccess(): boolean {
   return true
 }
 
-function addTrendLine(line: TrendLine) {
+function updateProjectDrawings(drawings: ReplayDrawing[]) {
   const project = activeProject.value
   if (!project) return
   updateProject({
     ...project,
-    trendLines: [...project.trendLines, line],
+    drawings,
     updatedAt: new Date().toISOString(),
   })
-  setNotice('趋势线已添加并保存到当前项目。')
-}
-
-function clearTrendLines() {
-  const project = activeProject.value
-  if (!project || !project.trendLines.length) return
-  updateProject({
-    ...project,
-    trendLines: [],
-    updatedAt: new Date().toISOString(),
-  })
-  setNotice('当前项目的趋势线已清除。')
+  setNotice('绘图已保存到当前项目。')
 }
 
 function syncDraftFromProject(project: ReplayProject) {
@@ -828,7 +817,7 @@ onBeforeUnmount(() => {
                   </span>
                 </div>
                 <span>{{ timeframeLabels[project.timeframe] ?? project.timeframe }} · {{ projectRangeLabel(project) }}</span>
-                <span>游标 {{ project.cursorIndex + 1 }} · 交易 {{ project.trades.length }} · {{ speedToText(project.speed) }}</span>
+                <span>游标 {{ project.cursorIndex + 1 }} · 交易 {{ project.trades.length }} · 绘图 {{ project.drawings.length }} · {{ speedToText(project.speed) }}</span>
               </button>
             </div>
             <p v-else class="history-empty">暂无项目。填写左侧表单后会直接打开全屏 K 线复盘窗口。</p>
@@ -847,9 +836,8 @@ onBeforeUnmount(() => {
           :project-name="currentProjectLabel"
           :show-header="false"
           :manual-trades="activeProject?.trades ?? []"
-          :trend-lines="activeProject?.trendLines ?? []"
-          @trendline-created="addTrendLine"
-          @trendlines-cleared="clearTrendLines"
+          :drawings="activeProject?.drawings ?? []"
+          @drawings-changed="updateProjectDrawings"
         />
 
         <div class="replay-topline">

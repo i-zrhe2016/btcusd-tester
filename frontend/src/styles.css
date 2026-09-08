@@ -21,7 +21,6 @@
   --chart-bg: #000000;
   --chart-border: #334155;
   --chart-text: #dbe4ee;
-  --chart-trendline: #facc15;
   --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 8px;
@@ -523,148 +522,181 @@ select {
   color: var(--chart-text);
 }
 
-.trendline-layer {
-  position: absolute;
-  z-index: 2;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.trendline-layer.is-drawing {
-  cursor: crosshair;
-  pointer-events: auto;
-  touch-action: none;
-}
-
-.trendline-line {
-  fill: none;
-  stroke: var(--chart-trendline);
-  stroke-width: 2;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-  pointer-events: none;
-}
-
-.trendline-preview {
-  stroke-dasharray: 7 5;
-  opacity: 0.82;
-}
-
-.trendline-endpoint {
-  fill: var(--chart-bg);
-  stroke: var(--chart-trendline);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
-  pointer-events: none;
-}
-
-.trendline-anchor {
-  fill: var(--chart-trendline);
-}
-
 .chart-toolbox {
   position: absolute;
   z-index: 4;
   top: 12px;
-  right: 12px;
+  left: 12px;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  border: 1px solid rgba(185, 180, 168, 0.9);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 14px 36px rgba(17, 24, 39, 0.2);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  width: 44px;
+  padding: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.88);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.32);
   backdrop-filter: blur(10px);
 }
 
 .chart-card-bare .chart-toolbox {
   top: 68px;
-  right: auto;
   left: 12px;
 }
 
+.chart-tool-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 3px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.chart-tool-group-primary {
+  grid-template-columns: 1fr;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.chart-tool-group-actions {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.chart-tool-group-label {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: rgba(203, 213, 225, 0.68);
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chart-tool-button {
-  min-height: 40px;
+  position: relative;
+  width: 32px;
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text-muted);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #cbd5e1;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 700;
   white-space: nowrap;
-  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, opacity 160ms ease, transform 160ms ease;
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease, opacity 140ms ease;
 }
 
 .chart-tool-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--text);
-  transform: translateY(-1px);
+  border-color: rgba(250, 204, 21, 0.7);
+  background: rgba(250, 204, 21, 0.12);
+  color: #fef3c7;
 }
 
 .chart-tool-button.active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
+  border-color: #facc15;
+  background: #facc15;
+  color: #171717;
 }
 
-.chart-tool-button small {
-  min-width: 18px;
-  padding: 2px 5px;
-  border-radius: 999px;
-  background: rgba(17, 24, 39, 0.1);
-  font: 700 10px/1 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+.chart-tool-button:focus-visible {
+  outline: 2px solid #fef08a;
+  outline-offset: 2px;
 }
 
-.chart-tool-button.active small {
-  background: rgba(255, 255, 255, 0.18);
+.chart-tool-tooltip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  z-index: 6;
+  min-width: max-content;
+  padding: 5px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 4px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(-4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.chart-tool-button:hover .chart-tool-tooltip,
+.chart-tool-button:focus-visible .chart-tool-tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
 }
 
 .chart-tool-button.chart-tool-clear:hover:not(:disabled) {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.chart-tool-button.chart-tool-cancel:hover:not(:disabled) {
-  border-color: var(--warning);
-  color: var(--warning);
+  border-color: #fb7185;
+  background: rgba(251, 113, 133, 0.12);
+  color: #fecdd3;
 }
 
 .chart-tool-button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
-  transform: none;
 }
 
-.trendline-hint {
+.drawing-hint,
+.measurement-readout {
   position: absolute;
   z-index: 4;
-  top: 68px;
-  right: 12px;
+  left: 68px;
+  bottom: 92px;
   max-width: min(420px, calc(100% - 24px));
   margin: 0;
   padding: 8px 10px;
-  border: 1px solid rgba(250, 204, 21, 0.62);
+  border: 1px solid rgba(250, 204, 21, 0.56);
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.78);
+  background: rgba(15, 23, 42, 0.9);
   color: #fef3c7;
   font-size: 12px;
   line-height: 1.35;
 }
 
-.chart-card-bare .trendline-hint {
-  top: 120px;
-  right: auto;
-  left: 12px;
+.measurement-readout {
+  bottom: 58px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-color: rgba(96, 165, 250, 0.55);
+  color: #dbeafe;
+}
+
+.measurement-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 4px;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.measurement-clear:hover,
+.measurement-clear:focus-visible {
+  border-color: #facc15;
+  color: #fef08a;
+}
+
+.measurement-clear:focus-visible {
+  outline: 2px solid #fef08a;
+  outline-offset: 2px;
 }
 
 .fullscreen-chart .empty-state p {

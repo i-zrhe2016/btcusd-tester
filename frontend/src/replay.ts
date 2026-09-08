@@ -26,21 +26,44 @@ export interface ManualTrade {
   createdAt: string
 }
 
-export interface TrendLinePoint {
+export const REPLAY_DRAWING_TOOL_IDS = [
+  'TrendLine',
+  'Ray',
+  'ExtendedLine',
+  'HorizontalLine',
+  'HorizontalRay',
+  'VerticalLine',
+  'CrossLine',
+  'Rectangle',
+  'Circle',
+  'Triangle',
+  'ParallelChannel',
+  'Arrow',
+  'PriceRange',
+  'DateRange',
+  'FibRetracement',
+  'FibExtension',
+] as const
+
+export type ReplayDrawingTool = typeof REPLAY_DRAWING_TOOL_IDS[number]
+
+export interface ReplayDrawingPoint {
   timestamp: number
   price: number
 }
 
-export interface TrendLine {
-  id: string
-  start: TrendLinePoint
-  end: TrendLinePoint
-  createdAt: string
+export interface ReplayDrawingStyle {
+  color: string
+  width: number
+  dashed: boolean
+  fill: string | null
 }
 
-export interface TrendLineInput {
-  start: TrendLinePoint
-  end: TrendLinePoint
+export interface ReplayDrawing {
+  id: string
+  tool: ReplayDrawingTool
+  points: ReplayDrawingPoint[]
+  style: ReplayDrawingStyle
 }
 
 export interface ManualTradeInput {
@@ -72,7 +95,7 @@ export interface ReplayProject {
   cursorIndex: number
   cursorTimestamp?: number
   trades: ManualTrade[]
-  trendLines: TrendLine[]
+  drawings: ReplayDrawing[]
   createdAt: string
   updatedAt: string
 }
@@ -82,7 +105,8 @@ interface StorageLike {
   setItem(key: string, value: string): void
 }
 
-const PROJECTS_KEY = 'btcusd.replay.projects.v1'
+const PROJECTS_KEY = 'btcusd.replay.projects.v2'
+const LEGACY_PROJECTS_KEY = 'btcusd.replay.projects.v1'
 const ACTIVE_KEY = 'btcusd.replay.active.v1'
 
 const DEFAULT_SPEED = 1
@@ -90,6 +114,32 @@ const MIN_SPEED = 0.25
 const MAX_SPEED = 8
 export const MANUAL_TRADE_QUANTITY = 1
 export const REPLAY_PAGE_SIZE = 240
+
+export const DEFAULT_REPLAY_DRAWING_STYLE: ReplayDrawingStyle = {
+  color: '#facc15',
+  width: 2,
+  dashed: false,
+  fill: null,
+}
+
+const REPLAY_DRAWING_POINTS: Record<ReplayDrawingTool, number> = {
+  TrendLine: 2,
+  Ray: 2,
+  ExtendedLine: 2,
+  HorizontalLine: 1,
+  HorizontalRay: 1,
+  VerticalLine: 1,
+  CrossLine: 1,
+  Rectangle: 2,
+  Circle: 2,
+  Triangle: 3,
+  ParallelChannel: 3,
+  Arrow: 2,
+  PriceRange: 2,
+  DateRange: 2,
+  FibRetracement: 2,
+  FibExtension: 3,
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
@@ -208,7 +258,7 @@ export function reconcileReplayProject(project: ReplayProject, market: MarketMet
     cursorIndex: 0,
     cursorTimestamp: undefined,
     trades: [],
-    trendLines: [],
+    drawings: [],
     updatedAt: nowIso(),
   }
 }
@@ -282,7 +332,7 @@ export function createReplayProjectFromDraft(
     cursorIndex: keepExistingState ? existing?.cursorIndex ?? 0 : 0,
     cursorTimestamp: keepExistingState ? existing?.cursorTimestamp : undefined,
     trades: keepExistingState ? existing?.trades ?? [] : [],
-    trendLines: keepExistingState ? existing?.trendLines ?? [] : [],
+    drawings: keepExistingState ? existing?.drawings ?? [] : [],
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   }
@@ -292,7 +342,7 @@ export function createSeedReplayProject(metadata: MarketMetadata): ReplayProject
   return createReplayProjectFromDraft(createReplayDraft(metadata))
 }
 
-export function normalizeReplayProject(raw: unknown): ReplayProject | null {
+export function normalizeReplayProject(raw: unknown, allowDrawings = true): ReplayProject | null {
   if (!raw || typeof raw !== 'object') return null
   const candidate = raw as Partial<ReplayProject>
   if (
@@ -317,8 +367,8 @@ export function normalizeReplayProject(raw: unknown): ReplayProject | null {
   const trades = Array.isArray(candidate.trades)
     ? sortManualTrades(candidate.trades.map(normalizeManualTrade).filter((trade): trade is ManualTrade => Boolean(trade)))
     : []
-  const trendLines = Array.isArray(candidate.trendLines)
-    ? candidate.trendLines.map(normalizeTrendLine).filter((line): line is TrendLine => Boolean(line))
+  const drawings = allowDrawings && Array.isArray(candidate.drawings)
+    ? candidate.drawings.map(normalizeReplayDrawing).filter((drawing): drawing is ReplayDrawing => Boolean(drawing))
     : []
   const createdAt = typeof candidate.createdAt === 'string' ? candidate.createdAt : nowIso()
   const updatedAt = typeof candidate.updatedAt === 'string' ? candidate.updatedAt : createdAt
@@ -334,15 +384,15 @@ export function normalizeReplayProject(raw: unknown): ReplayProject | null {
     cursorIndex,
     cursorTimestamp,
     trades,
-    trendLines,
+    drawings,
     createdAt,
     updatedAt,
   }
 }
 
-function normalizeTrendLinePoint(raw: unknown): TrendLinePoint | null {
+function normalizeReplayDrawingPoint(raw: unknown): ReplayDrawingPoint | null {
   if (!raw || typeof raw !== 'object') return null
-  const candidate = raw as Partial<TrendLinePoint>
+  const candidate = raw as Partial<ReplayDrawingPoint>
   if (
     typeof candidate.timestamp !== 'number' ||
     typeof candidate.price !== 'number' ||
@@ -358,36 +408,45 @@ function normalizeTrendLinePoint(raw: unknown): TrendLinePoint | null {
   }
 }
 
-function normalizeTrendLine(raw: unknown): TrendLine | null {
-  if (!raw || typeof raw !== 'object') return null
-  const candidate = raw as Partial<TrendLine>
-  const start = normalizeTrendLinePoint(candidate.start)
-  const end = normalizeTrendLinePoint(candidate.end)
-  if (
-    typeof candidate.id !== 'string' ||
-    !start ||
-    !end ||
-    start.timestamp === end.timestamp
-  ) {
-    return null
-  }
+function normalizeReplayDrawingStyle(raw: unknown): ReplayDrawingStyle {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_REPLAY_DRAWING_STYLE }
+  const candidate = raw as Partial<ReplayDrawingStyle>
+  const width = typeof candidate.width === 'number' && Number.isFinite(candidate.width)
+    ? clamp(candidate.width, 1, 8)
+    : DEFAULT_REPLAY_DRAWING_STYLE.width
   return {
-    id: candidate.id,
-    start,
-    end,
-    createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : nowIso(),
+    color: typeof candidate.color === 'string' && candidate.color.trim()
+      ? candidate.color
+      : DEFAULT_REPLAY_DRAWING_STYLE.color,
+    width,
+    dashed: typeof candidate.dashed === 'boolean' ? candidate.dashed : DEFAULT_REPLAY_DRAWING_STYLE.dashed,
+    fill: candidate.fill === null || typeof candidate.fill === 'string'
+      ? candidate.fill
+      : DEFAULT_REPLAY_DRAWING_STYLE.fill,
   }
 }
 
-export function createTrendLine(input: TrendLineInput): TrendLine | null {
-  const start = normalizeTrendLinePoint(input.start)
-  const end = normalizeTrendLinePoint(input.end)
-  if (!start || !end || start.timestamp === end.timestamp) return null
+function isReplayDrawingTool(value: unknown): value is ReplayDrawingTool {
+  return typeof value === 'string' && (REPLAY_DRAWING_TOOL_IDS as readonly string[]).includes(value)
+}
+
+export function replayDrawingPointsNeeded(tool: ReplayDrawingTool): number {
+  return REPLAY_DRAWING_POINTS[tool]
+}
+
+function normalizeReplayDrawing(raw: unknown): ReplayDrawing | null {
+  if (!raw || typeof raw !== 'object') return null
+  const candidate = raw as Partial<ReplayDrawing>
+  if (typeof candidate.id !== 'string' || !candidate.id || !isReplayDrawingTool(candidate.tool)) return null
+  const pointsNeeded = replayDrawingPointsNeeded(candidate.tool)
+  if (!Array.isArray(candidate.points) || candidate.points.length < pointsNeeded) return null
+  const points = candidate.points.slice(0, pointsNeeded).map(normalizeReplayDrawingPoint)
+  if (points.some((point) => point === null)) return null
   return {
-    id: createId(),
-    start,
-    end,
-    createdAt: nowIso(),
+    id: candidate.id,
+    tool: candidate.tool,
+    points: points as ReplayDrawingPoint[],
+    style: normalizeReplayDrawingStyle(candidate.style),
   }
 }
 
@@ -562,12 +621,26 @@ export function sortReplayProjects(projects: ReplayProject[]): ReplayProject[] {
 
 export function loadReplayProjects(storage: StorageLike | null = defaultStorage()): ReplayProject[] {
   if (!storage) return []
+  const current = readStoredReplayProjects(storage, PROJECTS_KEY, true)
+  if (current !== null) return current
+  return readStoredReplayProjects(storage, LEGACY_PROJECTS_KEY, false) ?? []
+}
+
+function readStoredReplayProjects(
+  storage: StorageLike,
+  key: string,
+  allowDrawings: boolean,
+): ReplayProject[] | null {
+  const raw = storage.getItem(key)
+  if (raw === null) return null
   try {
-    const parsed = JSON.parse(storage.getItem(PROJECTS_KEY) ?? '[]') as unknown
-    if (!Array.isArray(parsed)) return []
-    return sortReplayProjects(parsed.map(normalizeReplayProject).filter((project): project is ReplayProject => Boolean(project)))
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return null
+    return sortReplayProjects(parsed
+      .map((item) => normalizeReplayProject(item, allowDrawings))
+      .filter((project): project is ReplayProject => Boolean(project)))
   } catch {
-    return []
+    return null
   }
 }
 
