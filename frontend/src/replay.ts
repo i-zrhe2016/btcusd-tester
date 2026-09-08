@@ -113,7 +113,8 @@ const DEFAULT_SPEED = 1
 const MIN_SPEED = 0.25
 const MAX_SPEED = 8
 export const MANUAL_TRADE_QUANTITY = 1
-export const REPLAY_PAGE_SIZE = 240
+export const REPLAY_PAGE_SIZE = 60
+export const REPLAY_PREFETCH_THRESHOLD = 15
 
 export const DEFAULT_REPLAY_DRAWING_STYLE: ReplayDrawingStyle = {
   color: '#facc15',
@@ -174,6 +175,11 @@ export function clampReplayCursor(index: number, totalCandles: number): number {
   return clamp(Math.floor(index), 0, totalCandles - 1)
 }
 
+export function shouldPrefetchReplay(cursorIndex: number, totalCandles: number, hasMore: boolean): boolean {
+  if (!hasMore || totalCandles <= 0) return false
+  return totalCandles - clampReplayCursor(cursorIndex, totalCandles) - 1 <= REPLAY_PREFETCH_THRESHOLD
+}
+
 export function replayCursorIndexAtOrBefore(candles: Pick<Candle, 'timestamp'>[], timestamp: number): number {
   if (!candles.length || !Number.isFinite(timestamp)) return 0
 
@@ -227,6 +233,17 @@ export function nextReplayWindowStart(
 ): number {
   if (lastTimestamp === undefined || !Number.isFinite(lastTimestamp)) return fallback
   return Math.max(fallback, lastTimestamp + timeframeStepSeconds(timeframe))
+}
+
+export function replayUnloadedTimestamps(
+  lastTimestamp: number | undefined,
+  timeframe: string,
+  count = REPLAY_PAGE_SIZE,
+): number[] {
+  if (lastTimestamp === undefined || !Number.isFinite(lastTimestamp) || !Number.isFinite(count)) return []
+  const points = Math.max(0, Math.floor(count))
+  const step = timeframeStepSeconds(timeframe)
+  return Array.from({ length: points }, (_, index) => lastTimestamp + step * (index + 1))
 }
 
 export function reconcileReplayProject(project: ReplayProject, market: MarketMetadata): ReplayProject {

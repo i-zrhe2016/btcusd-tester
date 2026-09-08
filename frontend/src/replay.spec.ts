@@ -5,12 +5,18 @@ import {
   createReplayProjectFromDraft,
   loadReplayProjects,
   nextReplayWindowStart,
+  normalizeSpeed,
   reconcileReplayProject,
   replayCursorIndexAtOrBefore,
+  replayDelayMs,
+  replayUnloadedTimestamps,
   replayWindowEnd,
   saveReplayProjects,
+  shouldPrefetchReplay,
   summarizeManualTrades,
   timeframeStepSeconds,
+  REPLAY_PAGE_SIZE,
+  REPLAY_PREFETCH_THRESHOLD,
   type ReplayProject,
   type ReplayDrawing,
 } from './replay'
@@ -160,9 +166,37 @@ describe('replay helpers', () => {
 
   it('creates bounded lazy-loading windows', () => {
     expect(timeframeStepSeconds('1m')).toBe(60)
-    expect(replayWindowEnd(1_000, 20_000, '1m')).toBe(15_400)
-    expect(nextReplayWindowStart(15_339, '1m', 15_400)).toBe(15_400)
-    expect(nextReplayWindowStart(undefined, '1m', 15_400)).toBe(15_400)
+    expect(REPLAY_PAGE_SIZE).toBe(60)
+    expect(REPLAY_PREFETCH_THRESHOLD).toBe(15)
+    expect(replayWindowEnd(1_000, 20_000, '1m')).toBe(4_600)
+    expect(replayWindowEnd(1_000, 4_300, '1m')).toBe(4_300)
+    expect(nextReplayWindowStart(4_539, '1m', 4_600)).toBe(4_600)
+    expect(nextReplayWindowStart(undefined, '1m', 4_600)).toBe(4_600)
+  })
+
+  it('creates future timestamps for the unloaded drawing area', () => {
+    expect(replayUnloadedTimestamps(1_000, '1m', 3)).toEqual([1_060, 1_120, 1_180])
+    expect(replayUnloadedTimestamps(1_000, '1h', 2)).toEqual([4_600, 8_200])
+    expect(replayUnloadedTimestamps(undefined, '1m', 3)).toEqual([])
+    expect(replayUnloadedTimestamps(1_000, '1m', -1)).toEqual([])
+  })
+
+  it('prefetches only when the current batch has 15 or fewer unplayed candles', () => {
+    expect(shouldPrefetchReplay(44, 60, true)).toBe(true)
+    expect(shouldPrefetchReplay(43, 60, true)).toBe(false)
+    expect(shouldPrefetchReplay(59, 60, true)).toBe(true)
+    expect(shouldPrefetchReplay(44, 60, false)).toBe(false)
+    expect(shouldPrefetchReplay(0, 0, true)).toBe(false)
+  })
+
+  it('normalizes playback speed and derives the timer delay', () => {
+    expect(normalizeSpeed(0.1)).toBe(0.25)
+    expect(normalizeSpeed(2.5)).toBe(2.5)
+    expect(normalizeSpeed(12)).toBe(8)
+    expect(normalizeSpeed(Number.NaN)).toBe(1)
+    expect(replayDelayMs(0.25)).toBe(3600)
+    expect(replayDelayMs(2)).toBe(450)
+    expect(replayDelayMs(8)).toBe(120)
   })
 
   it('moves projects into the current market coverage after a data refresh', () => {

@@ -15,12 +15,14 @@ import {
 import {
   ColorType,
   createSeriesMarkers,
+  type CandlestickData,
   type IChartApi,
   type ISeriesMarkersPluginApi,
   type ISeriesApi,
   type SeriesMarker,
   type Time,
   type UTCTimestamp,
+  type WhitespaceData,
 } from 'lightweight-charts'
 import {
   ArrowUpRight,
@@ -45,6 +47,7 @@ import {
   DEFAULT_REPLAY_DRAWING_STYLE,
   REPLAY_DRAWING_TOOL_IDS,
   replayDrawingPointsNeeded,
+  replayUnloadedTimestamps,
   type ManualTrade,
   type ReplayDrawing,
   type ReplayDrawingStyle,
@@ -195,7 +198,7 @@ const activeToolLabel = computed(() => {
 const drawingHint = computed(() => {
   const tool = activeTool.value
   return tool
-    ? activeToolLabel.value + '已启用；点击图表放置 ' + replayDrawingPointsNeeded(tool) + ' 个锚点。按 Esc 取消。'
+    ? activeToolLabel.value + '已启用；点击图表（含右侧未加载区域）放置 ' + replayDrawingPointsNeeded(tool) + ' 个锚点。按 Esc 取消。'
     : ''
 })
 
@@ -303,6 +306,28 @@ function toCandleKitBar(candle: { timestamp: number; open: number; high: number;
     close: candle.close,
     volume: candle.volume,
   }
+}
+
+function toLightweightCandle(candle: { timestamp: number; open: number; high: number; low: number; close: number }): CandlestickData<UTCTimestamp> {
+  return {
+    time: candle.timestamp as UTCTimestamp,
+    open: candle.open,
+    high: candle.high,
+    low: candle.low,
+    close: candle.close,
+  }
+}
+
+function unloadedChartData(): Array<CandlestickData<UTCTimestamp> | WhitespaceData<UTCTimestamp>> {
+  const candles = visibleCandles.value
+  const lastTimestamp = candles.at(-1)?.timestamp
+  const timeframe = props.snapshot?.timeframe ?? '1m'
+  return [
+    ...candles.map(toLightweightCandle),
+    ...replayUnloadedTimestamps(lastTimestamp, timeframe).map((timestamp) => ({
+      time: timestamp as UTCTimestamp,
+    })),
+  ]
 }
 
 function toCandleKitDrawing(drawing: ReplayDrawing): CandleKitDrawing {
@@ -434,6 +459,7 @@ function setPlaybackRange() {
 function setSeriesData() {
   if (!chartController || !candleSeries) return
   chartController.setData(visibleCandles.value.map(toCandleKitBar))
+  candleSeries.setData(unloadedChartData())
   tradeMarkers?.setMarkers(visibleTradeMarkers.value)
   setPlaybackRange()
 }
