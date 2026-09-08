@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { ClerkLoaded, ClerkLoading, Show, SignInButton, SignUpButton, UserButton } from '@clerk/vue'
+import { ClerkLoaded, ClerkLoading, Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/vue'
 import {
   ArrowLeft,
   ChartCandlestick,
@@ -50,6 +50,8 @@ type AppView = 'projects' | 'replay'
 
 const viewKey = 'btcusd.workspace.view.v2'
 const replayLengths: [number, number, number] = [30, 120, 840]
+const authEnabled = false
+const { isLoaded: authLoaded, isSignedIn } = useAuth()
 
 const timeframeLabels: Record<string, string> = {
   '1m': '1 分',
@@ -132,6 +134,7 @@ const canPlaceManualTrade = computed(() => Boolean(
   activeProject.value && currentCandle.value && !replayLoading.value && !replayError.value,
 ))
 const currentTimeframeValue = computed(() => activeProject.value?.timeframe ?? projectDraft.timeframe)
+const replayAccessGranted = computed(() => !authEnabled || (authLoaded.value && isSignedIn.value === true))
 const timeframeOptions = computed(() => {
   const supported = metadata.value?.supported_timeframes ?? Object.keys(timeframeLabels)
   return supported.filter((value) => value in timeframeLabels)
@@ -161,6 +164,19 @@ function saveAppView(value: AppView) {
 
 function setNotice(message: string) {
   notice.value = message
+}
+
+function ensureReplayAccess(): boolean {
+  if (!authEnabled) return true
+  if (!authLoaded.value) {
+    setNotice('账户状态仍在加载，请稍后再试。')
+    return false
+  }
+  if (!isSignedIn.value) {
+    setNotice('请先登录后进入复盘。')
+    return false
+  }
+  return true
 }
 
 function addTrendLine(line: TrendLine) {
@@ -199,10 +215,19 @@ function updateProject(project: ReplayProject) {
   persistProjectsState()
 }
 
-function alignProjectToMarket(project: ReplayProject): { project: ReplayProject; changed: boolean } {
+function reconcileProjectWithMarket(project: ReplayProject): { project: ReplayProject; changed: boolean } {
   if (!metadata.value) return { project, changed: false }
   const aligned = reconcileReplayProject(project, metadata.value)
-  if (aligned === project) return { project, changed: false }
+  return { project: aligned, changed: aligned !== project }
+}
+
+function marketAlignmentNotice(project: ReplayProject): string {
+  return `当前时间范围没有可用行情，已调整到 ${projectRangeLabel(project)}。`
+}
+
+function alignProjectToMarket(project: ReplayProject): { project: ReplayProject; changed: boolean } {
+  const { project: aligned, changed } = reconcileProjectWithMarket(project)
+  if (!changed) return { project, changed: false }
   projects.value = projects.value.map((current) => (current.id === project.id ? aligned : current))
   saveReplayProjects(projects.value)
   return { project: aligned, changed: true }
@@ -291,6 +316,10 @@ function openProjects() {
 }
 
 function openReplay() {
+  if (!ensureReplayAccess()) {
+    activeView.value = 'projects'
+    return
+  }
   if (!activeProject.value) {
     activeView.value = 'projects'
     return
@@ -320,9 +349,11 @@ function placeManualTrade(side: ManualTradeSide) {
 }
 
 function createProject() {
+  if (!ensureReplayAccess()) return
   projectError.value = ''
   try {
-    const project = createReplayProjectFromDraft(projectDraft)
+    const draftProject = createReplayProjectFromDraft(projectDraft)
+    const { project, changed } = reconcileProjectWithMarket(draftProject)
     projects.value = [project, ...projects.value.filter((item) => item.id !== project.id)]
     activeProjectId.value = project.id
     saveActiveReplayProjectId(project.id)
@@ -331,13 +362,14 @@ function createProject() {
     playbackPlaying.value = false
     activeView.value = 'replay'
     void loadReplaySnapshot(project)
-    setNotice(`项目“${project.name}”已创建。`)
+    setNotice(changed ? marketAlignmentNotice(project) : `项目“${project.name}”已创建。`)
   } catch (caught) {
     projectError.value = caught instanceof Error ? caught.message : '项目创建失败。'
   }
 }
 
 function saveActiveProject() {
+  if (!ensureReplayAccess()) return
   const project = activeProject.value
   if (!project) {
     createProject()
@@ -345,7 +377,8 @@ function saveActiveProject() {
   }
   projectError.value = ''
   try {
-    const next = createReplayProjectFromDraft(projectDraft, project)
+    const draftProject = createReplayProjectFromDraft(projectDraft, project)
+    const { project: next, changed } = reconcileProjectWithMarket(draftProject)
     projects.value = projects.value.map((item) => (item.id === next.id ? next : item))
     activeProjectId.value = next.id
     saveActiveReplayProjectId(next.id)
@@ -354,13 +387,14 @@ function saveActiveProject() {
     playbackPlaying.value = false
     activeView.value = 'replay'
     void loadReplaySnapshot(next)
-    setNotice(`项目“${next.name}”已保存。`)
+    setNotice(changed ? marketAlignmentNotice(next) : `项目“${next.name}”已保存。`)
   } catch (caught) {
     projectError.value = caught instanceof Error ? caught.message : '项目保存失败。'
   }
 }
 
 function selectProject(projectId: string) {
+  if (!ensureReplayAccess()) return
   const storedProject = projects.value.find((item) => item.id === projectId)
   if (!storedProject) return
   const { project, changed } = alignProjectToMarket(storedProject)
@@ -371,7 +405,7 @@ function selectProject(projectId: string) {
   playbackPlaying.value = false
   activeView.value = 'replay'
   void loadReplaySnapshot(project)
-  if (changed) setNotice('项目时间范围已调整到当前可用行情，旧区间交易记录已清除。')
+  if (changed) setNotice(`${marketAlignmentNotice(project)}旧区间交易记录已清除。`)
 }
 
 function mergeMarketSnapshots(current: MarketSnapshot, incoming: MarketSnapshot): MarketSnapshot {
@@ -489,7 +523,8 @@ async function initialize() {
   pageError.value = ''
   try {
     metadata.value = await getMarketMetadata()
-    activeView.value = loadAppView()
+    const requestedView = loadAppView()
+    activeView.value = requestedView === 'replay' && replayAccessGranted.value ? 'replay' : 'projects'
 
     const storedProjects = loadReplayProjects()
     if (!storedProjects.length && metadata.value) {
@@ -518,7 +553,7 @@ async function initialize() {
       syncDraftFromProject(active)
       await loadReplaySnapshot(active)
       if (alignedActiveProject.changed) {
-        setNotice('项目时间范围已调整到当前可用行情，旧区间交易记录已清除。')
+        setNotice(`${marketAlignmentNotice(active)}旧区间交易记录已清除。`)
       }
     } else {
       activeView.value = 'projects'
@@ -544,10 +579,30 @@ function tradeActionLabel(action: ManualTradeAction | undefined): string {
 }
 
 watch(activeView, (value) => {
+  if (!authEnabled) {
+    saveAppView(value)
+    if (value !== 'replay') {
+      playbackPlaying.value = false
+    }
+    return
+  }
+  if (value === 'replay' && !replayAccessGranted.value) {
+    activeView.value = 'projects'
+    setNotice(authLoaded.value ? '请先登录后进入复盘。' : '账户状态仍在加载，请稍后再试。')
+    return
+  }
   saveAppView(value)
   if (value !== 'replay') {
     playbackPlaying.value = false
   }
+})
+
+watch([authLoaded, isSignedIn], ([loaded, signedIn]) => {
+  if (!authEnabled) return
+  if (!loaded || signedIn || activeView.value !== 'replay') return
+  pausePlayback()
+  activeView.value = 'projects'
+  setNotice('请先登录后进入复盘。')
 })
 
 watch([playbackPlaying, () => activeProject.value?.speed, () => activeProjectId.value, () => totalReplayCandles.value], () => {
@@ -620,7 +675,7 @@ onBeforeUnmount(() => {
           <span>{{ appStatusLabel }}</span>
         </div>
 
-        <div class="auth-controls" aria-label="账户操作">
+        <div v-if="authEnabled" class="auth-controls" aria-label="账户操作">
           <ClerkLoading>
             <span class="auth-loading" aria-live="polite">账户加载中…</span>
           </ClerkLoading>
@@ -675,6 +730,13 @@ onBeforeUnmount(() => {
           <ServerCog :size="20" aria-hidden="true" />
           <span>{{ activeError }}</span>
           <button type="button" class="text-button" @click="initialize">重试</button>
+        </div>
+
+        <div v-if="authEnabled && authLoaded && !isSignedIn" class="alert auth-required-alert" role="status">
+          <span>请先登录后进入复盘，也不能创建或打开复盘项目。</span>
+          <SignInButton mode="modal">
+            <button type="button" class="text-button">立即登录</button>
+          </SignInButton>
         </div>
 
         <div class="project-layout">

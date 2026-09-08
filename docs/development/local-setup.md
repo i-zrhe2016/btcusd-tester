@@ -164,15 +164,15 @@ npm run dev
 http://localhost:5173
 ```
 
-Vite 已配置开发代理：
+Vite 启动时会自动检测代理目标：如果宿主机已有手动启动的 Rust 服务，就直连 `8081/8082`；否则通过本机 Docker Compose 的 HTTPS 网关代理 API。网关会继续把请求转发到私有网络中的后端服务，因此 Compose 模式不需要暴露后端容器端口：
 
 | 前端路径 | 代理目标 |
 | --- | --- |
-| `/api/market/*` | `http://localhost:8081` |
-| `/api/backtests*` | `http://localhost:8082` |
-| `/api/configs*` | `http://localhost:8082` |
+| `/api/market/*` | 优先 `http://127.0.0.1:8081`，否则 `https://127.0.0.1`（Nginx HTTPS 网关） |
+| `/api/backtests*` | 优先 `http://127.0.0.1:8082`，否则 `https://127.0.0.1`（Nginx HTTPS 网关） |
+| `/api/configs*` | 优先 `http://127.0.0.1:8082`，否则 `https://127.0.0.1`（Nginx HTTPS 网关） |
 
-因此本地开发不需要 Nginx，也不需要 HTTPS 证书。
+如需覆盖回退网关，可设置 `VITE_API_GATEWAY_TARGET`；使用 Compose 时不需要额外暴露后端端口。
 
 ## 最小冒烟检查
 

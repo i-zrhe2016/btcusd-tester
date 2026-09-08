@@ -10,5 +10,10 @@ if (!publishableKey) {
 }
 
 const app = createApp(App)
-app.use(clerkPlugin, { publishableKey })
+const allowedRedirectOrigins = import.meta.env.DEV ? [window.location.origin] : undefined
+
+app.use(clerkPlugin, {
+  publishableKey,
+  ...(allowedRedirectOrigins ? { allowedRedirectOrigins } : {}),
+})
 app.mount('#app')
