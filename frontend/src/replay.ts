@@ -628,6 +628,49 @@ export function applyManualTrade(project: ReplayProject, input: ManualTradeInput
   }
 }
 
+export function closeManualPosition(
+  project: ReplayProject,
+  input: Omit<ManualTradeInput, 'side'>,
+): ReplayProject {
+  if (!Number.isFinite(input.candleIndex) || !Number.isFinite(input.timestamp) || !Number.isFinite(input.price) || input.price <= 0) {
+    return project
+  }
+
+  const candleIndex = Math.max(0, Math.floor(input.candleIndex))
+  const retainedTrades = sortManualTrades(project.trades.filter((trade) => trade.candleIndex <= candleIndex))
+  const position = summarizeManualTrades(retainedTrades, input.price, candleIndex)
+  if (position.side === 'flat' || position.averagePrice === null || position.quantity <= 0) return project
+
+  const side: ManualTradeSide = position.side === 'long' ? 'sell' : 'buy'
+  const action: ManualTradeAction = position.side === 'long' ? 'close-long' : 'close-short'
+  const quantity = position.quantity
+  const realizedPnl = action === 'close-long'
+    ? (input.price - position.averagePrice) * quantity
+    : (position.averagePrice - input.price) * quantity
+  const timestamp = nowIso()
+
+  return {
+    ...project,
+    cursorIndex: candleIndex,
+    cursorTimestamp: Math.floor(input.timestamp),
+    trades: sortManualTrades([
+      ...retainedTrades,
+      {
+        id: createId(),
+        candleIndex,
+        timestamp: Math.floor(input.timestamp),
+        side,
+        action,
+        price: input.price,
+        quantity,
+        realizedPnl,
+        createdAt: timestamp,
+      },
+    ]),
+    updatedAt: timestamp,
+  }
+}
+
 export function sortReplayProjects(projects: ReplayProject[]): ReplayProject[] {
   return [...projects].sort((left, right) => {
     const updated = right.updatedAt.localeCompare(left.updatedAt)
