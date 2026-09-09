@@ -1286,6 +1286,14 @@ select {
   white-space: nowrap;
 }
 
+.console-shortcuts {
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--text-dim);
+  font: 700 10px/1.2 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+  white-space: nowrap;
+}
+
 .console-quick-stats {
   flex: 0 1 auto;
   display: flex;
@@ -1694,6 +1702,10 @@ select {
 
   .project-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .console-shortcuts {
+    display: none;
   }
 
 }

@@ -86,6 +86,7 @@ const playbackPlaying = ref(false)
 const isReplayFullscreen = ref(false)
 
 const projectDraft = reactive<ReplayProjectDraft>(createReplayDraft(null))
+const marketChartRef = ref<{ activateTrendLine: () => void } | null>(null)
 
 let snapshotRequestId = 0
 let playbackTimer: number | null = null
@@ -377,6 +378,48 @@ function placeManualTrade(side: ManualTradeSide) {
   updateProject(next)
   const action = next.trades.at(-1)?.action
   setNotice(`${side === 'buy' ? 'Buy' : 'Sell'} 已按 ${formatNumber(candle.close)} 成交，${tradeActionLabel(action)}。`)
+}
+
+function isEditableShortcutTarget(target: EventTarget | null): boolean {
+  if (typeof HTMLElement === 'undefined' || !(target instanceof HTMLElement)) return false
+  return Boolean(
+    target.isContentEditable ||
+    target.closest('input, textarea, select, [contenteditable="true"]'),
+  )
+}
+
+function handleReplayShortcut(event: KeyboardEvent) {
+  if (
+    activeView.value !== 'replay' ||
+    event.defaultPrevented ||
+    event.repeat ||
+    event.isComposing ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    isEditableShortcutTarget(event.target)
+  ) return
+
+  switch (event.key.toLowerCase()) {
+    case 'a':
+      event.preventDefault()
+      togglePlayback()
+      break
+    case 'b':
+      event.preventDefault()
+      placeManualTrade('buy')
+      break
+    case 's':
+      event.preventDefault()
+      placeManualTrade('sell')
+      break
+    case 'c':
+      event.preventDefault()
+      marketChartRef.value?.activateTrendLine()
+      break
+    default:
+      break
+  }
 }
 
 function createProject() {
@@ -713,12 +756,14 @@ watch([playbackPlaying, () => activeProject.value?.speed, () => activeProjectId.
 
 onMounted(() => {
   document.addEventListener('fullscreenchange', syncReplayFullscreen)
+  window.addEventListener('keydown', handleReplayShortcut)
   void initialize()
 })
 
 onBeforeUnmount(() => {
   clearPlaybackTimer()
   document.removeEventListener('fullscreenchange', syncReplayFullscreen)
+  window.removeEventListener('keydown', handleReplayShortcut)
 })
 </script>
 
@@ -957,6 +1002,7 @@ onBeforeUnmount(() => {
       <section v-else-if="activeView === 'replay'" class="replay-screen" aria-labelledby="replay-title">
         <h1 id="replay-title" class="sr-only">{{ currentProjectLabel }} 复盘</h1>
         <MarketChart
+          ref="marketChartRef"
           class="fullscreen-chart"
           :snapshot="replaySnapshot"
           :loading="replayLoading"
@@ -1023,6 +1069,8 @@ onBeforeUnmount(() => {
                 Sell
               </button>
             </div>
+
+            <span class="console-shortcuts" aria-label="复盘快捷键">A 播放/暂停 · B Buy · S Sell · C 趋势线</span>
 
             <div class="console-quick-stats" aria-label="复盘辅助信息">
               <span class="console-stat">{{ currentTimeLabel }}</span>

@@ -592,6 +592,13 @@ function selectTool(tool: ReplayDrawingTool) {
   setToolFeedback(activeToolLabel.value + '已启用，点击图表放置锚点。')
 }
 
+function activateTrendLine() {
+  if (activeTool.value === 'TrendLine') return
+  selectTool('TrendLine')
+}
+
+defineExpose({ activateTrendLine })
+
 function stopDrawingTool() {
   drawingEngine?.cancelDraft()
   drawingEngine?.stopTool()
