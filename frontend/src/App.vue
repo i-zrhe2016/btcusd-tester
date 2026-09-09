@@ -2,10 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ClerkLoaded, ClerkLoading, Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/vue'
 import {
-  ArrowLeft,
   ChartCandlestick,
   FolderOpen,
   FolderPlus,
+  Maximize2,
+  Minimize2,
   Pause,
   Play,
   RefreshCw,
@@ -82,8 +83,10 @@ const pageError = ref('')
 const projectError = ref('')
 const activeView = ref<AppView>('projects')
 const playbackPlaying = ref(false)
+const isReplayFullscreen = ref(false)
 
 const projectDraft = reactive<ReplayProjectDraft>(createReplayDraft(null))
+const marketChartRef = ref<{ activateTrendLine: () => void } | null>(null)
 
 let snapshotRequestId = 0
 let playbackTimer: number | null = null
@@ -265,6 +268,37 @@ function pausePlayback() {
   playbackPlaying.value = false
 }
 
+function syncReplayFullscreen() {
+  if (typeof document === 'undefined') return
+  isReplayFullscreen.value = Boolean(document.fullscreenElement)
+}
+
+async function exitReplayFullscreen() {
+  if (typeof document !== 'undefined' && document.fullscreenElement) {
+    try {
+      await document.exitFullscreen()
+    } catch {
+      // Keep the CSS fallback state in sync when the browser rejects the exit.
+    }
+  }
+  isReplayFullscreen.value = false
+}
+
+async function toggleReplayFullscreen() {
+  if (activeView.value !== 'replay' || typeof document === 'undefined') return
+  if (isReplayFullscreen.value || document.fullscreenElement) {
+    await exitReplayFullscreen()
+    return
+  }
+
+  isReplayFullscreen.value = true
+  try {
+    await document.documentElement.requestFullscreen?.()
+  } catch {
+    // The app-level immersive layout remains available as a CSS fallback.
+  }
+}
+
 function setPlaybackCursor(index: number, shouldPause = true) {
   const project = activeProject.value
   const total = totalReplayCandles.value
@@ -309,6 +343,7 @@ function changeReplayTimeframe(event: Event) {
 
 function openProjects() {
   pausePlayback()
+  void exitReplayFullscreen()
   activeView.value = 'projects'
 }
 
@@ -343,6 +378,48 @@ function placeManualTrade(side: ManualTradeSide) {
   updateProject(next)
   const action = next.trades.at(-1)?.action
   setNotice(`${side === 'buy' ? 'Buy' : 'Sell'} 已按 ${formatNumber(candle.close)} 成交，${tradeActionLabel(action)}。`)
+}
+
+function isEditableShortcutTarget(target: EventTarget | null): boolean {
+  if (typeof HTMLElement === 'undefined' || !(target instanceof HTMLElement)) return false
+  return Boolean(
+    target.isContentEditable ||
+    target.closest('input, textarea, select, [contenteditable="true"]'),
+  )
+}
+
+function handleReplayShortcut(event: KeyboardEvent) {
+  if (
+    activeView.value !== 'replay' ||
+    event.defaultPrevented ||
+    event.repeat ||
+    event.isComposing ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    isEditableShortcutTarget(event.target)
+  ) return
+
+  switch (event.key.toLowerCase()) {
+    case 'a':
+      event.preventDefault()
+      togglePlayback()
+      break
+    case 'b':
+      event.preventDefault()
+      placeManualTrade('buy')
+      break
+    case 's':
+      event.preventDefault()
+      placeManualTrade('sell')
+      break
+    case 'c':
+      event.preventDefault()
+      marketChartRef.value?.activateTrendLine()
+      break
+    default:
+      break
+  }
 }
 
 function createProject() {
@@ -629,6 +706,7 @@ watch(activeView, (value) => {
   saveAppView(value)
   if (value !== 'replay') {
     playbackPlaying.value = false
+    void exitReplayFullscreen()
   }
 })
 
@@ -676,25 +754,35 @@ watch([playbackPlaying, () => activeProject.value?.speed, () => activeProjectId.
   }, replayDelayMs(project.speed))
 }, { immediate: true })
 
-onMounted(initialize)
+onMounted(() => {
+  document.addEventListener('fullscreenchange', syncReplayFullscreen)
+  window.addEventListener('keydown', handleReplayShortcut)
+  void initialize()
+})
 
 onBeforeUnmount(() => {
   clearPlaybackTimer()
+  document.removeEventListener('fullscreenchange', syncReplayFullscreen)
+  window.removeEventListener('keydown', handleReplayShortcut)
 })
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'replay-active': activeView === 'replay' }">
+  <div
+    class="app-shell"
+    :class="{ 'replay-active': activeView === 'replay', 'replay-immersive': isReplayFullscreen }"
+  >
     <header class="topbar">
       <a class="brand" href="/" aria-label="BTCUSD 复盘平台首页">
         <span class="brand-mark" aria-hidden="true"><ChartCandlestick :size="20" /></span>
         <span>
           <strong>BTCUSD</strong>
-          <small>REPLAY WORKSPACE</small>
+          <small v-if="activeView === 'replay'">{{ currentTimeframeValue }} REPLAY</small>
+          <small v-else>REPLAY WORKSPACE</small>
         </span>
       </a>
 
-      <div class="mode-switch" role="tablist" aria-label="工作区模式">
+      <div v-if="activeView === 'projects'" class="mode-switch" role="tablist" aria-label="工作区模式">
         <button
           type="button"
           class="mode-chip"
@@ -707,8 +795,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="mode-chip"
-          :class="{ active: activeView === 'replay' }"
-          :aria-pressed="activeView === 'replay'"
+          :aria-pressed="false"
           :disabled="!activeProject"
           @click="openReplay"
         >
@@ -716,11 +803,40 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
+      <div v-if="activeView === 'replay'" class="replay-topbar-meta" aria-label="当前复盘项目">
+        <strong>{{ currentProjectLabel }}</strong>
+        <span>{{ currentRangeLabel }}</span>
+      </div>
+
+      <div v-if="activeView === 'replay'" class="replay-topbar-status" aria-label="当前复盘状态">
+        <span class="status-chip" :data-status="playbackPlaying ? 'running' : 'paused'">{{ replayStatusLabel }}</span>
+        <span class="status-chip muted">{{ currentProgressLabel }}</span>
+        <span class="status-chip muted">{{ positionLabel }}</span>
+      </div>
+
       <div class="topbar-actions">
-        <div class="service-state">
+        <div v-if="activeView === 'projects'" class="service-state">
           <span class="status-dot" aria-hidden="true" />
           <span>{{ appStatusLabel }}</span>
         </div>
+
+        <template v-else>
+          <button class="topbar-action" type="button" @click="openProjects">
+            <FolderOpen :size="15" aria-hidden="true" />
+            项目库
+          </button>
+          <button
+            class="topbar-icon-button"
+            type="button"
+            data-testid="replay-fullscreen"
+            :aria-label="isReplayFullscreen ? '退出全屏' : '进入全屏'"
+            :title="isReplayFullscreen ? '退出全屏' : '进入全屏'"
+            @click="toggleReplayFullscreen"
+          >
+            <Minimize2 v-if="isReplayFullscreen" :size="16" aria-hidden="true" />
+            <Maximize2 v-else :size="16" aria-hidden="true" />
+          </button>
+        </template>
 
         <div v-if="authEnabled" class="auth-controls" aria-label="账户操作">
           <ClerkLoading>
@@ -886,6 +1002,7 @@ onBeforeUnmount(() => {
       <section v-else-if="activeView === 'replay'" class="replay-screen" aria-labelledby="replay-title">
         <h1 id="replay-title" class="sr-only">{{ currentProjectLabel }} 复盘</h1>
         <MarketChart
+          ref="marketChartRef"
           class="fullscreen-chart"
           :snapshot="replaySnapshot"
           :loading="replayLoading"
@@ -898,18 +1015,6 @@ onBeforeUnmount(() => {
           @drawings-changed="updateProjectDrawings"
         />
 
-        <div class="replay-topline">
-          <button class="secondary-button replay-back-button" type="button" @click="openProjects">
-            <ArrowLeft :size="18" aria-hidden="true" />
-            项目库
-          </button>
-          <div class="replay-status">
-            <span class="status-chip" :data-status="playbackPlaying ? 'running' : 'paused'">{{ replayStatusLabel }}</span>
-            <span class="status-chip muted">{{ currentProgressLabel }}</span>
-            <span class="status-chip muted">{{ positionLabel }}</span>
-          </div>
-        </div>
-
         <div v-if="activeError" class="alert replay-alert" role="alert">
           <ServerCog :size="20" aria-hidden="true" />
           <span>{{ activeError }}</span>
@@ -918,11 +1023,6 @@ onBeforeUnmount(() => {
 
         <div class="replay-console" aria-label="复盘状态栏">
           <div class="console-strip">
-            <div class="console-summary">
-              <strong>{{ currentProjectLabel }}</strong>
-              <span>{{ currentRangeLabel }}</span>
-            </div>
-
             <label class="timeframe-control">
               <span>周期</span>
               <select
@@ -970,24 +1070,35 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <div class="console-quick-stats" aria-label="当前复盘状态">
-              <span>{{ currentProgressLabel }}</span>
-              <span>{{ currentTimeLabel }}</span>
-              <span>{{ positionLabel }}</span>
+            <span class="console-shortcuts" aria-label="复盘快捷键">A 播放/暂停 · B Buy · S Sell · C 趋势线</span>
+
+            <div class="console-quick-stats" aria-label="复盘辅助信息">
+              <span class="console-stat">{{ currentTimeLabel }}</span>
+              <div v-if="replayHasMore" class="console-load-control" aria-live="polite">
+                <span v-if="replayWindowLoading">加载中…</span>
+                <span v-else-if="replayWindowError" :title="replayWindowError">加载失败</span>
+                <button
+                  class="text-button console-load-button"
+                  type="button"
+                  data-testid="replay-load-more"
+                  :disabled="replayWindowLoading"
+                  @click="replayWindowError ? retryLoadMoreReplay() : loadMoreReplay()"
+                >
+                  {{ replayWindowLoading ? '加载中…' : replayWindowError ? '重试加载' : '加载更多' }}
+                </button>
+              </div>
+              <button
+                class="topbar-icon-button console-fullscreen-button"
+                type="button"
+                data-testid="replay-fullscreen-console"
+                :aria-label="isReplayFullscreen ? '退出全屏' : '进入全屏'"
+                :title="isReplayFullscreen ? '退出全屏' : '进入全屏'"
+                @click="toggleReplayFullscreen"
+              >
+                <Minimize2 v-if="isReplayFullscreen" :size="16" aria-hidden="true" />
+                <Maximize2 v-else :size="16" aria-hidden="true" />
+              </button>
             </div>
-          </div>
-          <div v-if="replayHasMore" class="replay-load-status" aria-live="polite">
-            <span v-if="replayWindowLoading">正在加载下一批 K 线…</span>
-            <span v-else-if="replayWindowError" :title="replayWindowError">{{ replayWindowError }}</span>
-            <button
-              class="text-button"
-              type="button"
-              data-testid="replay-load-more"
-              :disabled="replayWindowLoading"
-              @click="replayWindowError ? retryLoadMoreReplay() : loadMoreReplay()"
-            >
-              {{ replayWindowLoading ? '加载中…' : replayWindowError ? '重试加载' : '加载更多' }}
-            </button>
           </div>
         </div>
       </section>

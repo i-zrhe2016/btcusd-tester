@@ -437,9 +437,15 @@ function disposeCharts() {
   lastDrawingSnapshot = ''
 }
 
-function playbackWindowBars() {
+function playbackBarSpacing(count: number): number {
+  if (count < 30) return 14
+  if (count > 100) return 10
+  return 12
+}
+
+function playbackWindowBars(count = visibleCandles.value.length) {
   const { width } = containerSize()
-  return Math.min(Math.max(Math.floor(width / 12), 80), 180)
+  return Math.min(Math.max(Math.floor(width / playbackBarSpacing(count)), 60), 180)
 }
 
 function setPlaybackRange() {
@@ -447,8 +453,12 @@ function setPlaybackRange() {
   const count = visibleCandles.value.length
   if (!scale || !count) return
 
-  const bars = playbackWindowBars()
-  const rightOffset = Math.max(6, Math.floor(bars * 0.08))
+  const barSpacing = playbackBarSpacing(count)
+  if (scale.options().barSpacing !== barSpacing) {
+    scale.applyOptions({ barSpacing })
+  }
+  const bars = playbackWindowBars(count)
+  const rightOffset = Math.max(12, Math.floor(bars * 0.22))
   const right = count - 1 + rightOffset
   scale.setVisibleLogicalRange({
     from: right - bars,
@@ -582,6 +592,13 @@ function selectTool(tool: ReplayDrawingTool) {
   setToolFeedback(activeToolLabel.value + '已启用，点击图表放置锚点。')
 }
 
+function activateTrendLine() {
+  if (activeTool.value === 'TrendLine') return
+  selectTool('TrendLine')
+}
+
+defineExpose({ activateTrendLine })
+
 function stopDrawingTool() {
   drawingEngine?.cancelDraft()
   drawingEngine?.stopTool()
@@ -690,6 +707,7 @@ onBeforeUnmount(() => {
     <div v-else class="chart-stage">
       <div ref="priceContainer" class="price-chart" aria-hidden="true" />
 
+      <div class="chart-toolbox-edge" aria-hidden="true" />
       <div class="chart-toolbox" role="toolbar" aria-label="绘图工具栏">
         <div class="chart-tool-group chart-tool-group-primary">
           <button
