@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
   TrendingDown,
   TrendingUp,
+  X,
 } from '@lucide/vue'
 import MarketChart from './components/MarketChart.vue'
 import { getMarketMetadata, getMarketSnapshot } from './api'
@@ -21,6 +22,7 @@ import { fromUtcInput, formatNumber, formatUtc } from './format'
 import {
   applyManualTrade,
   clampReplayCursor,
+  closeManualPosition,
   createReplayDraft,
   createReplayProjectFromDraft,
   createSeedReplayProject,
@@ -138,6 +140,9 @@ const positionLabel = computed(() => {
 })
 const canPlaceManualTrade = computed(() => Boolean(
   activeProject.value && currentCandle.value && !replayLoading.value && !replayError.value,
+))
+const canCloseManualTrade = computed(() => Boolean(
+  canPlaceManualTrade.value && manualTradeStats.value.side !== 'flat',
 ))
 const currentTimeframeValue = computed(() => activeProject.value?.timeframe ?? projectDraft.timeframe)
 const replayAccessGranted = computed(() => !authEnabled || (authLoaded.value && isSignedIn.value === true))
@@ -378,6 +383,22 @@ function placeManualTrade(side: ManualTradeSide) {
   updateProject(next)
   const action = next.trades.at(-1)?.action
   setNotice(`${side === 'buy' ? 'Buy' : 'Sell'} 已按 ${formatNumber(candle.close)} 成交，${tradeActionLabel(action)}。`)
+}
+
+function closeManualTrade() {
+  const project = activeProject.value
+  const candle = currentCandle.value
+  const side = manualTradeStats.value.side
+  if (!project || !candle || side === 'flat' || !canCloseManualTrade.value) return
+
+  const next = closeManualPosition(project, {
+    candleIndex: activePlaybackIndex.value,
+    timestamp: candle.timestamp,
+    price: candle.close,
+  })
+  updateProject(next)
+  const action = next.trades.at(-1)?.action
+  setNotice(`平仓已按 ${formatNumber(candle.close)} 成交，${tradeActionLabel(action)}。`)
 }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
@@ -1067,6 +1088,16 @@ onBeforeUnmount(() => {
               <button class="trade-button sell" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('sell')">
                 <TrendingDown :size="16" aria-hidden="true" />
                 Sell
+              </button>
+              <button
+                class="trade-button close"
+                type="button"
+                data-testid="replay-close-position"
+                :disabled="!canCloseManualTrade"
+                @click="closeManualTrade"
+              >
+                <X :size="16" aria-hidden="true" />
+                平仓
               </button>
             </div>
 

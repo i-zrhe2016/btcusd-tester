@@ -9,6 +9,7 @@ Last verified: 2026-09-09 @ working tree
 ## Implemented
 
 - Vue/Vite 复盘工作台支持 K 线播放、手动交易和 CandleKit 提供的 TradingView 风格绘图工具。
+- 复盘控制栏提供 Buy、Sell 和仅在持仓时启用的显式平仓按钮；平多/平空按当前持仓数量生成交易记录并复用既有盈亏计算。
 - 左侧分组工具栏支持 16 个绘图工具、选择/拖动、锁定、删除、清除和 Shift 测量。
 - 绘图以通用 `drawings` 模型与复盘项目一起保存在 `btcusd.replay.projects.v2`；v1 旧趋势线升级时清空但保留 v1 原始数据。
 - 图表保持黑白 K 线、无成交量副图，CandleKit 私有存储关闭，应用项目状态是唯一来源。

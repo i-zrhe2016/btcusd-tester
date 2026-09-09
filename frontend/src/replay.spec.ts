@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyManualTrade,
   clampReplayCursor,
+  closeManualPosition,
   createReplayProjectFromDraft,
   loadReplayProjects,
   nextReplayWindowStart,
@@ -309,6 +310,53 @@ describe('replay helpers', () => {
       action: 'close-short',
       realizedPnl: 15,
     })
+  })
+
+  it('closes the entire current position with an explicit close action', () => {
+    const project = createReplayProjectFromDraft({
+      name: 'Close Replay',
+      symbol: 'BTCUSD',
+      timeframe: '1m',
+      fromInput: '2026-08-27T00:00',
+      toInput: '2026-08-27T01:00',
+      speed: 1,
+    })
+
+    const firstLong = applyManualTrade(project, {
+      side: 'buy',
+      candleIndex: 1,
+      timestamp: project.from + 60,
+      price: 100,
+    })
+    const secondLong = applyManualTrade(firstLong, {
+      side: 'buy',
+      candleIndex: 2,
+      timestamp: project.from + 120,
+      price: 110,
+    })
+    const closedProject = closeManualPosition(secondLong, {
+      candleIndex: 4,
+      timestamp: project.from + 240,
+      price: 112,
+    })
+
+    expect(closedProject.trades.at(-1)).toMatchObject({
+      side: 'sell',
+      action: 'close-long',
+      quantity: 2,
+      realizedPnl: 14,
+    })
+    expect(summarizeManualTrades(closedProject.trades, 112, 4)).toMatchObject({
+      side: 'flat',
+      quantity: 0,
+      realizedPnl: 14,
+      unrealizedPnl: 0,
+    })
+    expect(closeManualPosition(project, {
+      candleIndex: 4,
+      timestamp: project.from + 240,
+      price: 112,
+    })).toBe(project)
   })
 
   it('drops future manual trades when trading after rewinding', () => {
