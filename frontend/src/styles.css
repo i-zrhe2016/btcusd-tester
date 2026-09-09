@@ -163,13 +163,75 @@ select {
 
 .app-shell.replay-active {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: 48px minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
 }
 
 .app-shell.replay-active .topbar {
   position: relative;
+  height: 48px;
+  padding: 0 14px;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.app-shell.replay-active .brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+}
+
+.app-shell.replay-immersive {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 100dvh;
+  height: 100dvh;
+  background: var(--chart-bg);
+}
+
+.app-shell.replay-immersive .topbar {
+  display: none;
+}
+
+.app-shell.replay-immersive .workspace-replay {
+  height: 100dvh;
+}
+
+.app-shell.replay-immersive .replay-console {
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.32);
+}
+
+.app-shell.replay-immersive .chart-card-bare .chart-toolbox {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-8px);
+}
+
+.app-shell.replay-immersive .chart-card-bare .chart-toolbox-edge {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: block;
+  width: 56px;
+}
+
+.app-shell.replay-immersive .chart-card-bare .chart-toolbox-edge:hover + .chart-toolbox,
+.app-shell.replay-immersive .chart-card-bare .chart-toolbox:hover,
+.app-shell.replay-immersive .chart-toolbox:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
 }
 
 .topbar {
@@ -275,6 +337,75 @@ select {
 
 .topbar-actions {
   gap: 14px;
+}
+
+.replay-topbar-meta {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+}
+
+.replay-topbar-meta strong,
+.replay-topbar-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replay-topbar-meta strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.replay-topbar-meta span {
+  color: var(--text-dim);
+  font: 600 10px/1.2 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.replay-topbar-status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.topbar-action,
+.topbar-icon-button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.topbar-action {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.topbar-icon-button {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+.topbar-action:hover,
+.topbar-icon-button:hover {
+  border-color: var(--accent);
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .auth-controls {
@@ -525,31 +656,40 @@ select {
 .chart-toolbox {
   position: absolute;
   z-index: 4;
-  top: 12px;
-  left: 12px;
+  top: 10px;
+  left: 10px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 5px;
-  width: 44px;
-  padding: 5px;
+  gap: 2px;
+  width: 40px;
+  max-height: calc(100% - 20px);
+  padding: 4px;
+  overflow-y: auto;
   border: 1px solid rgba(148, 163, 184, 0.42);
   border-radius: 7px;
   background: rgba(15, 23, 42, 0.88);
   box-shadow: 0 18px 36px rgba(0, 0, 0, 0.32);
   backdrop-filter: blur(10px);
+  scrollbar-width: thin;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.chart-toolbox-edge {
+  display: none;
 }
 
 .chart-card-bare .chart-toolbox {
-  top: 68px;
-  left: 12px;
+  top: 8px;
+  left: 8px;
+  max-height: calc(100% - 88px);
 }
 
 .chart-tool-group {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 3px;
-  padding-top: 5px;
+  grid-template-columns: 1fr;
+  gap: 2px;
+  padding-top: 4px;
   border-top: 1px solid rgba(148, 163, 184, 0.24);
 }
 
@@ -560,11 +700,11 @@ select {
 }
 
 .chart-tool-group-actions {
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: 1fr;
 }
 
 .chart-tool-group-label {
-  grid-column: 1 / -1;
+  display: none;
   overflow: hidden;
   color: rgba(203, 213, 225, 0.68);
   font-size: 8px;
@@ -577,8 +717,8 @@ select {
 
 .chart-tool-button {
   position: relative;
-  width: 32px;
-  min-height: 32px;
+  width: 30px;
+  min-height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -652,8 +792,8 @@ select {
 .measurement-readout {
   position: absolute;
   z-index: 4;
-  left: 68px;
-  bottom: 92px;
+  left: 56px;
+  bottom: 72px;
   max-width: min(420px, calc(100% - 24px));
   margin: 0;
   padding: 8px 10px;
@@ -666,7 +806,7 @@ select {
 }
 
 .measurement-readout {
-  bottom: 58px;
+  bottom: 68px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1036,24 +1176,6 @@ select {
   font-size: 11px;
 }
 
-.replay-topline {
-  position: absolute;
-  z-index: 5;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 12px;
-  pointer-events: none;
-}
-
-.replay-topline > * {
-  pointer-events: auto;
-}
-
-.replay-status,
 .replay-console {
   border: 1px solid rgba(185, 180, 168, 0.9);
   border-radius: var(--radius);
@@ -1062,24 +1184,10 @@ select {
   backdrop-filter: blur(10px);
 }
 
-.replay-back-button {
-  min-height: 42px;
-}
-
-.replay-status {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  justify-self: end;
-  gap: 8px;
-  max-width: min(52vw, 420px);
-  padding: 8px;
-}
-
 .replay-alert {
   position: absolute;
   z-index: 6;
-  top: 78px;
+  top: 12px;
   left: 12px;
   right: 12px;
 }
@@ -1087,64 +1195,47 @@ select {
 .replay-console {
   position: absolute;
   z-index: 5;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  display: grid;
-  gap: 0;
-  max-height: none;
-  padding: 8px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
   overflow: hidden;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
 }
 
 .console-strip {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto auto minmax(156px, auto) minmax(240px, auto);
-  grid-template-areas: "summary timeframe speed play trades stats";
-  gap: 10px;
+  display: flex;
+  width: 100%;
+  min-width: 0;
   align-items: center;
-  min-height: 44px;
+  gap: 12px;
 }
 
 .console-summary {
-  grid-area: summary;
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.console-summary strong {
-  color: var(--text);
-  font-size: 14px;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.console-summary span {
-  color: var(--text-muted);
-  font: 600 11px/1.35 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: none;
 }
 
 .timeframe-control {
-  grid-area: timeframe;
-  display: grid;
-  grid-template-columns: auto minmax(76px, auto);
-  gap: 8px;
+  flex: 0 0 auto;
+  display: flex;
   align-items: center;
-  min-height: 44px;
+  gap: 6px;
+  min-height: 36px;
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 700;
 }
 
 .timeframe-control select {
-  height: 36px;
-  min-width: 88px;
+  height: 32px;
+  min-width: 76px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -1153,12 +1244,12 @@ select {
 }
 
 .replay-speed-control {
-  grid-area: speed;
+  flex: 0 1 220px;
   display: grid;
-  grid-template-columns: auto minmax(76px, 112px) auto;
+  grid-template-columns: auto minmax(76px, 1fr) auto;
   gap: 6px;
   align-items: center;
-  min-height: 44px;
+  min-width: 0;
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 700;
@@ -1175,13 +1266,13 @@ select {
 }
 
 .console-play {
-  min-height: 40px;
+  flex: 0 0 auto;
+  min-height: 38px;
   white-space: nowrap;
-  grid-area: play;
 }
 
 .console-trade-actions {
-  grid-area: trades;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(68px, 1fr));
   gap: 8px;
@@ -1196,15 +1287,17 @@ select {
 }
 
 .console-quick-stats {
-  grid-area: stats;
+  flex: 0 1 auto;
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
+  margin-left: auto;
   min-width: 0;
 }
 
-.console-quick-stats span {
+.console-quick-stats > .console-stat {
   min-height: 28px;
   display: inline-flex;
   align-items: center;
@@ -1220,30 +1313,33 @@ select {
   white-space: nowrap;
 }
 
-.replay-load-status {
+.console-load-control {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  min-height: 28px;
-  padding-top: 4px;
-  color: var(--text-muted);
-  font: 700 11px/1.2 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+  gap: 6px;
+  max-width: 180px;
+  min-width: 0;
 }
 
-.replay-load-status span {
-  max-width: min(60vw, 520px);
+.console-load-control > span {
   overflow: hidden;
+  color: var(--text-dim);
+  font: 700 10px/1.2 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.replay-load-status .text-button {
+.console-load-button {
   min-height: 28px;
   padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
+  white-space: nowrap;
+}
+
+.console-fullscreen-button {
+  flex: 0 0 auto;
 }
 
 .console-body {
@@ -1567,15 +1663,6 @@ select {
 }
 
 @media (max-width: 1320px) {
-  .console-strip {
-    grid-template-columns: minmax(140px, 1fr) auto auto auto minmax(148px, auto) minmax(96px, auto);
-    grid-template-areas: "summary timeframe speed play trades stats";
-  }
-
-  .console-quick-stats span:not(:first-child) {
-    display: none;
-  }
-
   .console-body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
@@ -1609,19 +1696,6 @@ select {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .replay-status {
-    justify-content: flex-end;
-    max-width: none;
-  }
-
-  .console-strip {
-    grid-template-columns: minmax(0, 1fr) auto auto auto minmax(148px, auto) minmax(96px, auto);
-    grid-template-areas: "summary timeframe speed play trades stats";
-  }
-
-  .timeframe-control {
-    justify-self: auto;
-  }
 }
 
 @media (max-width: 920px) {
@@ -1717,47 +1791,8 @@ select {
     flex: 1 1 auto;
   }
 
-  .replay-topline {
-    top: 8px;
-    left: 8px;
-    right: 8px;
-    gap: 8px;
-  }
-
-  .replay-status {
-    display: none;
-  }
-
-  .replay-console {
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    padding: 8px;
-  }
-
-  .console-strip {
-    grid-template-columns: minmax(0, 1fr) auto minmax(104px, auto) auto;
-    grid-template-areas:
-      "summary timeframe trades play"
-      "speed speed speed speed";
-    gap: 8px;
-  }
-
-  .console-quick-stats {
-    display: none;
-  }
-
-  .console-summary span {
-    display: none;
-  }
-
   .timeframe-control {
-    grid-template-columns: auto;
     width: auto;
-  }
-
-  .timeframe-control > span {
-    display: none;
   }
 
   .timeframe-control select {
@@ -1802,6 +1837,115 @@ select {
   .chart-skeleton,
   .empty-state {
     min-height: 320px;
+  }
+}
+
+@media (max-width: 920px) {
+  .app-shell.replay-active .topbar {
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  .app-shell.replay-active .brand {
+    gap: 6px;
+  }
+
+  .replay-topbar-meta {
+    display: none;
+  }
+
+  .replay-topbar-status {
+    gap: 4px;
+  }
+
+  .replay-topbar-status .status-chip {
+    min-height: 24px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .topbar-actions {
+    gap: 6px;
+  }
+
+  .topbar-action {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .replay-console {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .console-strip {
+    gap: 6px;
+  }
+
+  .replay-speed-control {
+    flex-basis: 160px;
+  }
+
+  .console-quick-stats > .console-stat {
+    max-width: 160px;
+  }
+
+  .console-load-control > span {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell.replay-active .topbar {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .app-shell.replay-active .brand small {
+    display: none;
+  }
+
+  .replay-topbar-status .status-chip {
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+
+  .replay-console {
+    height: auto;
+    min-height: 56px;
+  }
+
+  .console-strip {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .timeframe-control {
+    order: 1;
+  }
+
+  .console-play {
+    order: 2;
+  }
+
+  .console-trade-actions {
+    order: 3;
+  }
+
+  .replay-speed-control {
+    order: 4;
+    flex: 1 1 140px;
+  }
+
+  .console-quick-stats {
+    order: 5;
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+
+  .console-quick-stats > .console-stat {
+    max-width: none;
   }
 }
 

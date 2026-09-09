@@ -1,10 +1,10 @@
 # Repository Current State
 
-Last verified: 2026-09-08 @ working tree
+Last verified: 2026-09-09 @ working tree
 
 ## Current Focus
 
-- 复盘行情动态加载、播放中速度控制与未加载区域绘图（Phase 1/2/3）。
+- 图表优先的 Replay 工作区布局与沉浸式复盘体验。
 
 ## Implemented
 
@@ -16,11 +16,15 @@ Last verified: 2026-09-08 @ working tree
 - 新行情窗口按 timestamp 去重、排序后追加，过期、重复和无进展请求不会覆盖当前复盘数据。
 - 复盘状态栏支持播放中调整 `0.25x`–`8x` 速度，调整后即时重建播放定时器并持久化当前项目速度。
 - 当前已加载/已播放 K 线右侧追加一批 Lightweight Charts whitespace 时间槽，不绘制虚假 K 线但支持 CandleKit 在未加载时间区域创建绘图锚点；行情追加或播放推进后按时间戳保留绘图。
+- Replay 顶栏压缩为 48px，统一展示项目、周期、播放状态、进度和仓位；项目库入口与全屏入口收进顶栏。
+- Replay 底部控制栏压缩为 56px，集中周期、播放速度、播放/交易、当前时间、加载更多和全屏操作；窄屏自动换行。
+- 图表可视范围按播放数据量调整 K 线间距，并将最新 K 线固定在约 78% 的横向位置，右侧保留约 22% 的未来区域。
+- CandleKit 工具栏改为单列 40px；沉浸式全屏隐藏网站顶栏、悬浮底栏，并通过左侧边缘热区按需显示工具栏。
 - Nginx 作为公网入口，行情和回测服务运行在私有网络中。
 
 ## In Progress
 
-- Phase 1/2/3 的代码、测试和文档已完成，尚未提交。
+- 无。
 
 ## Known Issues / Failing Checks
 
