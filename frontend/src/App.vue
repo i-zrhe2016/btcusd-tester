@@ -28,6 +28,7 @@ import {
   createSeedReplayProject,
   draftFromProject,
   loadActiveReplayProjectId,
+  assignReplayPaneTimeframe,
   loadReplayProjects,
   nextReplayPaneTimeframe,
   nextReplayWindowStart,
@@ -52,7 +53,6 @@ import {
   shouldPrefetchReplay,
   summarizeManualTrades,
   timeframeStepSeconds,
-  withReplayPaneTimeframe,
   type ManualTradeAction,
   type ManualTradeSide,
   type ReplayProject,
@@ -173,7 +173,6 @@ const canCloseManualTrade = computed(() => Boolean(
 ))
 const currentTimeframeValue = computed(() => activeProject.value?.timeframe ?? projectDraft.timeframe)
 const replayPaneCount = computed(() => Math.min(activeProject.value?.panes.length ?? 1, MAX_REPLAY_PANES))
-const replayPaneTimeframeOptions = computed(() => timeframeOptions.value.filter((timeframe) => timeframe !== currentTimeframeValue.value))
 const replayAccessGranted = computed(() => !authEnabled || (authLoaded.value && isSignedIn.value === true))
 const timeframeOptions = computed(() => {
   const supported = metadata.value?.supported_timeframes ?? Object.keys(timeframeLabels)
@@ -352,9 +351,8 @@ function setPlaybackCursor(index: number, shouldPause = true) {
   }
 }
 
-function changeReplayTimeframe(event: Event) {
+function changeReplayTimeframeTo(timeframe: string, panes?: string[]) {
   const project = activeProject.value
-  const timeframe = (event.target as HTMLSelectElement).value
   if (!project || !timeframe || project.timeframe === timeframe) return
 
   pausePlayback()
@@ -369,6 +367,7 @@ function changeReplayTimeframe(event: Event) {
   }
   const nextProject = {
     ...createReplayProjectFromDraft(nextDraft, project),
+    panes: normalizeReplayPanes(panes ?? project.panes, timeframe),
     cursorIndex: 0,
     cursorTimestamp,
   }
@@ -382,6 +381,19 @@ function changeReplayTimeframe(event: Event) {
       ? `周期已切换为 ${timeframeLabel}，已保留 ${formatUtc(cursorTimestamp)} UTC 的复盘进度、交易与绘图记录。`
       : `周期已切换为 ${timeframeLabel}，已保留交易与绘图记录。`,
   })
+}
+
+function changeReplayPaneTimeframe(index: number, event: Event) {
+  const project = activeProject.value
+  if (!project) return
+  const timeframe = (event.target as HTMLSelectElement).value
+  const panes = assignReplayPaneTimeframe(project.panes, index, timeframe)
+  if (panes.join(',') === project.panes.join(',')) return
+  if (panes[0] !== project.panes[0]) {
+    changeReplayTimeframeTo(panes[0], panes)
+    return
+  }
+  updateReplayPanes(panes)
 }
 
 function paneCursorTimestamp(): number | null {
@@ -477,12 +489,6 @@ function changeReplayPaneCount(event: Event): void {
   const panes = project.panes.slice(0, count)
   while (panes.length < count) panes.push(nextReplayPaneTimeframe(panes))
   updateReplayPanes(panes)
-}
-
-function changeReplayPaneTimeframe(index: number, event: Event): void {
-  const project = activeProject.value
-  if (!project) return
-  updateReplayPanes(withReplayPaneTimeframe(project.panes, index + 1, (event.target as HTMLSelectElement).value))
 }
 
 function removeReplayPane(index: number): void {
@@ -1176,7 +1182,20 @@ onBeforeUnmount(() => {
         <h1 id="replay-title" class="sr-only">{{ currentProjectLabel }} 复盘</h1>
         <div class="replay-panes" :data-panes="replayPaneCount">
           <div class="replay-pane">
-            <span v-if="replayPaneCount > 1" class="replay-pane-badge replay-pane-badge-offset">主屏 · {{ currentTimeframeValue }}</span>
+            <div class="replay-pane-header">
+              <span class="replay-pane-label">主屏</span>
+              <label class="sr-only" for="replay-pane-timeframe-0">主屏周期</label>
+              <select
+                id="replay-pane-timeframe-0"
+                data-testid="replay-pane-timeframe"
+                :value="currentTimeframeValue"
+                @change="changeReplayPaneTimeframe(0, $event)"
+              >
+                <option v-for="timeframe in timeframeOptions" :key="timeframe" :value="timeframe">
+                  {{ timeframeLabels[timeframe] ?? timeframe }}
+                </option>
+              </select>
+            </div>
             <MarketChart
               ref="marketChartRef"
               class="fullscreen-chart"
@@ -1191,16 +1210,17 @@ onBeforeUnmount(() => {
               @drawings-changed="updateProjectDrawings"
             />
           </div>
-          <div v-for="(pane, index) in secondaryPanes" :key="pane.timeframe" class="replay-pane">
-            <div class="replay-pane-tools">
-              <label class="sr-only" :for="`replay-pane-timeframe-${index}`">第 {{ index + 2 }} 屏周期</label>
+          <div v-for="(pane, index) in secondaryPanes" :key="`${index}-${pane.timeframe}`" class="replay-pane">
+            <div class="replay-pane-header">
+              <span class="replay-pane-label">第 {{ index + 2 }} 屏</span>
+              <label class="sr-only" :for="`replay-pane-timeframe-${index + 1}`">第 {{ index + 2 }} 屏周期</label>
               <select
-                :id="`replay-pane-timeframe-${index}`"
+                :id="`replay-pane-timeframe-${index + 1}`"
                 data-testid="replay-pane-timeframe"
                 :value="pane.timeframe"
-                @change="changeReplayPaneTimeframe(index, $event)"
+                @change="changeReplayPaneTimeframe(index + 1, $event)"
               >
-                <option v-for="timeframe in replayPaneTimeframeOptions" :key="timeframe" :value="timeframe">
+                <option v-for="timeframe in timeframeOptions" :key="timeframe" :value="timeframe">
                   {{ timeframeLabels[timeframe] ?? timeframe }}
                 </option>
               </select>
@@ -1239,19 +1259,6 @@ onBeforeUnmount(() => {
 
         <div class="replay-console" aria-label="复盘状态栏">
           <div class="console-strip">
-            <label class="timeframe-control">
-              <span>周期</span>
-              <select
-                :value="currentTimeframeValue"
-                :disabled="!activeProject || replayLoading"
-                @change="changeReplayTimeframe"
-              >
-                <option v-for="timeframe in timeframeOptions" :key="timeframe" :value="timeframe">
-                  {{ timeframeLabels[timeframe] ?? timeframe }}
-                </option>
-              </select>
-            </label>
-
             <label class="timeframe-control pane-count-control">
               <span>分屏</span>
               <select

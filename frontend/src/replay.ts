@@ -312,10 +312,10 @@ export function nextReplayPaneTimeframe(used: string[]): string {
   return REPLAY_PANE_PREFERENCE.find((timeframe) => !used.includes(timeframe)) ?? REPLAY_TIMEFRAMES[0]
 }
 
-export function withReplayPaneTimeframe(panes: string[], index: number, timeframe: string): string[] {
+export function assignReplayPaneTimeframe(panes: string[], index: number, timeframe: string): string[] {
   const next = normalizeReplayPanes(panes, panes[0] ?? timeframe)
-  if (index <= 0 || index >= next.length || !REPLAY_TIMEFRAMES.includes(timeframe)) return next
-  if (timeframe === next[0]) return next
+  if (index < 0 || index >= next.length || !REPLAY_TIMEFRAMES.includes(timeframe)) return next
+  if (timeframe === next[index]) return next
   const occupied = next.indexOf(timeframe)
   if (occupied >= 0) next[occupied] = next[index]
   next[index] = timeframe
