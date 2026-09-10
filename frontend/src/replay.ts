@@ -200,6 +200,8 @@ export function replayCursorIndexAtOrBefore(candles: Pick<Candle, 'timestamp'>[]
 
 export function timeframeStepSeconds(timeframe: string): number {
   switch (timeframe) {
+    case '5m':
+      return 5 * 60
     case '15m':
       return 15 * 60
     case '30m':
@@ -208,6 +210,8 @@ export function timeframeStepSeconds(timeframe: string): number {
       return 60 * 60
     case '2h':
       return 2 * 60 * 60
+    case '3h':
+      return 3 * 60 * 60
     case '4h':
       return 4 * 60 * 60
     case '1d':

@@ -80,7 +80,7 @@ async fn metadata(State(state): State<AppState>) -> Json<MarketMetadata> {
         candle_count: state.candles.len(),
         first_timestamp,
         last_timestamp,
-        supported_timeframes: ["1m", "15m", "30m", "1h", "2h", "4h", "1d", "1w", "1M"],
+        supported_timeframes: ["1m", "5m", "15m", "30m", "1h", "2h", "3h", "4h", "1d", "1w", "1M"],
     })
 }
 

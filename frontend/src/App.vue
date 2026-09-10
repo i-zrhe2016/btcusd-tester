@@ -60,10 +60,12 @@ const { isLoaded: authLoaded, isSignedIn } = useAuth()
 
 const timeframeLabels: Record<string, string> = {
   '1m': '1 分',
+  '5m': '5 分',
   '15m': '15 分',
   '30m': '30 分',
   '1h': '1 小时',
   '2h': '2 小时',
+  '3h': '3 小时',
   '4h': '4 小时',
   '1d': '日',
   '1w': '周',

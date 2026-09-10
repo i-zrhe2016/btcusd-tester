@@ -92,10 +92,12 @@ pub fn aggregate(candles: &[Candle], timeframe: Timeframe) -> Vec<Candle> {
 fn bucket_start(timestamp: i64, timeframe: Timeframe) -> i64 {
     let seconds = match timeframe {
         Timeframe::Minute1 => Some(60),
+        Timeframe::Minute5 => Some(5 * 60),
         Timeframe::Minute15 => Some(15 * 60),
         Timeframe::Minute30 => Some(30 * 60),
         Timeframe::Hour1 => Some(60 * 60),
         Timeframe::Hour2 => Some(2 * 60 * 60),
+        Timeframe::Hour3 => Some(3 * 60 * 60),
         Timeframe::Hour4 => Some(4 * 60 * 60),
         Timeframe::Day1 => Some(24 * 60 * 60),
         Timeframe::Week1 | Timeframe::Month1 => None,
@@ -149,8 +151,25 @@ mod tests {
     }
 
     #[test]
+    fn supports_five_minute_and_three_hour_buckets() {
+        for (name, seconds) in [("5m", 300), ("3h", 10_800)] {
+            let timeframe = Timeframe::parse(name).unwrap();
+            assert_eq!(timeframe.as_str(), name);
+            let result = aggregate(
+                &[candle(0, 10.0), candle(seconds - 60, 12.0), candle(seconds, 20.0)],
+                timeframe,
+            );
+            assert_eq!(result.len(), 2);
+            assert_eq!(result[0].timestamp, 0);
+            assert_eq!(result[0].open, 10.0);
+            assert_eq!(result[0].close, 13.0);
+            assert_eq!(result[0].volume, 6.0);
+            assert_eq!(result[1].timestamp, seconds);
+        }
+    }
+
+    #[test]
     fn monday_is_week_bucket_start() {
         assert_eq!(bucket_start(345_600, Timeframe::Week1), 345_600);
     }
 }
-
