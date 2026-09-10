@@ -15,7 +15,6 @@ import {
 import {
   ColorType,
   LineSeries,
-  LineStyle,
   createSeriesMarkers,
   type CandlestickData,
   type IChartApi,
@@ -321,6 +320,7 @@ function chartOptions() {
       textColor: chartTheme.text,
       fontFamily: chartTheme.fontFamily,
       fontSize: chartTheme.fontSize,
+      attributionLogo: false,
     },
     grid: {
       vertLines: { color: 'rgba(0, 0, 0, 0)', visible: false },
@@ -563,10 +563,6 @@ function buildCharts() {
       crosshairMarkerVisible: true,
       autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
     }, 1))
-    for (const price of [20, 50, 80]) {
-      stochSeries[0].createPriceLine({ price, color: '#787B86', lineWidth: 1,
-        lineStyle: LineStyle.Solid, axisLabelVisible: true, title: '' })
-    }
     priceChart.panes()[0].setStretchFactor(3)
     priceChart.panes()[1].setStretchFactor(1)
   }

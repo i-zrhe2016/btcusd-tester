@@ -2049,3 +2049,11 @@ select {
 .stoch-legend, .stoch-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .stoch-actions button { padding: 7px 10px; }
 .stoch-settings :focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
+
+.app-attribution {
+  padding: 6px 16px 14px;
+  color: #64748b;
+  font-size: 11px;
+  text-align: right;
+}
+.app-attribution a { color: inherit; text-decoration: underline; }
