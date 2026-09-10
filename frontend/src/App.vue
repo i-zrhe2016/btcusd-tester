@@ -32,6 +32,7 @@ import {
   nextReplayWindowStart,
   normalizeSpeed,
   projectRangeLabel,
+  reanchorManualTrades,
   reconcileReplayProject,
   replayCursorIndexAtOrBefore,
   replayWindowEnd,
@@ -248,6 +249,14 @@ function updateProjectCursor(projectId: string, cursorIndex: number, cursorTimes
   })
 }
 
+function reanchorProjectTrades(projectId: string, candles: MarketSnapshot['candles']) {
+  const current = projects.value.find((project) => project.id === projectId)
+  if (!current?.trades.length) return
+  const trades = reanchorManualTrades(current.trades, candles)
+  if (trades === current.trades) return
+  updateProject({ ...current, trades, updatedAt: new Date().toISOString() })
+}
+
 function updateActiveProjectSpeed(speed: number) {
   if (!activeProject.value) return
   const normalized = normalizeSpeed(speed)
@@ -340,11 +349,12 @@ function changeReplayTimeframe(event: Event) {
 
   updateProject(nextProject)
   syncDraftFromProject(nextProject)
+  const timeframeLabel = timeframeLabels[timeframe] ?? timeframe
   void loadReplaySnapshot(nextProject, {
     cursorTimestamp,
     notice: cursorTimestamp
-      ? `周期已切换为 ${timeframeLabels[timeframe] ?? timeframe}，已保留 ${formatUtc(cursorTimestamp)} UTC 的复盘进度；旧周期交易记录已清空。`
-      : `周期已切换为 ${timeframeLabels[timeframe] ?? timeframe}，旧周期交易记录已清空。`,
+      ? `周期已切换为 ${timeframeLabel}，已保留 ${formatUtc(cursorTimestamp)} UTC 的复盘进度、交易与绘图记录。`
+      : `周期已切换为 ${timeframeLabel}，已保留交易与绘图记录。`,
   })
 }
 
@@ -566,6 +576,7 @@ async function loadReplaySnapshot(
         ? clampReplayCursor(project.cursorIndex, snapshot.candles.length)
         : replayCursorIndexAtOrBefore(snapshot.candles, boundedCursorTimestamp)
       const mappedTimestamp = snapshot.candles[clamped]?.timestamp
+      reanchorProjectTrades(project.id, snapshot.candles)
       if (clamped !== project.cursorIndex || mappedTimestamp !== project.cursorTimestamp) {
         updateProjectCursor(project.id, clamped, mappedTimestamp)
       }

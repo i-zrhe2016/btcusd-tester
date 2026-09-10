@@ -47,6 +47,7 @@ import {
 import {
   DEFAULT_REPLAY_DRAWING_STYLE,
   REPLAY_DRAWING_TOOL_IDS,
+  replayCursorIndexAtOrBefore,
   replayDrawingPointsNeeded,
   replayUnloadedTimestamps,
   type ManualTrade,
@@ -218,19 +219,22 @@ const visibleCount = computed(() => {
 
 const visibleCandles = computed(() => props.snapshot?.candles.slice(0, visibleCount.value) ?? [])
 const currentCandle = computed(() => visibleCandles.value.at(-1) ?? null)
-const visibleTradeMarkers = computed<SeriesMarker<Time>[]>(() =>
-  props.manualTrades
-    .filter((trade) => trade.candleIndex < visibleCount.value)
+const visibleTradeMarkers = computed<SeriesMarker<Time>[]>(() => {
+  const candles = visibleCandles.value
+  const lastCandle = candles.at(-1)
+  if (!lastCandle) return []
+  return props.manualTrades
+    .filter((trade) => trade.timestamp <= lastCandle.timestamp)
     .map((trade) => ({
       id: trade.id,
-      time: trade.timestamp as UTCTimestamp,
+      time: candles[replayCursorIndexAtOrBefore(candles, trade.timestamp)].timestamp as UTCTimestamp,
       position: trade.side === 'buy' ? 'belowBar' : 'aboveBar',
       shape: trade.side === 'buy' ? 'arrowUp' : 'arrowDown',
       color: trade.side === 'buy' ? '#ffffff' : '#dbe4ee',
       text: trade.side === 'buy' ? 'BUY' : 'SELL',
       size: 1.25,
-    })),
-)
+    }))
+})
 
 const activeTool = computed<ReplayDrawingTool | null>(() => {
   toolbarRevision.value

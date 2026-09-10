@@ -198,6 +198,26 @@ export function replayCursorIndexAtOrBefore(candles: Pick<Candle, 'timestamp'>[]
   return result
 }
 
+export function reanchorManualTrades(
+  trades: ManualTrade[],
+  candles: Pick<Candle, 'timestamp'>[],
+): ManualTrade[] {
+  if (!trades.length || !candles.length) return trades
+
+  const lastTimestamp = candles[candles.length - 1].timestamp
+  let changed = false
+  const reanchored = trades.map((trade) => {
+    const candleIndex = trade.timestamp > lastTimestamp
+      ? candles.length
+      : replayCursorIndexAtOrBefore(candles, trade.timestamp)
+    if (candleIndex === trade.candleIndex) return trade
+    changed = true
+    return { ...trade, candleIndex }
+  })
+
+  return changed ? reanchored : trades
+}
+
 export function timeframeStepSeconds(timeframe: string): number {
   switch (timeframe) {
     case '5m':
@@ -336,10 +356,7 @@ export function createReplayProjectFromDraft(
   const timestamp = nowIso()
   const keepExistingState = Boolean(
     existing &&
-    existing.symbol === symbol &&
-    existing.timeframe === timeframe &&
-    existing.from === from &&
-    existing.to === to,
+    existing.symbol === symbol,
   )
 
   return {
@@ -514,8 +531,8 @@ function normalizeManualTrade(raw: unknown): ManualTrade | null {
 
 export function sortManualTrades(trades: ManualTrade[]): ManualTrade[] {
   return [...trades].sort((left, right) => {
-    const candleOrder = left.candleIndex - right.candleIndex
-    if (candleOrder !== 0) return candleOrder
+    const timeOrder = left.timestamp - right.timestamp
+    if (timeOrder !== 0) return timeOrder
     return left.createdAt.localeCompare(right.createdAt)
   })
 }
