@@ -1,10 +1,10 @@
 # Repository Current State
 
-Last verified: 2026-09-10 @ working tree
+Last verified: 2026-09-10 @ cf760d1
 
 ## Current Focus
 
-- 可调整参数的双组 Stoch 复盘副图。
+- 图表展示与交互调整：Stoch 参考线、TradingView 署名、右键清除绘图。
 
 ## Implemented
 
@@ -12,7 +12,9 @@ Last verified: 2026-09-10 @ working tree
 - 复盘控制栏提供 Buy、Sell 和仅在持仓时启用的显式平仓按钮；平多/平空按当前持仓数量生成交易记录并复用既有盈亏计算。
 - 左侧分组工具栏支持 16 个绘图工具、选择/拖动、锁定、删除、清除和 Shift 测量。
 - 绘图以通用 `drawings` 模型与复盘项目一起保存在 `btcusd.replay.projects.v2`；v1 旧趋势线升级时清空但保留 v1 原始数据。
-- 图表保持黑白 K 线、无成交量副图；Stoch 副图以已播放收盘价计算双组 K/D，提供 20/50/80 参考线，按周期设置参数、恢复默认并在浏览器保存。
+- 图表保持黑白 K 线、无成交量副图；Stoch 副图以已播放收盘价计算双组 K/D，不再绘制固定 20/50/80 参考线，按周期设置参数、恢复默认并在浏览器保存。
+- 图表关闭 Lightweight Charts 的 TradingView 图标，改在页面底部提供 TradingView 署名与链接（库许可证要求二选一）。
+- 图表支持右键菜单清除当前项目的全部绘图。
 - 行情聚合与复盘周期支持 1m、5m、15m、30m、1h、2h、3h、4h、1d、1w、1M；Stoch 使用用户提供的各周期默认值。
 - 图表为底部状态栏预留高度，窄屏及全屏下副图与时间轴不被遮挡；CandleKit 私有存储关闭，绘图使用应用项目状态。
 - 复盘行情按每批 60 根 K 线加载；当前批次剩余 15 根未播放时后台预取，窗口末尾等待加载结果，失败暂停并支持手动重试。
@@ -40,6 +42,8 @@ Last verified: 2026-09-10 @ working tree
 - 浏览器通过同源 `/api/...` 访问服务；本地 Vite 优先连接 `127.0.0.1:8081/8082`，否则回退到 HTTPS 网关。
 - 部署使用 Tailscale 内网地址；后端仍使用固定访客用户，未完成服务端 Clerk 身份校验。
 - CandleKit 版本固定为 `@getcandlekit/charts@0.1.0`；绘图持久化由应用项目模型负责，不使用 CandleKit 私有 localStorage。
+- Lightweight Charts 固定为 `lightweight-charts@5.2.1`，关闭 `attributionLogo` 时必须保留页脚署名链接。
+- 该 Tailscale 节点不得再配置监听 443 的 `tailscale serve`：它会劫持内网 HTTPS 且节点未启用 Tailscale 证书，导致 `https://100.112.13.103` 无法打开。
 
 ## Architecture Snapshot
 
