@@ -673,6 +673,10 @@ select {
   pointer-events: none;
 }
 
+.replay-pane-badge-offset {
+  left: 56px;
+}
+
 .replay-pane-tools {
   position: absolute;
   z-index: 4;

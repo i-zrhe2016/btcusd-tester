@@ -315,6 +315,7 @@ export function nextReplayPaneTimeframe(used: string[]): string {
 export function withReplayPaneTimeframe(panes: string[], index: number, timeframe: string): string[] {
   const next = normalizeReplayPanes(panes, panes[0] ?? timeframe)
   if (index <= 0 || index >= next.length || !REPLAY_TIMEFRAMES.includes(timeframe)) return next
+  if (timeframe === next[0]) return next
   const occupied = next.indexOf(timeframe)
   if (occupied >= 0) next[occupied] = next[index]
   next[index] = timeframe
@@ -332,13 +333,16 @@ export function replayPaneWindow(
   return { from, to, limit: REPLAY_PANE_WINDOW_LIMIT }
 }
 
+// A pane is loaded for a requested time window, not for a candle range: the window can be
+// clamped by the project end, so candles may never reach the cursor even though the pane
+// already covers it. Reload only when the cursor leaves the loaded window.
 export function replayPaneNeedsReload(
-  candles: Pick<Candle, 'timestamp'>[],
+  window: ReplayWindowRange | null,
   cursorTimestamp: number,
 ): boolean {
-  if (candles.length === 0) return true
+  if (!window) return true
   if (!Number.isFinite(cursorTimestamp)) return false
-  return cursorTimestamp < candles[0].timestamp || cursorTimestamp > candles[candles.length - 1].timestamp
+  return cursorTimestamp < window.from || cursorTimestamp >= window.to
 }
 
 export function nextReplayWindowStart(

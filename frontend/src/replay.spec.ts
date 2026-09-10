@@ -554,7 +554,8 @@ describe('replay multi-timeframe panes', () => {
     expect(nextReplayPaneTimeframe(['1h', '5m', '15m', '30m'])).toBe('4h')
     expect(nextReplayPaneTimeframe(REPLAY_TIMEFRAMES)).toBe('1m')
     expect(withReplayPaneTimeframe(['1h', '5m'], 1, '4h')).toEqual(['1h', '4h'])
-    expect(withReplayPaneTimeframe(['1h', '5m'], 1, '1h')).toEqual(['5m', '1h'])
+    expect(withReplayPaneTimeframe(['1h', '5m', '15m'], 2, '5m')).toEqual(['1h', '15m', '5m'])
+    expect(withReplayPaneTimeframe(['1h', '5m'], 1, '1h')).toEqual(['1h', '5m'])
     expect(withReplayPaneTimeframe(['1h', '5m'], 1, 'bogus')).toEqual(['1h', '5m'])
     expect(withReplayPaneTimeframe(['1h', '5m'], 0, '4h')).toEqual(['1h', '5m'])
   })
@@ -573,15 +574,23 @@ describe('replay multi-timeframe panes', () => {
     expect(replayPaneWindow(8_999_000, project, '5m').to).toBe(9_000_000)
   })
 
-  it('reloads a pane only when the cursor leaves its loaded candles', () => {
-    const candles = [{ timestamp: 100 }, { timestamp: 200 }, { timestamp: 300 }]
+  it('reloads a pane only when the cursor leaves its loaded window', () => {
+    const window = { from: 1_000_000, to: 1_010_000, limit: 1001 }
 
-    expect(replayPaneNeedsReload([], 100)).toBe(true)
-    expect(replayPaneNeedsReload(candles, 99)).toBe(true)
-    expect(replayPaneNeedsReload(candles, 100)).toBe(false)
-    expect(replayPaneNeedsReload(candles, 250)).toBe(false)
-    expect(replayPaneNeedsReload(candles, 300)).toBe(false)
-    expect(replayPaneNeedsReload(candles, 301)).toBe(true)
+    expect(replayPaneNeedsReload(null, 1_000_000)).toBe(true)
+    expect(replayPaneNeedsReload(window, 999_999)).toBe(true)
+    expect(replayPaneNeedsReload(window, 1_000_000)).toBe(false)
+    expect(replayPaneNeedsReload(window, 1_009_999)).toBe(false)
+    expect(replayPaneNeedsReload(window, 1_010_000)).toBe(true)
+    expect(replayPaneNeedsReload(window, Number.NaN)).toBe(false)
+  })
+
+  it('keeps a pane loaded while the project end clamps its window', () => {
+    const project = { from: 1_000_000, to: 1_007_200 }
+    const window = replayPaneWindow(1_003_600, project, '1d')
+
+    expect(window.to).toBe(project.to)
+    expect(replayPaneNeedsReload(window, 1_007_100)).toBe(false)
   })
 
   it('keeps the split layout when the primary timeframe changes', () => {

@@ -58,6 +58,7 @@ import {
   type ReplayProject,
   type ReplayProjectDraft,
   type ReplayDrawing,
+  type ReplayWindowRange,
 } from './replay'
 import type { MarketMetadata, MarketSnapshot } from './types'
 
@@ -67,6 +68,7 @@ interface ReplayPaneState {
   projectId: string
   timeframe: string
   snapshot: MarketSnapshot | null
+  range: ReplayWindowRange | null
   loading: boolean
   error: string
   requestId: number
@@ -171,6 +173,7 @@ const canCloseManualTrade = computed(() => Boolean(
 ))
 const currentTimeframeValue = computed(() => activeProject.value?.timeframe ?? projectDraft.timeframe)
 const replayPaneCount = computed(() => Math.min(activeProject.value?.panes.length ?? 1, MAX_REPLAY_PANES))
+const replayPaneTimeframeOptions = computed(() => timeframeOptions.value.filter((timeframe) => timeframe !== currentTimeframeValue.value))
 const replayAccessGranted = computed(() => !authEnabled || (authLoaded.value && isSignedIn.value === true))
 const timeframeOptions = computed(() => {
   const supported = metadata.value?.supported_timeframes ?? Object.keys(timeframeLabels)
@@ -411,6 +414,7 @@ async function loadReplayPane(pane: ReplayPaneState, project: ReplayProject, anc
     })
     if (pane.requestId !== requestId) return
     pane.snapshot = snapshot
+    pane.range = range
   } catch (caught) {
     if (pane.requestId !== requestId) return
     pane.error = caught instanceof Error ? caught.message : '副屏行情加载失败。'
@@ -428,13 +432,21 @@ function syncReplayPanes(): void {
   const current = secondaryPanes.value
   secondaryPanes.value = project.panes.slice(1, MAX_REPLAY_PANES).map((timeframe) => {
     const existing = current.find((pane) => pane.timeframe === timeframe && pane.projectId === project.id)
-    return existing ?? { projectId: project.id, timeframe, snapshot: null, loading: false, error: '', requestId: 0 }
+    return existing ?? {
+      projectId: project.id,
+      timeframe,
+      snapshot: null,
+      range: null,
+      loading: false,
+      error: '',
+      requestId: 0,
+    }
   })
   const anchor = paneCursorTimestamp()
   if (anchor === null) return
   for (const pane of secondaryPanes.value) {
     if (pane.loading) continue
-    if (replayPaneNeedsReload(pane.snapshot?.candles ?? [], anchor)) {
+    if (replayPaneNeedsReload(pane.range, anchor)) {
       void loadReplayPane(pane, project, anchor)
     }
   }
@@ -1164,7 +1176,7 @@ onBeforeUnmount(() => {
         <h1 id="replay-title" class="sr-only">{{ currentProjectLabel }} 复盘</h1>
         <div class="replay-panes" :data-panes="replayPaneCount">
           <div class="replay-pane">
-            <span class="replay-pane-badge">主屏 · {{ currentTimeframeValue }}</span>
+            <span v-if="replayPaneCount > 1" class="replay-pane-badge replay-pane-badge-offset">主屏 · {{ currentTimeframeValue }}</span>
             <MarketChart
               ref="marketChartRef"
               class="fullscreen-chart"
@@ -1188,7 +1200,7 @@ onBeforeUnmount(() => {
                 :value="pane.timeframe"
                 @change="changeReplayPaneTimeframe(index, $event)"
               >
-                <option v-for="timeframe in timeframeOptions" :key="timeframe" :value="timeframe">
+                <option v-for="timeframe in replayPaneTimeframeOptions" :key="timeframe" :value="timeframe">
                   {{ timeframeLabels[timeframe] ?? timeframe }}
                 </option>
               </select>
