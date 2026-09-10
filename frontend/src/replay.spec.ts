@@ -11,15 +11,21 @@ import {
   reanchorManualTrades,
   reconcileReplayProject,
   replayCursorIndexAtOrBefore,
+  replayCursorIndexAtOrAfter,
   replayDelayMs,
+  replayProgressLabel,
   replayUnloadedTimestamps,
   replayWindowEnd,
+  replayWindowRange,
   saveReplayProjects,
   shouldPrefetchReplay,
   summarizeManualTrades,
   timeframeStepSeconds,
+  REPLAY_FORWARD_CANDLES,
+  REPLAY_HISTORY_CANDLES,
   REPLAY_PAGE_SIZE,
   REPLAY_PREFETCH_THRESHOLD,
+  REPLAY_WINDOW_LIMIT,
   type ManualTrade,
   type ReplayProject,
   type ReplayDrawing,
@@ -166,6 +172,44 @@ describe('replay helpers', () => {
     expect(replayCursorIndexAtOrBefore(candles, 90)).toBe(0)
     expect(replayCursorIndexAtOrBefore(candles, 250)).toBe(1)
     expect(replayCursorIndexAtOrBefore(candles, 999)).toBe(2)
+  })
+
+  it('maps an empty cursor timestamp to the first candle inside the project range', () => {
+    const candles = [{ timestamp: 100 }, { timestamp: 200 }, { timestamp: 360 }]
+
+    expect(replayCursorIndexAtOrAfter(candles, 90)).toBe(0)
+    expect(replayCursorIndexAtOrAfter(candles, 200)).toBe(1)
+    expect(replayCursorIndexAtOrAfter(candles, 300)).toBe(2)
+    expect(replayCursorIndexAtOrAfter(candles, 999)).toBe(2)
+    expect(replayCursorIndexAtOrAfter([], 100)).toBe(0)
+  })
+
+  it('loads a long history window behind the cursor', () => {
+    const project = { from: 1_000_000, to: 9_000_000, timeframe: '1m' }
+    const window = replayWindowRange(2_000_000, project)
+
+    expect(REPLAY_HISTORY_CANDLES).toBe(500)
+    expect(REPLAY_FORWARD_CANDLES).toBe(30)
+    expect(REPLAY_WINDOW_LIMIT).toBe(531)
+    expect(window.from).toBe(2_000_000 - (500 * 60))
+    expect(window.to).toBe(2_000_000 + (30 * 60))
+    expect(window.limit).toBe(531)
+  })
+
+  it('keeps the history window inside the project and dataframe bounds', () => {
+    const project = { from: 1_000_000, to: 1_001_800, timeframe: '1m' }
+
+    expect(replayWindowRange(30_000, project).from).toBe(0)
+    expect(replayWindowRange(1_000_000, project).to).toBe(1_001_800)
+  })
+
+  it('counts replay progress from the project start instead of the loaded history', () => {
+    const candles = [{ timestamp: 100 }, { timestamp: 200 }, { timestamp: 360 }]
+    const project = { from: 200, cursorIndex: 1 } as ReplayProject
+
+    expect(replayProgressLabel(project, [])).toBe('0 / 0')
+    expect(replayProgressLabel(project, candles)).toBe('1 / 2')
+    expect(replayProgressLabel({ ...project, cursorIndex: 2 }, candles)).toBe('2 / 2')
   })
 
   it('creates bounded lazy-loading windows', () => {
