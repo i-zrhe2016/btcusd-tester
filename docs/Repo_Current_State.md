@@ -1,10 +1,10 @@
 # Repository Current State
 
-Last verified: 2026-09-10 @ 9c098a6
+Last verified: 2026-09-10 @ d384a51
 
 ## Current Focus
 
-- 复盘周期切换的数据保留：切换周期不再清空手动交易与绘图。
+- 复盘图表的历史上下文：游标之前的历史 K 线铺满图表宽度，不再保留大面积空白。
 
 ## Implemented
 
