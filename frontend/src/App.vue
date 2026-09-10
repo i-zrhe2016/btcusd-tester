@@ -1136,5 +1136,8 @@ onBeforeUnmount(() => {
         </div>
       </section>
     </main>
+    <footer class="app-attribution">
+      图表组件 <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">TradingView Lightweight Charts™</a> · Copyright (c) 2026 TradingView, Inc.
+    </footer>
   </div>
 </template>

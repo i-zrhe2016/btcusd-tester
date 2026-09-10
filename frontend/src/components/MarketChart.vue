@@ -15,7 +15,6 @@ import {
 import {
   ColorType,
   LineSeries,
-  LineStyle,
   createSeriesMarkers,
   type CandlestickData,
   type IChartApi,
@@ -172,6 +171,7 @@ const drawingToolGroups: DrawingToolGroup[] = [
 ]
 
 const priceContainer = ref<HTMLElement | null>(null)
+const contextMenuElement = ref<HTMLElement | null>(null)
 let chartController: ChartController | null = null
 let priceChart: IChartApi | null = null
 let candleSeries: ISeriesApi<'Candlestick'> | null = null
@@ -188,6 +188,7 @@ let lastDrawingSnapshot = ''
 const measurementResult = ref<MeasurementResult | null>(null)
 const toolbarRevision = ref(0)
 const toolFeedback = ref('')
+const contextMenuPosition = ref<{ left: number; top: number } | null>(null)
 
 const chartTheme: ChartTheme = {
   mode: 'dark',
@@ -319,6 +320,7 @@ function chartOptions() {
       textColor: chartTheme.text,
       fontFamily: chartTheme.fontFamily,
       fontSize: chartTheme.fontSize,
+      attributionLogo: false,
     },
     grid: {
       vertLines: { color: 'rgba(0, 0, 0, 0)', visible: false },
@@ -561,10 +563,6 @@ function buildCharts() {
       crosshairMarkerVisible: true,
       autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
     }, 1))
-    for (const price of [20, 50, 80]) {
-      stochSeries[0].createPriceLine({ price, color: '#787B86', lineWidth: 1,
-        lineStyle: LineStyle.Solid, axisLabelVisible: true, title: '' })
-    }
     priceChart.panes()[0].setStretchFactor(3)
     priceChart.panes()[1].setStretchFactor(1)
   }
@@ -689,6 +687,45 @@ function clearDrawings() {
   setToolFeedback('当前项目的绘图已清除。')
 }
 
+function closeContextMenu() {
+  contextMenuPosition.value = null
+}
+
+function openContextMenu(event: MouseEvent) {
+  event.preventDefault()
+  const chart = priceContainer.value
+  if (!chart) return
+
+  const bounds = chart.getBoundingClientRect()
+  contextMenuPosition.value = {
+    left: Math.max(8, Math.min(event.clientX - bounds.left, chart.clientWidth - 8)),
+    top: Math.max(8, Math.min(event.clientY - bounds.top, chart.clientHeight - 8)),
+  }
+
+  void nextTick(() => {
+    const menu = contextMenuElement.value
+    const currentPosition = contextMenuPosition.value
+    if (!menu || !currentPosition || !priceContainer.value) return
+    const maxLeft = Math.max(8, priceContainer.value.clientWidth - menu.offsetWidth - 8)
+    const maxTop = Math.max(8, priceContainer.value.clientHeight - menu.offsetHeight - 8)
+    contextMenuPosition.value = {
+      left: Math.min(currentPosition.left, maxLeft),
+      top: Math.min(currentPosition.top, maxTop),
+    }
+  })
+}
+
+function clearDrawingsFromContextMenu() {
+  closeContextMenu()
+  clearDrawings()
+}
+
+function handleDocumentPointerDown(event: PointerEvent) {
+  if (!contextMenuPosition.value) return
+  if (contextMenuElement.value?.contains(event.target as Node)) return
+  closeContextMenu()
+}
+
 function clearMeasurement() {
   measurementController?.clear()
   setToolFeedback('测量已清除。')
@@ -696,6 +733,7 @@ function clearMeasurement() {
 
 function handleKeyDown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
+  closeContextMenu()
   measurementController?.clear()
   if (drawingEngine?.getActiveTool() || drawingEngine?.getDraft()) {
     drawingEngine.cancelDraft()
@@ -723,6 +761,7 @@ watch(() => props.drawings, () => {
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   await nextTick()
   if (props.snapshot?.candles.length && !chartController) {
     buildCharts()
@@ -731,6 +770,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  closeContextMenu()
   clearFeedbackTimer()
   disposeCharts()
 })
@@ -768,7 +809,7 @@ onBeforeUnmount(() => {
       <span>请调整 UTC 时间范围后重新加载。</span>
     </div>
     <div v-else class="chart-stage">
-      <div ref="priceContainer" class="price-chart" aria-hidden="true" />
+      <div ref="priceContainer" class="price-chart" aria-hidden="true" @contextmenu="openContextMenu" />
 
       <details v-if="stochLengths" class="stoch-settings">
         <summary>Stoch · {{ stochPeriod }} · {{ stochLengths[0] }} / {{ stochLengths[1] }}</summary>
@@ -865,6 +906,29 @@ onBeforeUnmount(() => {
             <X :size="16" aria-hidden="true" />
           </button>
         </div>
+      </div>
+
+      <div
+        v-if="contextMenuPosition"
+        ref="contextMenuElement"
+        class="chart-context-menu"
+        role="menu"
+        data-testid="drawing-context-menu"
+        :style="{ left: contextMenuPosition.left + 'px', top: contextMenuPosition.top + 'px' }"
+        @pointerdown.stop
+        @contextmenu.prevent
+      >
+        <button
+          type="button"
+          role="menuitem"
+          data-testid="drawing-context-clear"
+          aria-label="删除全部绘图"
+          :disabled="!drawings.length || isLocked"
+          @click="clearDrawingsFromContextMenu"
+        >
+          <Trash2 :size="15" aria-hidden="true" />
+          <span>删除全部绘图</span>
+        </button>
       </div>
 
       <p v-if="activeTool || toolFeedback" class="drawing-hint" role="status" aria-live="polite">
