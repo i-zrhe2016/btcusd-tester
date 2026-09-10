@@ -202,9 +202,10 @@ select {
 }
 
 .app-shell.replay-immersive .replay-console {
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  margin: 0 12px 12px;
   border: 1px solid rgba(148, 163, 184, 0.42);
   border-radius: var(--radius);
   box-shadow: 0 18px 36px rgba(0, 0, 0, 0.32);
@@ -572,6 +573,8 @@ select {
 
 .replay-screen {
   position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -605,7 +608,7 @@ select {
 }
 
 .fullscreen-chart {
-  position: absolute;
+  position: relative;
   inset: 0;
   border: 0;
   border-radius: 0;
@@ -1193,7 +1196,7 @@ select {
 }
 
 .replay-console {
-  position: absolute;
+  position: relative;
   z-index: 5;
   left: 0;
   right: 0;
@@ -1977,3 +1980,25 @@ select {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Stoch settings share the chart's compact, dark controls. */
+.stoch-settings {
+  position: absolute;
+  top: 8px;
+  right: 76px;
+  z-index: 7;
+  max-width: calc(100% - 132px);
+  color: #e2e8f0;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.stoch-settings summary { padding: 7px 10px; cursor: pointer; }
+.stoch-settings form { width: 260px; max-width: 100%; padding: 10px; }
+.stoch-settings p { margin: 8px 0; color: #cbd5e1; line-height: 1.5; }
+.stoch-settings label { display: flex; align-items: center; gap: 12px; margin: 8px 0; color: #e2e8f0; }
+.stoch-settings input { width: 100%; min-width: 0; padding: 6px; }
+.stoch-legend, .stoch-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.stoch-actions button { padding: 7px 10px; }
+.stoch-settings :focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }

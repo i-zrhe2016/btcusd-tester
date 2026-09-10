@@ -167,6 +167,8 @@ describe('replay helpers', () => {
 
   it('creates bounded lazy-loading windows', () => {
     expect(timeframeStepSeconds('1m')).toBe(60)
+    expect(timeframeStepSeconds('5m')).toBe(300)
+    expect(timeframeStepSeconds('3h')).toBe(10800)
     expect(REPLAY_PAGE_SIZE).toBe(60)
     expect(REPLAY_PREFETCH_THRESHOLD).toBe(15)
     expect(replayWindowEnd(1_000, 20_000, '1m')).toBe(4_600)

@@ -14,6 +14,8 @@ import {
 } from '@getcandlekit/charts'
 import {
   ColorType,
+  LineSeries,
+  LineStyle,
   createSeriesMarkers,
   type CandlestickData,
   type IChartApi,
@@ -55,6 +57,7 @@ import {
 } from '../replay'
 import type { MarketSnapshot } from '../types'
 import { formatUtc } from '../format'
+import { calculateStoch, readStochSettings, STOCH_DEFAULTS, STOCH_STORAGE_KEY, validStochLength, type StochLengths } from '../stoch'
 
 const props = withDefaults(defineProps<{
   snapshot: MarketSnapshot | null
@@ -77,6 +80,51 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (event: 'drawings-changed', drawings: ReplayDrawing[]): void
 }>()
+
+const stochSettings = ref<Record<string, StochLengths>>({})
+try { stochSettings.value = readStochSettings(localStorage.getItem(STOCH_STORAGE_KEY)) } catch { /* Storage may be disabled. */ }
+const stochPeriod = computed(() => props.snapshot?.timeframe ?? '1m')
+const stochLengths = computed(() => stochSettings.value[stochPeriod.value] ?? STOCH_DEFAULTS[stochPeriod.value])
+const stochDraft = ref<StochLengths>([10, 20])
+const stochMessage = ref('')
+const stochLines: Array<{ key: 'k1' | 'd1' | 'k2' | 'd2'; color: string }> = [
+  { key: 'k1', color: '#ffffff' }, { key: 'd1', color: '#ffff00' },
+  { key: 'k2', color: '#ff0000' }, { key: 'd2', color: '#00ffff' },
+]
+let stochSeries: ISeriesApi<'Line'>[] = []
+
+watch(stochLengths, (lengths) => {
+  stochDraft.value = lengths ? [...lengths] : [10, 20]
+  stochMessage.value = ''
+}, { immediate: true })
+
+function applyStoch(reset = false) {
+  const lengths = reset ? STOCH_DEFAULTS[stochPeriod.value] : stochDraft.value
+  if (!lengths || !lengths.every(validStochLength)) {
+    stochMessage.value = 'K1 和 K2 必须是大于或等于 1 的整数。'
+    return
+  }
+  stochSettings.value = { ...stochSettings.value, [stochPeriod.value]: [...lengths] }
+  stochDraft.value = [...lengths]
+  updateStoch()
+  try {
+    localStorage.setItem(STOCH_STORAGE_KEY, JSON.stringify(stochSettings.value))
+    void nextTick(() => { stochMessage.value = reset ? '已恢复当前周期默认参数。' : '参数已应用并保存。' })
+  } catch {
+    void nextTick(() => { stochMessage.value = '参数已应用；浏览器无法保存，刷新后将恢复默认。' })
+  }
+}
+
+function updateStoch() {
+  if (!stochLengths.value) return
+  const points = calculateStoch(visibleCandles.value, stochLengths.value)
+  stochSeries.forEach((series, index) => {
+    const key = stochLines[index].key
+    series.setData(points.map((point) => point[key] === null
+      ? { time: point.timestamp as UTCTimestamp }
+      : { time: point.timestamp as UTCTimestamp, value: point[key] as number }))
+  })
+}
 
 interface DrawingToolOption {
   id: ReplayDrawingTool
@@ -417,6 +465,7 @@ function syncDrawingsFromProps() {
 }
 
 function disposeCharts() {
+  stochSeries = []
   resizeObserver?.disconnect()
   resizeObserver = null
   if (priceChart && visibleRangeHandler) {
@@ -471,6 +520,7 @@ function setSeriesData() {
   chartController.setData(visibleCandles.value.map(toCandleKitBar))
   candleSeries.setData(unloadedChartData())
   tradeMarkers?.setMarkers(visibleTradeMarkers.value)
+  updateStoch()
   setPlaybackRange()
 }
 
@@ -505,6 +555,19 @@ function buildCharts() {
     priceLineVisible: false,
   })
   tradeMarkers = createSeriesMarkers(candleSeries, [], { autoScale: true, zOrder: 'top' })
+  if (stochLengths.value) {
+    stochSeries = stochLines.map(({ key, color }) => priceChart!.addSeries(LineSeries, {
+      title: key, color, lineWidth: 2, priceLineVisible: false,
+      crosshairMarkerVisible: true,
+      autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+    }, 1))
+    for (const price of [20, 50, 80]) {
+      stochSeries[0].createPriceLine({ price, color: '#787B86', lineWidth: 1,
+        lineStyle: LineStyle.Solid, axisLabelVisible: true, title: '' })
+    }
+    priceChart.panes()[0].setStretchFactor(3)
+    priceChart.panes()[1].setStretchFactor(1)
+  }
 
   const engine = new DrawingEngine()
   engine.setDefaultStyle({ ...DEFAULT_REPLAY_DRAWING_STYLE })
@@ -706,6 +769,20 @@ onBeforeUnmount(() => {
     </div>
     <div v-else class="chart-stage">
       <div ref="priceContainer" class="price-chart" aria-hidden="true" />
+
+      <details v-if="stochLengths" class="stoch-settings">
+        <summary>Stoch · {{ stochPeriod }} · {{ stochLengths[0] }} / {{ stochLengths[1] }}</summary>
+        <form @submit.prevent="applyStoch()">
+          <strong>Stoch 参数 · {{ stochPeriod }}</strong>
+          <p>按当前周期保存；平滑长度为参数 × 0.3 四舍五入，最小为 1。</p>
+          <label>K1 <input v-model.number="stochDraft[0]" aria-label="Stoch K1" type="number" min="1" step="1" required /></label>
+          <label>K2 <input v-model.number="stochDraft[1]" aria-label="Stoch K2" type="number" min="1" step="1" required /></label>
+          <div class="stoch-legend"><span v-for="line in stochLines" :key="line.key" :style="{ color: line.color }">{{ line.key }}</span></div>
+          <p>仅使用已播放行情；历史较短时曲线仍在预热。</p>
+          <div class="stoch-actions"><button type="submit">应用参数</button><button type="button" @click="applyStoch(true)">恢复默认</button></div>
+          <p v-if="stochMessage" role="status">{{ stochMessage }}</p>
+        </form>
+      </details>
 
       <div class="chart-toolbox-edge" aria-hidden="true" />
       <div class="chart-toolbox" role="toolbar" aria-label="绘图工具栏">

@@ -6,7 +6,7 @@
 - 内容类型：`application/json`
 - 时间：Unix UTC 秒，范围为左闭右开 `[from, to)`。
 - 唯一支持的品种：`BTCUSD`，同时接受输入别名 `BTC-USD`。
-- 支持周期：`1m, 15m, 30m, 1h, 2h, 4h, 1d, 1w, 1M`。
+- 支持周期：`1m, 5m, 15m, 30m, 1h, 2h, 3h, 4h, 1d, 1w, 1M`。
 
 错误格式：
 
@@ -29,7 +29,7 @@
   "candle_count": 1540000,
   "first_timestamp": 1451606400,
   "last_timestamp": 1546300740,
-  "supported_timeframes": ["1m", "15m", "30m", "1h", "2h", "4h", "1d", "1w", "1M"]
+  "supported_timeframes": ["1m", "5m", "15m", "30m", "1h", "2h", "3h", "4h", "1d", "1w", "1M"]
 }
 ```
 

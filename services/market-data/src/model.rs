@@ -13,10 +13,12 @@ pub struct Candle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Timeframe {
     Minute1,
+    Minute5,
     Minute15,
     Minute30,
     Hour1,
     Hour2,
+    Hour3,
     Hour4,
     Day1,
     Week1,
@@ -27,10 +29,12 @@ impl Timeframe {
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "1m" => Some(Self::Minute1),
+            "5m" => Some(Self::Minute5),
             "15m" => Some(Self::Minute15),
             "30m" => Some(Self::Minute30),
             "1h" => Some(Self::Hour1),
             "2h" => Some(Self::Hour2),
+            "3h" => Some(Self::Hour3),
             "4h" => Some(Self::Hour4),
             "1d" => Some(Self::Day1),
             "1w" => Some(Self::Week1),
@@ -42,10 +46,12 @@ impl Timeframe {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Minute1 => "1m",
+            Self::Minute5 => "5m",
             Self::Minute15 => "15m",
             Self::Minute30 => "30m",
             Self::Hour1 => "1h",
             Self::Hour2 => "2h",
+            Self::Hour3 => "3h",
             Self::Hour4 => "4h",
             Self::Day1 => "1d",
             Self::Week1 => "1w",
@@ -87,7 +93,7 @@ pub struct MarketMetadata {
     pub candle_count: usize,
     pub first_timestamp: i64,
     pub last_timestamp: i64,
-    pub supported_timeframes: [&'static str; 9],
+    pub supported_timeframes: [&'static str; 11],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

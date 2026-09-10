@@ -29,7 +29,7 @@ cargo run -p market-data-service --example import_coinbase_history -- \
 
 ## 时间与聚合
 
-- `1m/15m/30m/1h/2h/4h/1d` 按 Unix UTC 固定秒数向下取整。
+- `1m/5m/15m/30m/1h/2h/3h/4h/1d` 按 Unix UTC 固定秒数向下取整。
 - `1w` 从 UTC 周一 `00:00:00` 开始。
 - `1M` 从每月 UTC 1 日 `00:00:00` 开始，不按固定 30 天计算。
 - 聚合值为首个 `open`、最大 `high`、最小 `low`、最后 `close` 和 `volume` 求和。
