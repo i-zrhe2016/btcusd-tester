@@ -66,6 +66,7 @@ const props = withDefaults(defineProps<{
   playing?: boolean
   projectName?: string
   showHeader?: boolean
+  showTools?: boolean
   manualTrades?: ManualTrade[]
   drawings?: ReplayDrawing[]
 }>(), {
@@ -73,6 +74,7 @@ const props = withDefaults(defineProps<{
   playing: false,
   projectName: '',
   showHeader: true,
+  showTools: true,
   manualTrades: () => [],
   drawings: () => [],
 })
@@ -829,8 +831,8 @@ onBeforeUnmount(() => {
         </form>
       </details>
 
-      <div class="chart-toolbox-edge" aria-hidden="true" />
-      <div class="chart-toolbox" role="toolbar" aria-label="绘图工具栏">
+      <div v-if="showTools" class="chart-toolbox-edge" aria-hidden="true" />
+      <div v-if="showTools" class="chart-toolbox" role="toolbar" aria-label="绘图工具栏">
         <div class="chart-tool-group chart-tool-group-primary">
           <button
             class="chart-tool-button"
@@ -913,7 +915,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div
-        v-if="contextMenuPosition"
+        v-if="showTools && contextMenuPosition"
         ref="contextMenuElement"
         class="chart-context-menu"
         role="menu"
