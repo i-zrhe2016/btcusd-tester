@@ -18,7 +18,7 @@ import {
   replayPaneNeedsReload,
   replayPaneWindow,
   replayProgressLabel,
-  withReplayPaneTimeframe,
+  assignReplayPaneTimeframe,
   replayUnloadedTimestamps,
   replayWindowEnd,
   replayWindowRange,
@@ -553,11 +553,23 @@ describe('replay multi-timeframe panes', () => {
     expect(nextReplayPaneTimeframe(['1h'])).toBe('5m')
     expect(nextReplayPaneTimeframe(['1h', '5m', '15m', '30m'])).toBe('4h')
     expect(nextReplayPaneTimeframe(REPLAY_TIMEFRAMES)).toBe('1m')
-    expect(withReplayPaneTimeframe(['1h', '5m'], 1, '4h')).toEqual(['1h', '4h'])
-    expect(withReplayPaneTimeframe(['1h', '5m', '15m'], 2, '5m')).toEqual(['1h', '15m', '5m'])
-    expect(withReplayPaneTimeframe(['1h', '5m'], 1, '1h')).toEqual(['1h', '5m'])
-    expect(withReplayPaneTimeframe(['1h', '5m'], 1, 'bogus')).toEqual(['1h', '5m'])
-    expect(withReplayPaneTimeframe(['1h', '5m'], 0, '4h')).toEqual(['1h', '5m'])
+  })
+
+  it('switches the timeframe of a single pane and keeps every pane unique', () => {
+    expect(assignReplayPaneTimeframe(['1h', '5m'], 1, '4h')).toEqual(['1h', '4h'])
+    expect(assignReplayPaneTimeframe(['1h', '5m', '15m'], 2, '5m')).toEqual(['1h', '15m', '5m'])
+    expect(assignReplayPaneTimeframe(['1h', '5m'], 1, '5m')).toEqual(['1h', '5m'])
+    expect(assignReplayPaneTimeframe(['1h', '5m'], 1, 'bogus')).toEqual(['1h', '5m'])
+    expect(assignReplayPaneTimeframe(['1h', '5m'], 5, '4h')).toEqual(['1h', '5m'])
+    expect(assignReplayPaneTimeframe(['1h', '5m'], -1, '4h')).toEqual(['1h', '5m'])
+  })
+
+  it('offers the 30m timeframe on every screen and swaps with the primary screen', () => {
+    expect(REPLAY_TIMEFRAMES).toContain('30m')
+    expect(assignReplayPaneTimeframe(['30m', '5m'], 1, '30m')).toEqual(['5m', '30m'])
+    expect(assignReplayPaneTimeframe(['1h', '30m'], 0, '30m')).toEqual(['30m', '1h'])
+    expect(assignReplayPaneTimeframe(['1h', '5m'], 0, '30m')).toEqual(['30m', '5m'])
+    expect(assignReplayPaneTimeframe(['1h', '5m'], 0, '1h')).toEqual(['1h', '5m'])
   })
 
   it('loads each pane with its own timeframe around the shared cursor', () => {

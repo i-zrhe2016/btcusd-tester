@@ -648,7 +648,7 @@ select {
 .replay-pane {
   position: relative;
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -659,37 +659,24 @@ select {
   border: 0;
 }
 
-.replay-pane-badge {
-  position: absolute;
-  z-index: 4;
-  top: 8px;
-  left: 8px;
-  padding: 3px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.75);
-  color: #ffffff;
-  font: 700 11px/16px "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
-  pointer-events: none;
-}
-
-.replay-pane-badge-offset {
-  left: 56px;
-}
-
-.replay-pane-tools {
-  position: absolute;
-  z-index: 4;
-  top: 8px;
-  left: 8px;
+.replay-pane-header {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(185, 180, 168, 0.25);
+  background: var(--chart-bg);
 }
 
-.replay-pane-tools select,
+.replay-pane-label {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.72);
+  font: 700 11px/16px "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.replay-pane-header select,
 .replay-pane-remove {
-  height: 32px;
+  height: 26px;
   border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: var(--radius-sm);
   background: rgba(0, 0, 0, 0.75);
@@ -697,13 +684,16 @@ select {
   font: 700 12px/1 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
-.replay-pane-tools select {
+.replay-pane-header select {
   min-width: 76px;
   padding: 0 6px;
 }
 
 .replay-pane-remove {
-  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
   cursor: pointer;
 }
 
@@ -715,7 +705,7 @@ select {
 .replay-pane-error {
   position: absolute;
   z-index: 5;
-  top: 48px;
+  top: 42px;
   left: 8px;
   right: 8px;
   display: flex;
@@ -2025,7 +2015,22 @@ select {
 @media (max-width: 920px) {
   .replay-panes {
     grid-template-columns: minmax(0, 1fr) !important;
-    grid-template-rows: repeat(auto-fit, minmax(0, 1fr));
+  }
+
+  .replay-panes[data-panes="1"] {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .replay-panes[data-panes="2"] {
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+  }
+
+  .replay-panes[data-panes="3"] {
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+  }
+
+  .replay-panes[data-panes="4"] {
+    grid-template-rows: repeat(4, minmax(0, 1fr));
   }
 
   .app-shell.replay-active .topbar {
