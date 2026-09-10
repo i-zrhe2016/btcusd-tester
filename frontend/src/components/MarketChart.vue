@@ -304,7 +304,7 @@ function containerSize() {
   const container = priceContainer.value
   return {
     width: Math.max(container?.clientWidth ?? 0, 320),
-    height: Math.max(container?.clientHeight ?? 0, 360),
+    height: Math.max(container?.clientHeight ?? 360, 1),
   }
 }
 
