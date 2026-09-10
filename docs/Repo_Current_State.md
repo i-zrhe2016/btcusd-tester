@@ -1,6 +1,6 @@
 # Repository Current State
 
-Last verified: 2026-09-10 @ e8faaa4
+Last verified: 2026-09-10 @ 8d5ae7f
 
 ## Current Focus
 
@@ -57,5 +57,5 @@ Last verified: 2026-09-10 @ e8faaa4
 
 ## Next
 
-- 无活动工单；多周期分屏复盘（Issue #9 / PR #10）已合并并部署为 `btcusd-web:e8faaa4`。
+- 无活动工单；多周期分屏复盘（Issue #9 / PR #10）与各屏周期切换控件统一（PR #11）已合并并部署为 `btcusd-web:8d5ae7f`。
 - 继续明确认证上线时机，并在验证 Clerk 配置后启用 `authEnabled`。
