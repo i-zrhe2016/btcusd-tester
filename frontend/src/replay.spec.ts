@@ -4,9 +4,11 @@ import {
   clampReplayCursor,
   closeManualPosition,
   createReplayProjectFromDraft,
+  draftFromProject,
   loadReplayProjects,
   nextReplayWindowStart,
   normalizeSpeed,
+  reanchorManualTrades,
   reconcileReplayProject,
   replayCursorIndexAtOrBefore,
   replayDelayMs,
@@ -18,6 +20,7 @@ import {
   timeframeStepSeconds,
   REPLAY_PAGE_SIZE,
   REPLAY_PREFETCH_THRESHOLD,
+  type ManualTrade,
   type ReplayProject,
   type ReplayDrawing,
 } from './replay'
@@ -395,5 +398,86 @@ describe('replay helpers', () => {
       action: 'close-long',
       realizedPnl: 3,
     })
+  })
+
+  it('keeps trades, drawings and progress when the replay timeframe changes', () => {
+    const project = createReplayProjectFromDraft({
+      name: 'BTCUSD 1m Replay',
+      symbol: 'BTCUSD',
+      timeframe: '1m',
+      fromInput: '2026-08-27T00:00',
+      toInput: '2026-08-27T01:00',
+      speed: 1,
+    })
+    const drawing: ReplayDrawing = {
+      id: 'drawing-1',
+      tool: 'TrendLine',
+      points: [
+        { timestamp: project.from + 60, price: 100 },
+        { timestamp: project.from + 300, price: 110 },
+      ],
+      style: { color: '#facc15', width: 2, dashed: false, fill: null },
+    }
+    const traded = applyManualTrade({ ...project, drawings: [drawing] }, {
+      side: 'buy',
+      candleIndex: 3,
+      timestamp: project.from + 180,
+      price: 100,
+    })
+
+    const switched = createReplayProjectFromDraft({
+      ...draftFromProject(traded),
+      name: 'BTCUSD 5m Replay',
+      timeframe: '5m',
+    }, traded)
+
+    expect(switched).toMatchObject({
+      id: project.id,
+      timeframe: '5m',
+      cursorTimestamp: project.from + 180,
+      createdAt: traded.createdAt,
+    })
+    expect(switched.trades).toHaveLength(1)
+    expect(switched.drawings).toEqual([drawing])
+
+    const fiveMinuteCandles = Array.from({ length: 12 }, (_, index) => ({
+      timestamp: project.from + index * 300,
+    }))
+    const reanchored = reanchorManualTrades(switched.trades, fiveMinuteCandles)
+
+    expect(reanchored[0].candleIndex).toBe(0)
+    expect(summarizeManualTrades(reanchored, 100, 0)).toMatchObject({
+      side: 'long',
+      quantity: 1,
+      averagePrice: 100,
+    })
+  })
+
+  it('re-anchors manual trades onto the loaded candle window by timestamp', () => {
+    const candles = [{ timestamp: 1_000 }, { timestamp: 1_060 }, { timestamp: 1_120 }]
+    const createTrade = (overrides: Partial<ManualTrade>): ManualTrade => ({
+      id: 'trade-1',
+      candleIndex: 0,
+      timestamp: 1_000,
+      side: 'buy',
+      action: 'open-long',
+      price: 100,
+      quantity: 1,
+      realizedPnl: null,
+      createdAt: '2026-08-27T00:00:00.000Z',
+      ...overrides,
+    })
+    const beforeWindow = createTrade({ id: 'before-window', candleIndex: 5, timestamp: 1_040 })
+    const insideWindow = createTrade({ id: 'inside-window', candleIndex: 9, timestamp: 1_120 })
+    const afterWindow = createTrade({ id: 'after-window', candleIndex: 1, timestamp: 1_300 })
+
+    const reanchored = reanchorManualTrades([beforeWindow, insideWindow, afterWindow], candles)
+
+    expect(reanchored.map((trade) => trade.candleIndex)).toEqual([0, 2, 3])
+    expect(reanchored.map((trade) => trade.id)).toEqual(['before-window', 'inside-window', 'after-window'])
+    expect(reanchorManualTrades([], candles)).toEqual([])
+
+    const stable = [createTrade({ candleIndex: 0, timestamp: 1_000 })]
+    expect(reanchorManualTrades(stable, candles)).toBe(stable)
   })
 })
