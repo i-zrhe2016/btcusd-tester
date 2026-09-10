@@ -89,6 +89,7 @@ export interface ReplayProject {
   name: string
   symbol: string
   timeframe: string
+  panes: string[]
   from: number
   to: number
   speed: number
@@ -118,6 +119,12 @@ export const REPLAY_PREFETCH_THRESHOLD = 15
 export const REPLAY_HISTORY_CANDLES = 500
 export const REPLAY_FORWARD_CANDLES = REPLAY_PAGE_SIZE - Math.floor(REPLAY_PAGE_SIZE / 2)
 export const REPLAY_WINDOW_LIMIT = REPLAY_HISTORY_CANDLES + REPLAY_FORWARD_CANDLES + 1
+export const REPLAY_TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h', '2h', '3h', '4h', '1d', '1w', '1M']
+export const MAX_REPLAY_PANES = 4
+export const REPLAY_PANE_HISTORY_CANDLES = 500
+export const REPLAY_PANE_FORWARD_CANDLES = 500
+export const REPLAY_PANE_WINDOW_LIMIT = REPLAY_PANE_HISTORY_CANDLES + REPLAY_PANE_FORWARD_CANDLES + 1
+const REPLAY_PANE_PREFERENCE = ['5m', '15m', '30m', '1h', '4h', '1d', '1w', '1m', '2h', '3h', '1M']
 
 export const DEFAULT_REPLAY_DRAWING_STYLE: ReplayDrawingStyle = {
   color: '#facc15',
@@ -287,6 +294,57 @@ export function replayWindowRange(
   return { from, to, limit: REPLAY_WINDOW_LIMIT }
 }
 
+function appendPaneTimeframe(panes: string[], value: unknown): void {
+  if (typeof value !== 'string' || !REPLAY_TIMEFRAMES.includes(value)) return
+  if (panes.length >= MAX_REPLAY_PANES || panes.includes(value)) return
+  panes.push(value)
+}
+
+export function normalizeReplayPanes(raw: unknown, timeframe: string): string[] {
+  const panes = typeof timeframe === 'string' && timeframe.length > 0 ? [timeframe] : []
+  for (const value of Array.isArray(raw) ? raw : []) {
+    appendPaneTimeframe(panes, value)
+  }
+  return panes
+}
+
+export function nextReplayPaneTimeframe(used: string[]): string {
+  return REPLAY_PANE_PREFERENCE.find((timeframe) => !used.includes(timeframe)) ?? REPLAY_TIMEFRAMES[0]
+}
+
+export function withReplayPaneTimeframe(panes: string[], index: number, timeframe: string): string[] {
+  const next = normalizeReplayPanes(panes, panes[0] ?? timeframe)
+  if (index <= 0 || index >= next.length || !REPLAY_TIMEFRAMES.includes(timeframe)) return next
+  if (timeframe === next[0]) return next
+  const occupied = next.indexOf(timeframe)
+  if (occupied >= 0) next[occupied] = next[index]
+  next[index] = timeframe
+  return next
+}
+
+export function replayPaneWindow(
+  anchorTimestamp: number,
+  project: Pick<ReplayProject, 'from' | 'to'>,
+  timeframe: string,
+): ReplayWindowRange {
+  const step = timeframeStepSeconds(timeframe)
+  const from = Math.max(0, anchorTimestamp - (step * REPLAY_PANE_HISTORY_CANDLES))
+  const to = Math.min(project.to, anchorTimestamp + (step * REPLAY_PANE_FORWARD_CANDLES))
+  return { from, to, limit: REPLAY_PANE_WINDOW_LIMIT }
+}
+
+// A pane is loaded for a requested time window, not for a candle range: the window can be
+// clamped by the project end, so candles may never reach the cursor even though the pane
+// already covers it. Reload only when the cursor leaves the loaded window.
+export function replayPaneNeedsReload(
+  window: ReplayWindowRange | null,
+  cursorTimestamp: number,
+): boolean {
+  if (!window) return true
+  if (!Number.isFinite(cursorTimestamp)) return false
+  return cursorTimestamp < window.from || cursorTimestamp >= window.to
+}
+
 export function nextReplayWindowStart(
   lastTimestamp: number | undefined,
   timeframe: string,
@@ -401,6 +459,12 @@ export function createReplayProjectFromDraft(
     name,
     symbol,
     timeframe,
+    panes: normalizeReplayPanes(
+      keepExistingState && existing?.panes.length
+        ? existing.panes.map((pane, index) => (index === 0 ? timeframe : pane))
+        : undefined,
+      timeframe,
+    ),
     from,
     to,
     speed: normalizedSpeed,
@@ -453,6 +517,7 @@ export function normalizeReplayProject(raw: unknown, allowDrawings = true): Repl
     name: candidate.name,
     symbol: candidate.symbol,
     timeframe: candidate.timeframe,
+    panes: normalizeReplayPanes(candidate.panes, candidate.timeframe),
     from: Math.floor(candidate.from),
     to: Math.floor(candidate.to),
     speed,

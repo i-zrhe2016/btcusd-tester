@@ -13,7 +13,12 @@ import {
   replayCursorIndexAtOrBefore,
   replayCursorIndexAtOrAfter,
   replayDelayMs,
+  nextReplayPaneTimeframe,
+  normalizeReplayPanes,
+  replayPaneNeedsReload,
+  replayPaneWindow,
   replayProgressLabel,
+  withReplayPaneTimeframe,
   replayUnloadedTimestamps,
   replayWindowEnd,
   replayWindowRange,
@@ -24,7 +29,11 @@ import {
   REPLAY_FORWARD_CANDLES,
   REPLAY_HISTORY_CANDLES,
   REPLAY_PAGE_SIZE,
+  REPLAY_PANE_FORWARD_CANDLES,
+  REPLAY_PANE_HISTORY_CANDLES,
+  REPLAY_PANE_WINDOW_LIMIT,
   REPLAY_PREFETCH_THRESHOLD,
+  REPLAY_TIMEFRAMES,
   REPLAY_WINDOW_LIMIT,
   type ManualTrade,
   type ReplayProject,
@@ -523,5 +532,112 @@ describe('replay helpers', () => {
 
     const stable = [createTrade({ candleIndex: 0, timestamp: 1_000 })]
     expect(reanchorManualTrades(stable, candles)).toBe(stable)
+  })
+})
+
+describe('replay multi-timeframe panes', () => {
+  it('keeps the project timeframe as the primary pane and defaults old projects to one pane', () => {
+    expect(normalizeReplayPanes(undefined, '1h')).toEqual(['1h'])
+    expect(normalizeReplayPanes([], '5m')).toEqual(['5m'])
+    expect(normalizeReplayPanes('1h', '5m')).toEqual(['5m'])
+  })
+
+  it('deduplicates panes, drops unknown timeframes, and caps the layout at four panes', () => {
+    expect(normalizeReplayPanes(['15m', '1h', '15m', 'bogus', '1d', '4h'], '1h'))
+      .toEqual(['1h', '15m', '1d', '4h'])
+    expect(normalizeReplayPanes(['1h', '5m', '15m', '30m', '1d'], '1h'))
+      .toEqual(['1h', '5m', '15m', '30m'])
+  })
+
+  it('picks the next unused default pane timeframe', () => {
+    expect(nextReplayPaneTimeframe(['1h'])).toBe('5m')
+    expect(nextReplayPaneTimeframe(['1h', '5m', '15m', '30m'])).toBe('4h')
+    expect(nextReplayPaneTimeframe(REPLAY_TIMEFRAMES)).toBe('1m')
+    expect(withReplayPaneTimeframe(['1h', '5m'], 1, '4h')).toEqual(['1h', '4h'])
+    expect(withReplayPaneTimeframe(['1h', '5m', '15m'], 2, '5m')).toEqual(['1h', '15m', '5m'])
+    expect(withReplayPaneTimeframe(['1h', '5m'], 1, '1h')).toEqual(['1h', '5m'])
+    expect(withReplayPaneTimeframe(['1h', '5m'], 1, 'bogus')).toEqual(['1h', '5m'])
+    expect(withReplayPaneTimeframe(['1h', '5m'], 0, '4h')).toEqual(['1h', '5m'])
+  })
+
+  it('loads each pane with its own timeframe around the shared cursor', () => {
+    const project = { from: 1_000_000, to: 9_000_000 }
+    const window = replayPaneWindow(2_000_000, project, '5m')
+
+    expect(REPLAY_PANE_HISTORY_CANDLES).toBe(500)
+    expect(REPLAY_PANE_FORWARD_CANDLES).toBe(500)
+    expect(REPLAY_PANE_WINDOW_LIMIT).toBe(1001)
+    expect(window.from).toBe(2_000_000 - (500 * 300))
+    expect(window.to).toBe(2_000_000 + (500 * 300))
+    expect(window.limit).toBe(1001)
+    expect(replayPaneWindow(30_000, project, '5m').from).toBe(0)
+    expect(replayPaneWindow(8_999_000, project, '5m').to).toBe(9_000_000)
+  })
+
+  it('reloads a pane only when the cursor leaves its loaded window', () => {
+    const window = { from: 1_000_000, to: 1_010_000, limit: 1001 }
+
+    expect(replayPaneNeedsReload(null, 1_000_000)).toBe(true)
+    expect(replayPaneNeedsReload(window, 999_999)).toBe(true)
+    expect(replayPaneNeedsReload(window, 1_000_000)).toBe(false)
+    expect(replayPaneNeedsReload(window, 1_009_999)).toBe(false)
+    expect(replayPaneNeedsReload(window, 1_010_000)).toBe(true)
+    expect(replayPaneNeedsReload(window, Number.NaN)).toBe(false)
+  })
+
+  it('keeps a pane loaded while the project end clamps its window', () => {
+    const project = { from: 1_000_000, to: 1_007_200 }
+    const window = replayPaneWindow(1_003_600, project, '1d')
+
+    expect(window.to).toBe(project.to)
+    expect(replayPaneNeedsReload(window, 1_007_100)).toBe(false)
+  })
+
+  it('keeps the split layout when the primary timeframe changes', () => {
+    const project = {
+      ...createReplayProjectFromDraft({
+        name: 'Pane replay',
+        symbol: 'BTCUSD',
+        timeframe: '1h',
+        fromInput: '2026-08-27T00:00',
+        toInput: '2026-08-27T06:00',
+        speed: 1,
+      }),
+      panes: ['1h', '15m'],
+    }
+
+    const switched = createReplayProjectFromDraft(
+      { ...draftFromProject(project), timeframe: '4h' },
+      project,
+    )
+    expect(switched.panes).toEqual(['4h', '15m'])
+
+    const collapsed = createReplayProjectFromDraft(
+      { ...draftFromProject(project), timeframe: '15m' },
+      project,
+    )
+    expect(collapsed.panes).toEqual(['15m'])
+  })
+
+  it('persists panes with the project and normalizes stored projects', () => {
+    const storage = createMemoryStorage()
+    const project = createReplayProjectFromDraft({
+      name: 'Pane replay',
+      symbol: 'BTCUSD',
+      timeframe: '1h',
+      fromInput: '2026-08-27T00:00',
+      toInput: '2026-08-27T06:00',
+      speed: 1,
+    })
+
+    expect(project.panes).toEqual(['1h'])
+    saveReplayProjects([{ ...project, panes: ['1h', '15m'] }], storage)
+    expect(loadReplayProjects(storage).map((stored) => stored.panes)).toEqual([['1h', '15m']])
+
+    saveReplayProjects([{ ...project, panes: ['1h', '1h', 'bogus'] }], storage)
+    expect(loadReplayProjects(storage).map((stored) => stored.panes)).toEqual([['1h']])
+
+    storage.setItem('btcusd.replay.projects.v2', JSON.stringify([{ ...project, panes: undefined }]))
+    expect(loadReplayProjects(storage).map((stored) => stored.panes)).toEqual([['1h']])
   })
 })

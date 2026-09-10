@@ -616,6 +616,120 @@ select {
   box-shadow: none;
 }
 
+.replay-panes {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--chart-bg);
+}
+
+.replay-panes[data-panes="1"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.replay-panes[data-panes="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.replay-panes[data-panes="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.replay-panes[data-panes="4"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+
+.replay-pane {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgba(185, 180, 168, 0.35);
+}
+
+.replay-panes[data-panes="1"] .replay-pane {
+  border: 0;
+}
+
+.replay-pane-badge {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  left: 8px;
+  padding: 3px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  font: 700 11px/16px "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+  pointer-events: none;
+}
+
+.replay-pane-badge-offset {
+  left: 56px;
+}
+
+.replay-pane-tools {
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.replay-pane-tools select,
+.replay-pane-remove {
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  font: 700 12px/1 "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.replay-pane-tools select {
+  min-width: 76px;
+  padding: 0 6px;
+}
+
+.replay-pane-remove {
+  width: 32px;
+  cursor: pointer;
+}
+
+.replay-pane-remove:hover,
+.replay-pane-remove:focus-visible {
+  border-color: #ffffff;
+}
+
+.replay-pane-error {
+  position: absolute;
+  z-index: 5;
+  top: 48px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.8);
+  color: #ffffff;
+  font-size: 12px;
+}
+
 .chart-stage {
   position: relative;
   width: 100%;
@@ -1909,6 +2023,11 @@ select {
 }
 
 @media (max-width: 920px) {
+  .replay-panes {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: repeat(auto-fit, minmax(0, 1fr));
+  }
+
   .app-shell.replay-active .topbar {
     padding: 0 10px;
     gap: 8px;
