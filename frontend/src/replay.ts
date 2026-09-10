@@ -115,6 +115,9 @@ const MAX_SPEED = 8
 export const MANUAL_TRADE_QUANTITY = 1
 export const REPLAY_PAGE_SIZE = 60
 export const REPLAY_PREFETCH_THRESHOLD = 15
+export const REPLAY_HISTORY_CANDLES = 500
+export const REPLAY_FORWARD_CANDLES = REPLAY_PAGE_SIZE - Math.floor(REPLAY_PAGE_SIZE / 2)
+export const REPLAY_WINDOW_LIMIT = REPLAY_HISTORY_CANDLES + REPLAY_FORWARD_CANDLES + 1
 
 export const DEFAULT_REPLAY_DRAWING_STYLE: ReplayDrawingStyle = {
   color: '#facc15',
@@ -198,6 +201,24 @@ export function replayCursorIndexAtOrBefore(candles: Pick<Candle, 'timestamp'>[]
   return result
 }
 
+export function replayCursorIndexAtOrAfter(candles: Pick<Candle, 'timestamp'>[], timestamp: number): number {
+  if (!candles.length || !Number.isFinite(timestamp)) return 0
+
+  let low = 0
+  let high = candles.length - 1
+  let result = candles.length - 1
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2)
+    if (candles[middle].timestamp >= timestamp) {
+      result = middle
+      high = middle - 1
+    } else {
+      low = middle + 1
+    }
+  }
+  return result
+}
+
 export function reanchorManualTrades(
   trades: ManualTrade[],
   candles: Pick<Candle, 'timestamp'>[],
@@ -248,6 +269,22 @@ export function timeframeStepSeconds(timeframe: string): number {
 
 export function replayWindowEnd(from: number, to: number, timeframe: string): number {
   return Math.min(to, from + (timeframeStepSeconds(timeframe) * REPLAY_PAGE_SIZE))
+}
+
+export interface ReplayWindowRange {
+  from: number
+  to: number
+  limit: number
+}
+
+export function replayWindowRange(
+  anchorTimestamp: number,
+  project: Pick<ReplayProject, 'from' | 'to' | 'timeframe'>,
+): ReplayWindowRange {
+  const step = timeframeStepSeconds(project.timeframe)
+  const from = Math.max(0, anchorTimestamp - (step * REPLAY_HISTORY_CANDLES))
+  const to = Math.min(project.to, anchorTimestamp + (step * REPLAY_FORWARD_CANDLES))
+  return { from, to, limit: REPLAY_WINDOW_LIMIT }
 }
 
 export function nextReplayWindowStart(
@@ -741,10 +778,13 @@ export function projectRangeLabel(project: ReplayProject): string {
   return `${formatUtc(project.from)} - ${formatUtc(project.to)} UTC`
 }
 
-export function replayProgressLabel(project: ReplayProject, totalCandles: number): string {
-  if (totalCandles <= 0) return '0 / 0'
-  const current = Math.min(project.cursorIndex + 1, totalCandles)
-  return `${current} / ${totalCandles}`
+export function replayProgressLabel(project: ReplayProject, candles: Pick<Candle, 'timestamp'>[]): string {
+  if (!candles.length) return '0 / 0'
+  const startIndex = replayCursorIndexAtOrAfter(candles, project.from)
+  const total = candles.length - startIndex
+  if (total <= 0) return '0 / 0'
+  const current = Math.min(Math.max(project.cursorIndex - startIndex + 1, 1), total)
+  return `${current} / ${total}`
 }
 
 export function replayProgressPercent(project: ReplayProject, totalCandles: number): number {

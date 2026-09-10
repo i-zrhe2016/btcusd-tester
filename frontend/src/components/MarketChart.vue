@@ -513,7 +513,7 @@ function setPlaybackRange() {
     scale.applyOptions({ barSpacing })
   }
   const bars = playbackWindowBars(count)
-  const rightOffset = Math.max(12, Math.floor(bars * 0.22))
+  const rightOffset = Math.max(6, Math.floor(bars * 0.06))
   const right = count - 1 + rightOffset
   scale.setVisibleLogicalRange({
     from: right - bars,

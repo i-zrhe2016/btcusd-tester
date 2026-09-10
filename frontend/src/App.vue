@@ -35,7 +35,9 @@ import {
   reanchorManualTrades,
   reconcileReplayProject,
   replayCursorIndexAtOrBefore,
+  replayCursorIndexAtOrAfter,
   replayWindowEnd,
+  replayWindowRange,
   REPLAY_PAGE_SIZE,
   replayDelayMs,
   replayProgressLabel,
@@ -113,7 +115,9 @@ const currentCandle = computed(() => replaySnapshot.value?.candles[activePlaybac
 const currentTimeLabel = computed(() => currentCandle.value ? `${formatUtc(currentCandle.value.timestamp)} UTC` : '—')
 const currentProjectLabel = computed(() => activeProject.value?.name ?? '未命名项目')
 const currentRangeLabel = computed(() => activeProject.value ? projectRangeLabel(activeProject.value) : '—')
-const currentProgressLabel = computed(() => activeProject.value ? replayProgressLabel(activeProject.value, totalReplayCandles.value) : '0 / 0')
+const currentProgressLabel = computed(() => activeProject.value
+  ? replayProgressLabel(activeProject.value, replaySnapshot.value?.candles ?? [])
+  : '0 / 0')
 const replayStatusLabel = computed(() => {
   if (!activeProject.value) return '未选择项目'
   if (replayLoading.value) return '加载中'
@@ -555,25 +559,20 @@ async function loadReplaySnapshot(
     const boundedCursorTimestamp = hasCursorTimestamp
       ? Math.min(Math.max(requestedCursorTimestamp as number, project.from), Math.max(project.from, project.to - step))
       : null
-    const requestedFrom = boundedCursorTimestamp === null
-      ? project.from
-      : Math.max(project.from, boundedCursorTimestamp - (step * Math.floor(REPLAY_PAGE_SIZE / 2)))
-    const requestedTo = boundedCursorTimestamp === null
-      ? replayWindowEnd(project.from, project.to, project.timeframe)
-      : Math.min(project.to, boundedCursorTimestamp + (step * (REPLAY_PAGE_SIZE - Math.floor(REPLAY_PAGE_SIZE / 2))))
+    const windowRange = replayWindowRange(boundedCursorTimestamp ?? project.from, project)
     const snapshot = await getMarketSnapshot({
       timeframe: project.timeframe,
-      from: requestedFrom,
-      to: requestedTo,
-      limit: REPLAY_PAGE_SIZE,
+      from: windowRange.from,
+      to: windowRange.to,
+      limit: windowRange.limit,
       lengths: replayLengths,
     })
     if (requestId !== snapshotRequestId) return
     replaySnapshot.value = snapshot
-    replayNextFrom.value = nextReplayRequestFrom(snapshot, project, requestedTo)
+    replayNextFrom.value = nextReplayRequestFrom(snapshot, project, windowRange.to)
     if (snapshot.candles.length) {
       const clamped = boundedCursorTimestamp === null
-        ? clampReplayCursor(project.cursorIndex, snapshot.candles.length)
+        ? replayCursorIndexAtOrAfter(snapshot.candles, project.from)
         : replayCursorIndexAtOrBefore(snapshot.candles, boundedCursorTimestamp)
       const mappedTimestamp = snapshot.candles[clamped]?.timestamp
       reanchorProjectTrades(project.id, snapshot.candles)
