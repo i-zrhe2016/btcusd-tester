@@ -1,10 +1,10 @@
 # Repository Current State
 
-Last verified: 2026-09-12 @ working tree
+Last verified: 2026-09-12 @ 60e5588
 
 ## Current Focus
 
-- Stoch 副图支持两组与三组切换：用户在 Stoch 设置面板选择组数后应用，副图按组数增删 K3/D3 曲线。
+- 无。
 
 ## Implemented
 
@@ -57,5 +57,5 @@ Last verified: 2026-09-12 @ working tree
 
 ## Next
 
-- 无活动工单；多周期分屏复盘（Issue #9 / PR #10）与各屏周期切换控件统一（PR #11）已合并并部署为 `btcusd-web:8d5ae7f`。
+- 无活动工单；Stoch 两组/三组切换（PR #12）已合并并部署为 `btcusd-web:60e5588`。
 - 继续明确认证上线时机，并在验证 Clerk 配置后启用 `authEnabled`。
