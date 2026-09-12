@@ -57,7 +57,18 @@ import {
 } from '../replay'
 import type { MarketSnapshot } from '../types'
 import { formatUtc } from '../format'
-import { calculateStoch, readStochSettings, STOCH_DEFAULTS, STOCH_STORAGE_KEY, validStochLength, type StochLengths } from '../stoch'
+import {
+  calculateStoch,
+  defaultStochSetting,
+  readStochSettings,
+  STOCH_DEFAULTS,
+  STOCH_STORAGE_KEY,
+  validStochLengths,
+  type StochGroupCount,
+  type StochLineKey,
+  type StochLengths,
+  type StochSetting,
+} from '../stoch'
 
 const props = withDefaults(defineProps<{
   snapshot: MarketSnapshot | null
@@ -83,31 +94,44 @@ const emit = defineEmits<{
   (event: 'drawings-changed', drawings: ReplayDrawing[]): void
 }>()
 
-const stochSettings = ref<Record<string, StochLengths>>({})
+const stochSettings = ref<Record<string, StochSetting>>({})
 try { stochSettings.value = readStochSettings(localStorage.getItem(STOCH_STORAGE_KEY)) } catch { /* Storage may be disabled. */ }
 const stochPeriod = computed(() => props.snapshot?.timeframe ?? '1m')
-const stochLengths = computed(() => stochSettings.value[stochPeriod.value] ?? STOCH_DEFAULTS[stochPeriod.value])
-const stochDraft = ref<StochLengths>([10, 20])
+const stochSetting = computed(() => stochSettings.value[stochPeriod.value] ?? defaultStochSetting(stochPeriod.value))
+const stochGroupCount = computed(() => stochSetting.value.groups)
+const stochLengths = computed(() => stochSetting.value.lengths.slice(0, stochGroupCount.value))
+const stochDraft = ref<StochLengths>([...defaultStochSetting('1m').lengths])
+const stochGroupsDraft = ref<StochGroupCount>(2)
 const stochMessage = ref('')
-const stochLines: Array<{ key: 'k1' | 'd1' | 'k2' | 'd2'; color: string }> = [
+const STOCH_LINE_STYLES: Array<{ key: StochLineKey; color: string }> = [
   { key: 'k1', color: '#ffffff' }, { key: 'd1', color: '#ffff00' },
   { key: 'k2', color: '#ff0000' }, { key: 'd2', color: '#00ffff' },
+  { key: 'k3', color: '#ff8c00' }, { key: 'd3', color: '#a78bfa' },
 ]
+const stochLines = computed(() => STOCH_LINE_STYLES.slice(0, stochGroupCount.value * 2))
 let stochSeries: ISeriesApi<'Line'>[] = []
 
-watch(stochLengths, (lengths) => {
-  stochDraft.value = lengths ? [...lengths] : [10, 20]
+watch(stochSetting, (setting) => {
+  stochGroupsDraft.value = setting.groups
+  stochDraft.value = [...setting.lengths]
   stochMessage.value = ''
 }, { immediate: true })
 
 function applyStoch(reset = false) {
-  const lengths = reset ? STOCH_DEFAULTS[stochPeriod.value] : stochDraft.value
-  if (!lengths || !lengths.every(validStochLength)) {
-    stochMessage.value = 'K1 和 K2 必须是大于或等于 1 的整数。'
+  const groups = stochGroupsDraft.value
+  const defaults = STOCH_DEFAULTS[stochPeriod.value] ?? STOCH_DEFAULTS['1m']
+  const active = stochDraft.value.slice(0, groups)
+  if (!validStochLengths(active)) {
+    stochMessage.value = 'K1、K2、K3 必须是大于或等于 1 的整数。'
     return
   }
-  stochSettings.value = { ...stochSettings.value, [stochPeriod.value]: [...lengths] }
-  stochDraft.value = [...lengths]
+  const setting: StochSetting = reset
+    ? { groups, lengths: [...defaults] as StochLengths }
+    : { groups, lengths: [active[0], active[1], active[2] ?? defaults[2]] as StochLengths }
+  stochSettings.value = { ...stochSettings.value, [stochPeriod.value]: setting }
+  stochGroupsDraft.value = setting.groups
+  stochDraft.value = [...setting.lengths]
+  syncStochSeries()
   updateStoch()
   try {
     localStorage.setItem(STOCH_STORAGE_KEY, JSON.stringify(stochSettings.value))
@@ -117,11 +141,31 @@ function applyStoch(reset = false) {
   }
 }
 
+function syncStochSeries() {
+  if (!priceChart) return
+  const lines = stochLines.value
+  while (stochSeries.length > lines.length) {
+    const series = stochSeries.pop()
+    if (series) priceChart.removeSeries(series)
+  }
+  while (stochSeries.length < lines.length) {
+    const { key, color } = lines[stochSeries.length]
+    stochSeries.push(priceChart.addSeries(LineSeries, {
+      title: key, color, lineWidth: 2, priceLineVisible: false,
+      crosshairMarkerVisible: true,
+      autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+    }, 1))
+  }
+  const panes = priceChart.panes()
+  panes[0]?.setStretchFactor(3)
+  panes[1]?.setStretchFactor(1)
+}
+
 function updateStoch() {
-  if (!stochLengths.value) return
+  if (!stochSeries.length || !validStochLengths(stochLengths.value)) return
   const points = calculateStoch(visibleCandles.value, stochLengths.value)
   stochSeries.forEach((series, index) => {
-    const key = stochLines[index].key
+    const key = stochLines.value[index].key
     series.setData(points.map((point) => point[key] === null
       ? { time: point.timestamp as UTCTimestamp }
       : { time: point.timestamp as UTCTimestamp, value: point[key] as number }))
@@ -563,15 +607,7 @@ function buildCharts() {
     priceLineVisible: false,
   })
   tradeMarkers = createSeriesMarkers(candleSeries, [], { autoScale: true, zOrder: 'top' })
-  if (stochLengths.value) {
-    stochSeries = stochLines.map(({ key, color }) => priceChart!.addSeries(LineSeries, {
-      title: key, color, lineWidth: 2, priceLineVisible: false,
-      crosshairMarkerVisible: true,
-      autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
-    }, 1))
-    priceChart.panes()[0].setStretchFactor(3)
-    priceChart.panes()[1].setStretchFactor(1)
-  }
+  syncStochSeries()
 
   const engine = new DrawingEngine()
   engine.setDefaultStyle({ ...DEFAULT_REPLAY_DRAWING_STYLE })
@@ -818,12 +854,18 @@ onBeforeUnmount(() => {
       <div ref="priceContainer" class="price-chart" aria-hidden="true" @contextmenu="openContextMenu" />
 
       <details v-if="stochLengths" class="stoch-settings">
-        <summary>Stoch · {{ stochPeriod }} · {{ stochLengths[0] }} / {{ stochLengths[1] }}</summary>
+        <summary>Stoch · {{ stochPeriod }} · {{ stochLengths.join(' / ') }}</summary>
         <form @submit.prevent="applyStoch()">
           <strong>Stoch 参数 · {{ stochPeriod }}</strong>
           <p>按当前周期保存；平滑长度为参数 × 0.3 四舍五入，最小为 1。</p>
+          <fieldset class="stoch-groups">
+            <legend>组数</legend>
+            <label><input v-model="stochGroupsDraft" data-testid="stoch-groups-2" type="radio" :value="2" />两组 · K1/K2</label>
+            <label><input v-model="stochGroupsDraft" data-testid="stoch-groups-3" type="radio" :value="3" />三组 · 增加 K3</label>
+          </fieldset>
           <label>K1 <input v-model.number="stochDraft[0]" aria-label="Stoch K1" type="number" min="1" step="1" required /></label>
           <label>K2 <input v-model.number="stochDraft[1]" aria-label="Stoch K2" type="number" min="1" step="1" required /></label>
+          <label v-if="stochGroupsDraft === 3">K3 <input v-model.number="stochDraft[2]" aria-label="Stoch K3" type="number" min="1" step="1" required /></label>
           <div class="stoch-legend"><span v-for="line in stochLines" :key="line.key" :style="{ color: line.color }">{{ line.key }}</span></div>
           <p>仅使用已播放行情；历史较短时曲线仍在预热。</p>
           <div class="stoch-actions"><button type="submit">应用参数</button><button type="button" @click="applyStoch(true)">恢复默认</button></div>

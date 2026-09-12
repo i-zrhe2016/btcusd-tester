@@ -2170,6 +2170,10 @@ select {
 .stoch-settings p { margin: 8px 0; color: #cbd5e1; line-height: 1.5; }
 .stoch-settings label { display: flex; align-items: center; gap: 12px; margin: 8px 0; color: #e2e8f0; }
 .stoch-settings input { width: 100%; min-width: 0; padding: 6px; }
+.stoch-groups { margin: 8px 0; padding: 0; border: 0; }
+.stoch-groups legend { padding: 0; color: #e2e8f0; }
+.stoch-groups label { margin: 6px 0; }
+.stoch-groups input { width: auto; }
 .stoch-legend, .stoch-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .stoch-actions button { padding: 7px 10px; }
 .stoch-settings :focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
