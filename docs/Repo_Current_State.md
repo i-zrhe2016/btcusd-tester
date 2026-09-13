@@ -61,6 +61,5 @@ Last verified: 2026-09-13 @ working tree
 
 ## Next
 
-- 无活动工单；交易标记区分（PR #14）与图表控件遮挡修复（PR #15）已随 `main` 部署到内网环境，线上镜像为 `btcusd-web:137ac43`、`btcusd-market-data:137ac43`、`btcusd-backtest:137ac43`，回滚镜像 `btcusd-web:cd30e40`、`btcusd-backtest:cd30e40`、`btcusd-market-data:06a77bf` 仍保留。
-- 宿主机根目录 `.env`（0600，未提交）保存前端构建所需的公开变量 `VITE_CLERK_PUBLISHABLE_KEY`；缺失时 `web` 镜像会构建失败。
+- 无活动工单；交易标记修复已部署到内网环境，部署版本、镜像标签与回滚目标见 `docs/deployment/docker-compose.md`。
 - 继续明确认证上线时机，并在验证 Clerk 配置后启用 `authEnabled`。

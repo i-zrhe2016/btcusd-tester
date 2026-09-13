@@ -39,6 +39,7 @@
 | `MARKET_DATA_URL` | backtest | `http://market-data:8081` |
 | `MARKET_DATA_PARQUET` | market-data | `/data/btcusd_1m.parquet` |
 | `RUST_LOG` | Rust 服务 | 默认 `info` |
+| `VITE_CLERK_PUBLISHABLE_KEY` | web（构建参数） | Clerk Publishable Key，属公开变量；缺失时前端镜像构建失败 |
 
 `.env.example` 只能包含无敏感默认值；生产 `.env` 权限设为 `0600` 并排除版本控制。
 CPU 配额由 Docker Compose 的 `cpus` 字段下发到容器，可按服务器规格在 `.env` 中调高或调低。
@@ -84,5 +85,7 @@ curl -k https://localhost/healthz
 6. 运行一条固定参数的冒烟回测，与基准结果比较。
 
 冒烟基准（固定窗口 `2019-09-01T00:00Z`–`2019-09-02T00:00Z`，`1m`，Stoch `length=10/oversold=20/overbought=80`，初始资金 10,000，费率 0.0004）：处理 1,440 根 K 线、26 笔完成交易、最终权益 9,892.53；重复执行结果必须一致。
+
+当前内网环境运行 `main@137ac43`（交易标记区分 + 图表控件遮挡修复），镜像 `btcusd-web:137ac43`、`btcusd-market-data:137ac43`、`btcusd-backtest:137ac43`；回滚镜像为 `btcusd-web:cd30e40`、`btcusd-backtest:cd30e40`、`btcusd-market-data:06a77bf`。
 
 数据库迁移失败、行情文件校验失败或冒烟结果不一致时停止发布并回滚镜像；不得跳过校验继续上线。
