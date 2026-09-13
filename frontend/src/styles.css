@@ -747,9 +747,10 @@ select {
 
 .chart-stage-with-controls .price-chart {
   inset: var(--chart-control-strip-height) 0 0 0;
+  height: auto;
 }
 
-.chart-stage-with-controls .chart-toolbox {
+.chart-card .chart-stage-with-controls .chart-toolbox {
   top: calc(var(--chart-control-strip-height) + 10px);
 }
 
