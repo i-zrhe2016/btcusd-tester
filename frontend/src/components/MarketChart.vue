@@ -405,8 +405,10 @@ function chartOptions() {
     rightPriceScale: {
       borderColor: chartTheme.axis,
       scaleMargins: {
-        top: 0.08,
-        bottom: 0.1,
+        // Marker auto-scale only reserves room for one marker row, so keep extra
+        // headroom for trades stacked on the same bar.
+        top: 0.15,
+        bottom: 0.12,
       },
     },
     timeScale: {
@@ -886,28 +888,30 @@ onBeforeUnmount(() => {
       <p>当前时间范围没有行情数据。</p>
       <span>请调整 UTC 时间范围后重新加载。</span>
     </div>
-    <div v-else class="chart-stage">
-      <div ref="priceContainer" class="price-chart" aria-hidden="true" @contextmenu="openContextMenu" />
+    <div v-else class="chart-stage" :class="{ 'chart-stage-with-controls': Boolean(stochLengths) }">
+      <div class="chart-control-strip">
+        <details v-if="stochLengths" class="stoch-settings">
+          <summary>Stoch · {{ stochPeriod }} · {{ stochLengths.join(' / ') }}</summary>
+          <form @submit.prevent="applyStoch()">
+            <strong>Stoch 参数 · {{ stochPeriod }}</strong>
+            <p>按当前周期保存；平滑长度为参数 × 0.3 四舍五入，最小为 1。</p>
+            <fieldset class="stoch-groups">
+              <legend>组数</legend>
+              <label><input v-model="stochGroupsDraft" data-testid="stoch-groups-2" type="radio" :value="2" />两组 · K1/K2</label>
+              <label><input v-model="stochGroupsDraft" data-testid="stoch-groups-3" type="radio" :value="3" />三组 · 增加 K3</label>
+            </fieldset>
+            <label>K1 <input v-model.number="stochDraft[0]" aria-label="Stoch K1" type="number" min="1" step="1" required /></label>
+            <label>K2 <input v-model.number="stochDraft[1]" aria-label="Stoch K2" type="number" min="1" step="1" required /></label>
+            <label v-if="stochGroupsDraft === 3">K3 <input v-model.number="stochDraft[2]" aria-label="Stoch K3" type="number" min="1" step="1" required /></label>
+            <div class="stoch-legend"><span v-for="line in stochLines" :key="line.key" :style="{ color: line.color }">{{ line.key }}</span></div>
+            <p>仅使用已播放行情；历史较短时曲线仍在预热。</p>
+            <div class="stoch-actions"><button type="submit">应用参数</button><button type="button" @click="applyStoch(true)">恢复默认</button></div>
+            <p v-if="stochMessage" role="status">{{ stochMessage }}</p>
+          </form>
+        </details>
+      </div>
 
-      <details v-if="stochLengths" class="stoch-settings">
-        <summary>Stoch · {{ stochPeriod }} · {{ stochLengths.join(' / ') }}</summary>
-        <form @submit.prevent="applyStoch()">
-          <strong>Stoch 参数 · {{ stochPeriod }}</strong>
-          <p>按当前周期保存；平滑长度为参数 × 0.3 四舍五入，最小为 1。</p>
-          <fieldset class="stoch-groups">
-            <legend>组数</legend>
-            <label><input v-model="stochGroupsDraft" data-testid="stoch-groups-2" type="radio" :value="2" />两组 · K1/K2</label>
-            <label><input v-model="stochGroupsDraft" data-testid="stoch-groups-3" type="radio" :value="3" />三组 · 增加 K3</label>
-          </fieldset>
-          <label>K1 <input v-model.number="stochDraft[0]" aria-label="Stoch K1" type="number" min="1" step="1" required /></label>
-          <label>K2 <input v-model.number="stochDraft[1]" aria-label="Stoch K2" type="number" min="1" step="1" required /></label>
-          <label v-if="stochGroupsDraft === 3">K3 <input v-model.number="stochDraft[2]" aria-label="Stoch K3" type="number" min="1" step="1" required /></label>
-          <div class="stoch-legend"><span v-for="line in stochLines" :key="line.key" :style="{ color: line.color }">{{ line.key }}</span></div>
-          <p>仅使用已播放行情；历史较短时曲线仍在预热。</p>
-          <div class="stoch-actions"><button type="submit">应用参数</button><button type="button" @click="applyStoch(true)">恢复默认</button></div>
-          <p v-if="stochMessage" role="status">{{ stochMessage }}</p>
-        </form>
-      </details>
+      <div ref="priceContainer" class="price-chart" aria-hidden="true" @contextmenu="openContextMenu" />
 
       <div v-if="showTools" class="chart-toolbox-edge" aria-hidden="true" />
       <div v-if="showTools" class="chart-toolbox" role="toolbar" aria-label="绘图工具栏">
