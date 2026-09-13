@@ -1,6 +1,6 @@
 # Repository Current State
 
-Last verified: 2026-09-13 @ working tree
+Last verified: 2026-09-13 @ 6fa1751
 
 ## Current Focus
 
@@ -14,7 +14,7 @@ Last verified: 2026-09-13 @ working tree
 - 图表顶部预留 32px 控件条承载 Stoch 参数入口（展开时才覆盖绘图区），并加大价格轴上下留白，交易标记及其文字不再被图例或画布边缘遮挡。
 - 左侧分组工具栏支持 16 个绘图工具、选择/拖动、锁定、删除、清除和 Shift 测量。
 - 绘图以通用 `drawings` 模型与复盘项目一起保存在 `btcusd.replay.projects.v2`；v1 旧趋势线升级时清空但保留 v1 原始数据。
-- 图表保持黑白 K 线、无成交量副图；Stoch 副图以已播放收盘价计算 K/D，可在两组（四条曲线）与三组（六条曲线）间切换，不再绘制固定 20/50/80 参考线，按周期设置参数、恢复默认并在浏览器保存。
+- 图表保持黑白 K 线、无成交量副图；Stoch 副图以已播放收盘价计算 K/D，可在两组（四条曲线）与三组（六条曲线）间切换，不再绘制固定 20/50/80 参考线，按周期设置参数、恢复默认并在浏览器保存；第三组 K3/D3 为白、黄两色并使用比前两组更粗的线宽。
 - 图表关闭 Lightweight Charts 的 TradingView 图标，改在页面底部提供 TradingView 署名与链接（库许可证要求二选一）。
 - 图表支持右键菜单清除当前项目的全部绘图。
 - 行情聚合与复盘周期支持 1m、5m、15m、30m、1h、2h、3h、4h、1d、1w、1M；Stoch 使用用户提供的各周期 K1/K2 默认值，K3 取桌面端第三组默认值并使用户保存的两参数数组按两组解析。
@@ -60,4 +60,4 @@ Last verified: 2026-09-13 @ working tree
 
 ## Next
 
-- 无活动工单；含 Clerk 移除的 `main@5935791` 已部署到内网环境，部署版本、镜像标签与回滚目标见 `docs/deployment/docker-compose.md`。
+- 无活动工单；`main@6fa1751`（Stoch 第三组样式）已部署到内网环境，部署版本、镜像标签与回滚目标见 `docs/deployment/docker-compose.md`。
