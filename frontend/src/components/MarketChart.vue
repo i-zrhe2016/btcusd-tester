@@ -47,6 +47,7 @@ import {
 import {
   DEFAULT_REPLAY_DRAWING_STYLE,
   REPLAY_DRAWING_TOOL_IDS,
+  manualTradeMarker,
   replayCursorIndexAtOrBefore,
   replayDrawingPointsNeeded,
   replayPaneDisplayCandles,
@@ -297,15 +298,13 @@ const visibleTradeMarkers = computed<SeriesMarker<Time>[]>(() => {
   const lastCandle = candles.at(-1)
   if (!lastCandle) return []
   return props.manualTrades
-    .filter((trade) => trade.timestamp <= lastCandle.timestamp)
-    .map((trade) => ({
+    .map((trade, index) => ({ trade, ordinal: index + 1 }))
+    .filter(({ trade }) => trade.timestamp <= lastCandle.timestamp)
+    .map(({ trade, ordinal }) => ({
       id: trade.id,
       time: candles[replayCursorIndexAtOrBefore(candles, trade.timestamp)].timestamp as UTCTimestamp,
-      position: trade.side === 'buy' ? 'belowBar' : 'aboveBar',
-      shape: trade.side === 'buy' ? 'arrowUp' : 'arrowDown',
-      color: trade.side === 'buy' ? '#ffffff' : '#dbe4ee',
-      text: trade.side === 'buy' ? 'BUY' : 'SELL',
       size: 1.25,
+      ...manualTradeMarker(trade, ordinal),
     }))
 })
 

@@ -778,6 +778,34 @@ export function summarizeManualTrades(
   }
 }
 
+export interface ManualTradeMarkerStyle {
+  text: string
+  position: 'aboveBar' | 'belowBar'
+  shape: 'arrowUp' | 'arrowDown'
+  color: string
+}
+
+export const MANUAL_TRADE_MARKER_ENTRY_COLOR = '#ffffff'
+export const MANUAL_TRADE_MARKER_EXIT_COLOR = '#f5b544'
+
+// Markers separate opening trades from closing ones and carry the 1-based trade
+// sequence so every recorded trade stays identifiable on the chart.
+export function manualTradeMarker(trade: ManualTrade, ordinal: number): ManualTradeMarkerStyle {
+  const closing = trade.action === 'close-long' || trade.action === 'close-short'
+  const label = trade.action === 'open-long'
+    ? 'BUY'
+    : trade.action === 'open-short'
+      ? 'SELL'
+      : trade.action === 'close-long' ? '平多' : '平空'
+  const sequence = Number.isFinite(ordinal) && ordinal > 0 ? ` #${Math.floor(ordinal)}` : ''
+  return {
+    text: `${label}${sequence}`,
+    position: trade.side === 'buy' ? 'belowBar' : 'aboveBar',
+    shape: trade.side === 'buy' ? 'arrowUp' : 'arrowDown',
+    color: closing ? MANUAL_TRADE_MARKER_EXIT_COLOR : MANUAL_TRADE_MARKER_ENTRY_COLOR,
+  }
+}
+
 export function applyManualTrade(project: ReplayProject, input: ManualTradeInput): ReplayProject {
   if (!Number.isFinite(input.candleIndex) || !Number.isFinite(input.timestamp) || !Number.isFinite(input.price) || input.price <= 0) {
     return project

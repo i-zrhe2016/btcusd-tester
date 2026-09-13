@@ -6,6 +6,7 @@ import {
   createReplayProjectFromDraft,
   draftFromProject,
   loadReplayProjects,
+  manualTradeMarker,
   nextReplayWindowStart,
   normalizeSpeed,
   reanchorManualTrades,
@@ -32,6 +33,8 @@ import {
   timeframeStepSeconds,
   REPLAY_FORWARD_CANDLES,
   REPLAY_HISTORY_CANDLES,
+  MANUAL_TRADE_MARKER_ENTRY_COLOR,
+  MANUAL_TRADE_MARKER_EXIT_COLOR,
   REPLAY_PAGE_SIZE,
   REPLAY_PANE_FORWARD_CANDLES,
   REPLAY_PANE_HISTORY_CANDLES,
@@ -372,6 +375,57 @@ describe('replay helpers', () => {
       action: 'close-short',
       realizedPnl: 15,
     })
+  })
+
+  it('labels markers with trade sequence and separates entries from closes', () => {
+    const project = createReplayProjectFromDraft({
+      name: 'Marker Replay',
+      symbol: 'BTCUSD',
+      timeframe: '1m',
+      fromInput: '2026-08-27T00:00',
+      toInput: '2026-08-27T01:00',
+      speed: 1,
+    })
+
+    const afterBuy = applyManualTrade(project, {
+      side: 'buy',
+      candleIndex: 1,
+      timestamp: project.from + 60,
+      price: 100,
+    })
+    const afterClose = closeManualPosition(afterBuy, {
+      candleIndex: 2,
+      timestamp: project.from + 120,
+      price: 105,
+    })
+    const afterSell = applyManualTrade(afterClose, {
+      side: 'sell',
+      candleIndex: 3,
+      timestamp: project.from + 180,
+      price: 104,
+    })
+    const markers = afterSell.trades.map((trade, index) => manualTradeMarker(trade, index + 1))
+
+    expect(markers).toEqual([
+      {
+        text: 'BUY #1',
+        position: 'belowBar',
+        shape: 'arrowUp',
+        color: MANUAL_TRADE_MARKER_ENTRY_COLOR,
+      },
+      {
+        text: '平多 #2',
+        position: 'aboveBar',
+        shape: 'arrowDown',
+        color: MANUAL_TRADE_MARKER_EXIT_COLOR,
+      },
+      {
+        text: 'SELL #3',
+        position: 'aboveBar',
+        shape: 'arrowDown',
+        color: MANUAL_TRADE_MARKER_ENTRY_COLOR,
+      },
+    ])
   })
 
   it('closes the entire current position with an explicit close action', () => {
