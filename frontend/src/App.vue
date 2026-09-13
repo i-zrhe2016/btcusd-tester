@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { ClerkLoaded, ClerkLoading, Show, SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/vue'
 import {
   ChartCandlestick,
   FolderOpen,
@@ -81,8 +80,6 @@ interface ReplayPaneState {
 
 const viewKey = 'btcusd.workspace.view.v2'
 const replayLengths: [number, number, number] = [30, 120, 840]
-const authEnabled = false
-const { isLoaded: authLoaded, isSignedIn } = useAuth()
 
 const timeframeLabels: Record<string, string> = {
   '1m': '1 分',
@@ -178,7 +175,6 @@ const canCloseManualTrade = computed(() => Boolean(
 ))
 const currentTimeframeValue = computed(() => activeProject.value?.timeframe ?? projectDraft.timeframe)
 const replayPaneCount = computed(() => Math.min(activeProject.value?.panes.length ?? 1, MAX_REPLAY_PANES))
-const replayAccessGranted = computed(() => !authEnabled || (authLoaded.value && isSignedIn.value === true))
 const timeframeOptions = computed(() => {
   const supported = metadata.value?.supported_timeframes ?? Object.keys(timeframeLabels)
   return supported.filter((value) => value in timeframeLabels)
@@ -208,19 +204,6 @@ function saveAppView(value: AppView) {
 
 function setNotice(message: string) {
   notice.value = message
-}
-
-function ensureReplayAccess(): boolean {
-  if (!authEnabled) return true
-  if (!authLoaded.value) {
-    setNotice('账户状态仍在加载，请稍后再试。')
-    return false
-  }
-  if (!isSignedIn.value) {
-    setNotice('请先登录后进入复盘。')
-    return false
-  }
-  return true
 }
 
 function updateProjectDrawings(drawings: ReplayDrawing[]) {
@@ -567,10 +550,6 @@ function openProjects() {
 }
 
 function openReplay() {
-  if (!ensureReplayAccess()) {
-    activeView.value = 'projects'
-    return
-  }
   if (!activeProject.value) {
     activeView.value = 'projects'
     return
@@ -658,7 +637,6 @@ function handleReplayShortcut(event: KeyboardEvent) {
 }
 
 function createProject() {
-  if (!ensureReplayAccess()) return
   projectError.value = ''
   try {
     const draftProject = createReplayProjectFromDraft(projectDraft)
@@ -678,7 +656,6 @@ function createProject() {
 }
 
 function saveActiveProject() {
-  if (!ensureReplayAccess()) return
   const project = activeProject.value
   if (!project) {
     createProject()
@@ -703,7 +680,6 @@ function saveActiveProject() {
 }
 
 function selectProject(projectId: string) {
-  if (!ensureReplayAccess()) return
   const storedProject = projects.value.find((item) => item.id === projectId)
   if (!storedProject) return
   const { project, changed } = alignProjectToMarket(storedProject)
@@ -867,7 +843,7 @@ async function initialize() {
   try {
     metadata.value = await getMarketMetadata()
     const requestedView = loadAppView()
-    activeView.value = requestedView === 'replay' && replayAccessGranted.value ? 'replay' : 'projects'
+    activeView.value = requestedView === 'replay' ? 'replay' : 'projects'
 
     const storedProjects = loadReplayProjects()
     if (!storedProjects.length && metadata.value) {
@@ -922,31 +898,10 @@ function tradeActionLabel(action: ManualTradeAction | undefined): string {
 }
 
 watch(activeView, (value) => {
-  if (!authEnabled) {
-    saveAppView(value)
-    if (value !== 'replay') {
-      playbackPlaying.value = false
-    }
-    return
-  }
-  if (value === 'replay' && !replayAccessGranted.value) {
-    activeView.value = 'projects'
-    setNotice(authLoaded.value ? '请先登录后进入复盘。' : '账户状态仍在加载，请稍后再试。')
-    return
-  }
   saveAppView(value)
   if (value !== 'replay') {
     playbackPlaying.value = false
-    void exitReplayFullscreen()
   }
-})
-
-watch([authLoaded, isSignedIn], ([loaded, signedIn]) => {
-  if (!authEnabled) return
-  if (!loaded || signedIn || activeView.value !== 'replay') return
-  pausePlayback()
-  activeView.value = 'projects'
-  setNotice('请先登录后进入复盘。')
 })
 
 watch([playbackPlaying, () => activeProject.value?.speed, () => activeProjectId.value, () => totalReplayCandles.value], () => {
@@ -1081,24 +1036,6 @@ onBeforeUnmount(() => {
           </button>
         </template>
 
-        <div v-if="authEnabled" class="auth-controls" aria-label="账户操作">
-          <ClerkLoading>
-            <span class="auth-loading" aria-live="polite">账户加载中…</span>
-          </ClerkLoading>
-          <ClerkLoaded>
-            <Show when="signed-out">
-              <SignInButton mode="modal">
-                <button type="button" class="auth-button auth-button-secondary">登录</button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button type="button" class="auth-button auth-button-primary">注册</button>
-              </SignUpButton>
-            </Show>
-            <Show when="signed-in">
-              <UserButton />
-            </Show>
-          </ClerkLoaded>
-        </div>
       </div>
     </header>
 
@@ -1136,13 +1073,6 @@ onBeforeUnmount(() => {
           <ServerCog :size="20" aria-hidden="true" />
           <span>{{ activeError }}</span>
           <button type="button" class="text-button" @click="initialize">重试</button>
-        </div>
-
-        <div v-if="authEnabled && authLoaded && !isSignedIn" class="alert auth-required-alert" role="status">
-          <span>请先登录后进入复盘，也不能创建或打开复盘项目。</span>
-          <SignInButton mode="modal">
-            <button type="button" class="text-button">立即登录</button>
-          </SignInButton>
         </div>
 
         <div class="project-layout">

@@ -39,8 +39,6 @@
 | `MARKET_DATA_URL` | backtest | `http://market-data:8081` |
 | `MARKET_DATA_PARQUET` | market-data | `/data/btcusd_1m.parquet` |
 | `RUST_LOG` | Rust 服务 | 默认 `info` |
-| `VITE_CLERK_PUBLISHABLE_KEY` | web（构建参数） | Clerk Publishable Key，属公开变量；缺失时前端镜像构建失败 |
-
 `.env.example` 只能包含无敏感默认值；生产 `.env` 权限设为 `0600` 并排除版本控制。
 CPU 配额由 Docker Compose 的 `cpus` 字段下发到容器，可按服务器规格在 `.env` 中调高或调低。
 
