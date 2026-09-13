@@ -49,13 +49,14 @@ import {
   REPLAY_DRAWING_TOOL_IDS,
   replayCursorIndexAtOrBefore,
   replayDrawingPointsNeeded,
+  replayPaneDisplayCandles,
   replayUnloadedTimestamps,
   type ManualTrade,
   type ReplayDrawing,
   type ReplayDrawingStyle,
   type ReplayDrawingTool,
 } from '../replay'
-import type { MarketSnapshot } from '../types'
+import type { Candle, MarketSnapshot } from '../types'
 import { formatUtc } from '../format'
 import {
   calculateStoch,
@@ -80,6 +81,9 @@ const props = withDefaults(defineProps<{
   showTools?: boolean
   manualTrades?: ManualTrade[]
   drawings?: ReplayDrawing[]
+  clockLimited?: boolean
+  formingBucket?: number | null
+  formingCandle?: Candle | null
 }>(), {
   playbackIndex: undefined,
   playing: false,
@@ -88,6 +92,9 @@ const props = withDefaults(defineProps<{
   showTools: true,
   manualTrades: () => [],
   drawings: () => [],
+  clockLimited: false,
+  formingBucket: null,
+  formingCandle: null,
 })
 
 const emit = defineEmits<{
@@ -256,14 +263,34 @@ const chartTheme: ChartTheme = {
 
 const totalCandles = computed(() => props.snapshot?.candles.length ?? 0)
 
-const visibleCount = computed(() => {
+const cursorCandleCount = computed(() => {
   const total = totalCandles.value
   if (!total) return 0
   const cursor = props.playbackIndex ?? total - 1
   return Math.min(Math.max(cursor + 1, 1), total)
 })
 
-const visibleCandles = computed(() => props.snapshot?.candles.slice(0, visibleCount.value) ?? [])
+// Panes follow the shared replay clock instead of a cursor index: they show the candles of
+// their loaded window that already closed plus the candle still forming in the current bucket,
+// so a pane never renders a candle the main timeframe has not played yet.
+const clippedCandles = computed<Candle[] | null>(() => {
+  if (!props.clockLimited) return null
+  const bucket = props.formingBucket
+  const forming = props.formingCandle ?? null
+  // Without a clock a pane must not fall back to its loaded window: it would show candles the
+  // replay has not reached yet.
+  if ((typeof bucket !== 'number' || !Number.isFinite(bucket)) && !forming) return []
+  return replayPaneDisplayCandles(
+    props.snapshot?.candles ?? [],
+    typeof bucket === 'number' && Number.isFinite(bucket) ? bucket : null,
+    forming,
+  )
+})
+
+const visibleCandles = computed(() => clippedCandles.value
+  ?? props.snapshot?.candles.slice(0, cursorCandleCount.value)
+  ?? [])
+const visibleCount = computed(() => visibleCandles.value.length)
 const currentCandle = computed(() => visibleCandles.value.at(-1) ?? null)
 const visibleTradeMarkers = computed<SeriesMarker<Time>[]>(() => {
   const candles = visibleCandles.value
@@ -791,11 +818,21 @@ watch(() => props.snapshot, async () => {
   }
 }, { immediate: true })
 
-watch([() => props.playbackIndex, () => props.playing, () => props.manualTrades], async () => {
-  await nextTick()
-  resizeChart()
-  setSeriesData()
-})
+watch(
+  [
+    () => props.playbackIndex,
+    () => props.playing,
+    () => props.manualTrades,
+    () => props.clockLimited,
+    () => props.formingBucket,
+    () => props.formingCandle,
+  ],
+  async () => {
+    await nextTick()
+    resizeChart()
+    setSeriesData()
+  },
+)
 
 watch(() => props.drawings, () => {
   syncDrawingsFromProps()
