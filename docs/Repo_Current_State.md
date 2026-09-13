@@ -1,6 +1,6 @@
 # Repository Current State
 
-Last verified: 2026-09-13 @ 6fa1751
+Last verified: 2026-09-13 @ d6f3472
 
 ## Current Focus
 
@@ -60,4 +60,4 @@ Last verified: 2026-09-13 @ 6fa1751
 
 ## Next
 
-- 无活动工单；`main@6fa1751`（Stoch 第三组样式）已部署到内网环境，部署版本、镜像标签与回滚目标见 `docs/deployment/docker-compose.md`。
+- 无活动工单；`main@d6f3472`（Stoch 50 中轴虚线）已部署到内网环境，部署版本、镜像标签与回滚目标见 `docs/deployment/docker-compose.md`。
