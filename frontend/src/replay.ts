@@ -345,6 +345,60 @@ export function replayPaneNeedsReload(
   return cursorTimestamp < window.from || cursorTimestamp >= window.to
 }
 
+// The replay clock is the close of the candle the cursor points at: bars up to that candle
+// are played, so every pane may only show candles that closed at or before it.
+export function replayClockTimestamp(
+  candles: Pick<Candle, 'timestamp'>[],
+  cursorIndex: number,
+  fallbackStepSeconds: number,
+): number | null {
+  const index = Math.floor(cursorIndex)
+  const candle = candles[index]
+  if (!candle) return null
+  const step = Number.isFinite(fallbackStepSeconds) && fallbackStepSeconds > 0
+    ? fallbackStepSeconds
+    : 60
+  const next = candles[index + 1]?.timestamp
+  const limit = candle.timestamp + step
+  return typeof next === 'number' && Number.isFinite(next) && next > candle.timestamp
+    ? Math.min(next, limit)
+    : limit
+}
+
+// Mirrors the market-data aggregation grid so a pane can request the bucket that contains a
+// timestamp: minute..day buckets are counted from the epoch, weeks start on Monday and months
+// start on the first day of the UTC month.
+export function replayBucketStart(timestamp: number, timeframe: string): number {
+  if (timeframe === '1M') {
+    const date = new Date(timestamp * 1000)
+    return Math.floor(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1) / 1000)
+  }
+  if (timeframe === '1w') {
+    const week = 7 * 24 * 60 * 60
+    const mondayOffset = 3 * 24 * 60 * 60
+    return Math.floor((timestamp + mondayOffset) / week) * week - mondayOffset
+  }
+  const step = timeframeStepSeconds(timeframe)
+  return Math.floor(timestamp / step) * step
+}
+
+// A pane shows the candles of its loaded window that already closed by the replay clock plus
+// the candle that is still forming inside the current bucket.
+export function replayPaneDisplayCandles(
+  candles: Candle[],
+  formingBucket: number | null,
+  forming: Candle | null,
+): Candle[] {
+  // The forming candle defines the boundary by itself: a refresh may still hold the candle of a
+  // newer bucket while the bucket moved on, and the rendered series must stay strictly ordered.
+  const boundary = forming
+    ? forming.timestamp
+    : (formingBucket !== null && Number.isFinite(formingBucket) ? formingBucket : null)
+  if (boundary === null) return candles
+  const closed = candles.filter((candle) => candle.timestamp < boundary)
+  return forming ? [...closed, forming] : closed
+}
+
 export function nextReplayWindowStart(
   lastTimestamp: number | undefined,
   timeframe: string,

@@ -13,6 +13,9 @@ import {
   replayCursorIndexAtOrBefore,
   replayCursorIndexAtOrAfter,
   replayDelayMs,
+  replayBucketStart,
+  replayClockTimestamp,
+  replayPaneDisplayCandles,
   nextReplayPaneTimeframe,
   normalizeReplayPanes,
   replayPaneNeedsReload,
@@ -603,6 +606,54 @@ describe('replay multi-timeframe panes', () => {
 
     expect(window.to).toBe(project.to)
     expect(replayPaneNeedsReload(window, 1_007_100)).toBe(false)
+  })
+
+  it('clocks panes at the close of the candle under the replay cursor', () => {
+    const candles = [{ timestamp: 1_000_000 }, { timestamp: 1_000_060 }, { timestamp: 1_000_120 }]
+
+    expect(replayClockTimestamp(candles, 0, 60)).toBe(1_000_060)
+    expect(replayClockTimestamp(candles, 1, 60)).toBe(1_000_120)
+    // The next candle wins when it arrives earlier than one step, e.g. a 30 day month.
+    expect(replayClockTimestamp(candles, 0, 86_400)).toBe(1_000_060)
+    // Data gaps fall back to one timeframe step.
+    expect(replayClockTimestamp([{ timestamp: 1_000_000 }], 0, 86_400)).toBe(1_086_400)
+    expect(replayClockTimestamp(candles, 9, 60)).toBeNull()
+  })
+
+  it('derives pane buckets on the same grid the market data service aggregates with', () => {
+    const monday = 345_600
+
+    expect(replayBucketStart(monday + 61, '1m')).toBe(monday + 60)
+    expect(replayBucketStart(monday + 299, '5m')).toBe(monday)
+    expect(replayBucketStart(monday + 300, '5m')).toBe(monday + 300)
+    expect(replayBucketStart(monday + 3_600, '1h')).toBe(monday + 3_600)
+    expect(replayBucketStart(monday + 86_400, '1d')).toBe(monday + 86_400)
+    expect(replayBucketStart(monday + 86_400, '1w')).toBe(monday)
+    expect(replayBucketStart(monday + 8 * 86_400, '1w')).toBe(monday + 7 * 86_400)
+    expect(replayBucketStart(Date.UTC(2019, 8, 17) / 1000, '1M')).toBe(Date.UTC(2019, 8, 1) / 1000)
+  })
+
+  it('renders pane candles that closed by the clock plus the forming candle', () => {
+    const candles = [
+      { timestamp: 1_000_000, open: 1, high: 2, low: 1, close: 2, volume: 1 },
+      { timestamp: 1_000_300, open: 2, high: 3, low: 2, close: 3, volume: 1 },
+      { timestamp: 1_000_600, open: 3, high: 4, low: 3, close: 4, volume: 1 },
+    ]
+    const forming = { timestamp: 1_000_300, open: 2, high: 2.5, low: 2, close: 2.5, volume: 1 }
+
+    expect(replayPaneDisplayCandles(candles, 1_000_300, forming).map((candle) => candle.timestamp))
+      .toEqual([1_000_000, 1_000_300])
+    expect(replayPaneDisplayCandles(candles, 1_000_300, forming).at(-1)).toEqual(forming)
+    // Before the first sub candle of the bucket is played the pane shows no forming candle.
+    expect(replayPaneDisplayCandles(candles, 1_000_300, null).map((candle) => candle.timestamp))
+      .toEqual([1_000_000])
+    // Without a shared clock the pane keeps its loaded window unchanged.
+    expect(replayPaneDisplayCandles(candles, null, null)).toBe(candles)
+    // A candle of the previous bucket must never be rendered twice while a refresh is running.
+    expect(replayPaneDisplayCandles(candles, 1_000_600, forming).map((candle) => candle.timestamp))
+      .toEqual([1_000_000, 1_000_300])
+    expect(replayPaneDisplayCandles(candles, null, forming).map((candle) => candle.timestamp))
+      .toEqual([1_000_000, 1_000_300])
   })
 
   it('keeps the split layout when the primary timeframe changes', () => {

@@ -38,6 +38,8 @@ import {
   projectRangeLabel,
   reanchorManualTrades,
   reconcileReplayProject,
+  replayBucketStart,
+  replayClockTimestamp,
   replayCursorIndexAtOrBefore,
   replayCursorIndexAtOrAfter,
   replayPaneNeedsReload,
@@ -60,7 +62,7 @@ import {
   type ReplayDrawing,
   type ReplayWindowRange,
 } from './replay'
-import type { MarketMetadata, MarketSnapshot } from './types'
+import type { Candle, MarketMetadata, MarketSnapshot } from './types'
 
 type AppView = 'projects' | 'replay'
 
@@ -72,6 +74,9 @@ interface ReplayPaneState {
   loading: boolean
   error: string
   requestId: number
+  formingBucket: number | null
+  forming: Candle | null
+  formingRequestId: number
 }
 
 const viewKey = 'btcusd.workspace.view.v2'
@@ -403,11 +408,13 @@ function paneCursorTimestamp(): number | null {
   return typeof project?.cursorTimestamp === 'number' ? project.cursorTimestamp : null
 }
 
-function panePlaybackIndex(pane: ReplayPaneState): number {
-  const candles = pane.snapshot?.candles ?? []
-  const anchor = paneCursorTimestamp()
-  if (candles.length === 0 || anchor === null) return 0
-  return replayCursorIndexAtOrBefore(candles, anchor)
+// The replay clock is the close of the candle under the replay cursor. Panes may only render
+// candles that already closed by then, otherwise they would reveal not-yet-played prices.
+function paneClockTimestamp(): number | null {
+  const project = activeProject.value
+  const candles = replaySnapshot.value?.candles ?? []
+  if (!project || !candles.length) return null
+  return replayClockTimestamp(candles, activePlaybackIndex.value, timeframeStepSeconds(project.timeframe))
 }
 
 async function loadReplayPane(pane: ReplayPaneState, project: ReplayProject, anchorTimestamp: number): Promise<void> {
@@ -427,11 +434,51 @@ async function loadReplayPane(pane: ReplayPaneState, project: ReplayProject, anc
     if (pane.requestId !== requestId) return
     pane.snapshot = snapshot
     pane.range = range
+    const clock = paneClockTimestamp()
+    if (clock !== null) void refreshReplayPaneForming(pane, clock)
   } catch (caught) {
     if (pane.requestId !== requestId) return
     pane.error = caught instanceof Error ? caught.message : '副屏行情加载失败。'
   } finally {
     if (pane.requestId === requestId) pane.loading = false
+  }
+}
+
+async function refreshReplayPaneForming(
+  pane: ReplayPaneState,
+  clockTimestamp: number,
+): Promise<void> {
+  const candles = pane.snapshot?.candles ?? []
+  if (!candles.length) return
+
+  // The candle still forming at the replay clock starts in the bucket that contains the last
+  // played instant; the backend aggregates it from the data that closed by then.
+  const bucket = replayBucketStart(clockTimestamp - 1, pane.timeframe)
+  if (clockTimestamp === replayBucketStart(clockTimestamp, pane.timeframe)) {
+    pane.formingBucket = bucket
+    pane.forming = candles.find((candle) => candle.timestamp === bucket) ?? null
+    return
+  }
+
+  if (pane.formingBucket !== bucket) {
+    // The bucket moved on: drop the previous forming candle before the new one arrives.
+    pane.formingBucket = bucket
+    pane.forming = null
+  }
+  const requestId = ++pane.formingRequestId
+  try {
+    const snapshot = await getMarketSnapshot({
+      timeframe: pane.timeframe,
+      from: bucket,
+      to: clockTimestamp,
+      limit: 1,
+      lengths: replayLengths,
+    })
+    if (pane.formingRequestId !== requestId) return
+    pane.forming = snapshot.candles.at(-1) ?? null
+  } catch {
+    // Keep the last rendered candle: a failed refresh must not blank the pane.
+    if (pane.formingRequestId !== requestId) return
   }
 }
 
@@ -452,14 +499,22 @@ function syncReplayPanes(): void {
       loading: false,
       error: '',
       requestId: 0,
+      formingBucket: null,
+      forming: null,
+      formingRequestId: 0,
     }
   })
   const anchor = paneCursorTimestamp()
   if (anchor === null) return
+  const clock = paneClockTimestamp()
   for (const pane of secondaryPanes.value) {
     if (pane.loading) continue
     if (replayPaneNeedsReload(pane.range, anchor)) {
       void loadReplayPane(pane, project, anchor)
+      continue
+    }
+    if (clock !== null) {
+      void refreshReplayPaneForming(pane, clock)
     }
   }
 }
@@ -928,6 +983,7 @@ watch(
     () => activeProject.value?.id ?? '',
     () => activeProject.value?.panes.join(',') ?? '',
     () => paneCursorTimestamp() ?? 0,
+    () => paneClockTimestamp() ?? 0,
   ],
   () => { syncReplayPanes() },
   { immediate: true },
@@ -1242,7 +1298,9 @@ onBeforeUnmount(() => {
               class="fullscreen-chart"
               :snapshot="pane.snapshot"
               :loading="pane.loading"
-              :playback-index="panePlaybackIndex(pane)"
+              :clock-limited="true"
+              :forming-bucket="pane.formingBucket"
+              :forming-candle="pane.forming"
               :playing="playbackPlaying"
               :project-name="currentProjectLabel"
               :show-header="false"
