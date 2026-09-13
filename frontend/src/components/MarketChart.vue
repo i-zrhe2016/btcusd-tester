@@ -20,6 +20,7 @@ import {
   type IChartApi,
   type ISeriesMarkersPluginApi,
   type ISeriesApi,
+  type LineWidth,
   type SeriesMarker,
   type Time,
   type UTCTimestamp,
@@ -111,10 +112,12 @@ const stochLengths = computed(() => stochSetting.value.lengths.slice(0, stochGro
 const stochDraft = ref<StochLengths>([...defaultStochSetting('1m').lengths])
 const stochGroupsDraft = ref<StochGroupCount>(2)
 const stochMessage = ref('')
-const STOCH_LINE_STYLES: Array<{ key: StochLineKey; color: string }> = [
-  { key: 'k1', color: '#ffffff' }, { key: 'd1', color: '#ffff00' },
-  { key: 'k2', color: '#ff0000' }, { key: 'd2', color: '#00ffff' },
-  { key: 'k3', color: '#ff8c00' }, { key: 'd3', color: '#a78bfa' },
+// The third group keeps the white/yellow pair but draws thicker so it stays readable
+// against the first group when all six lines share the pane.
+const STOCH_LINE_STYLES: Array<{ key: StochLineKey; color: string; lineWidth: LineWidth }> = [
+  { key: 'k1', color: '#ffffff', lineWidth: 2 }, { key: 'd1', color: '#ffff00', lineWidth: 2 },
+  { key: 'k2', color: '#ff0000', lineWidth: 2 }, { key: 'd2', color: '#00ffff', lineWidth: 2 },
+  { key: 'k3', color: '#ffffff', lineWidth: 3 }, { key: 'd3', color: '#ffff00', lineWidth: 3 },
 ]
 const stochLines = computed(() => STOCH_LINE_STYLES.slice(0, stochGroupCount.value * 2))
 let stochSeries: ISeriesApi<'Line'>[] = []
@@ -157,9 +160,9 @@ function syncStochSeries() {
     if (series) priceChart.removeSeries(series)
   }
   while (stochSeries.length < lines.length) {
-    const { key, color } = lines[stochSeries.length]
+    const { key, color, lineWidth } = lines[stochSeries.length]
     stochSeries.push(priceChart.addSeries(LineSeries, {
-      title: key, color, lineWidth: 2, priceLineVisible: false,
+      title: key, color, lineWidth, priceLineVisible: false,
       crosshairMarkerVisible: true,
       autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
     }, 1))
