@@ -15,8 +15,10 @@ import {
 import {
   ColorType,
   LineSeries,
+  LineStyle,
   createSeriesMarkers,
   type CandlestickData,
+  type CreatePriceLineOptions,
   type IChartApi,
   type ISeriesMarkersPluginApi,
   type ISeriesApi,
@@ -120,6 +122,15 @@ const STOCH_LINE_STYLES: Array<{ key: StochLineKey; color: string; lineWidth: Li
   { key: 'k3', color: '#ffffff', lineWidth: 3 }, { key: 'd3', color: '#ffff00', lineWidth: 3 },
 ]
 const stochLines = computed(() => STOCH_LINE_STYLES.slice(0, stochGroupCount.value * 2))
+// Stoch 副图的中轴参考线：只在 50 平衡位画一条虚线，颜色弱于 K/D 曲线。
+const STOCH_MIDLINE: CreatePriceLineOptions = {
+  price: 50,
+  color: '#787b86',
+  lineWidth: 1,
+  lineStyle: LineStyle.Dashed,
+  axisLabelVisible: true,
+  title: '',
+}
 let stochSeries: ISeriesApi<'Line'>[] = []
 
 watch(stochSetting, (setting) => {
@@ -160,12 +171,15 @@ function syncStochSeries() {
     if (series) priceChart.removeSeries(series)
   }
   while (stochSeries.length < lines.length) {
-    const { key, color, lineWidth } = lines[stochSeries.length]
-    stochSeries.push(priceChart.addSeries(LineSeries, {
+    const index = stochSeries.length
+    const { key, color, lineWidth } = lines[index]
+    const series = priceChart.addSeries(LineSeries, {
       title: key, color, lineWidth, priceLineVisible: false,
       crosshairMarkerVisible: true,
       autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
-    }, 1))
+    }, 1)
+    if (index === 0) series.createPriceLine(STOCH_MIDLINE)
+    stochSeries.push(series)
   }
   const panes = priceChart.panes()
   panes[0]?.setStretchFactor(3)
