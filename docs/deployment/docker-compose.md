@@ -84,6 +84,6 @@ curl -k https://localhost/healthz
 
 冒烟基准（固定窗口 `2019-09-01T00:00Z`–`2019-09-02T00:00Z`，`1m`，Stoch `length=10/oversold=20/overbought=80`，初始资金 10,000，费率 0.0004）：处理 1,440 根 K 线、26 笔完成交易、最终权益 9,892.53；重复执行结果必须一致。
 
-当前内网环境运行 `main@137ac43`（交易标记区分 + 图表控件遮挡修复），镜像 `btcusd-web:137ac43`、`btcusd-market-data:137ac43`、`btcusd-backtest:137ac43`；回滚镜像为 `btcusd-web:cd30e40`、`btcusd-backtest:cd30e40`、`btcusd-market-data:06a77bf`。
+当前内网环境运行 `main@5935791`（交易标记区分、图表控件遮挡修复、移除 Clerk 登录集成），镜像 `btcusd-web:5935791`、`btcusd-market-data:5935791`、`btcusd-backtest:5935791`；回滚镜像为 `btcusd-web:137ac43`、`btcusd-backtest:137ac43`、`btcusd-market-data:137ac43`，更早版本 `btcusd-web:cd30e40`、`btcusd-backtest:cd30e40`、`btcusd-market-data:06a77bf` 仍保留。前端镜像不再需要任何 Clerk 构建参数。
 
 数据库迁移失败、行情文件校验失败或冒烟结果不一致时停止发布并回滚镜像；不得跳过校验继续上线。
