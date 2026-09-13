@@ -330,8 +330,7 @@ select {
   white-space: nowrap;
 }
 
-.topbar-actions,
-.auth-controls {
+.topbar-actions {
   display: flex;
   align-items: center;
 }
@@ -407,49 +406,6 @@ select {
   border-color: var(--accent);
   background: var(--surface-2);
   color: var(--text);
-}
-
-.auth-controls {
-  min-width: 122px;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.auth-button {
-  min-height: 40px;
-  padding: 0 13px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.auth-button-secondary {
-  background: var(--surface);
-  color: var(--text);
-}
-
-.auth-button-secondary:hover {
-  border-color: var(--accent);
-  background: var(--surface-2);
-}
-
-.auth-button-primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-.auth-button-primary:hover {
-  background: var(--accent-strong);
-}
-
-.auth-loading {
-  color: var(--text-dim);
-  font-size: 12px;
-  white-space: nowrap;
 }
 
 .status-dot {

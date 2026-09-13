@@ -42,13 +42,12 @@ Last verified: 2026-09-13 @ working tree
 
 ## Known Issues / Failing Checks
 
-- 文档描述了登录保护，但认证开关关闭时运行时不会显示认证控件或执行 guard。
-- Clerk 开发实例仍会在浏览器控制台提示开发密钥警告；这不影响本机 Tailscale 部署，但生产环境仍需明确认证配置。
+- 前端没有身份校验：应用对访问者直接开放，生产必须依靠 VPN、IP 白名单或上游身份代理。
 
 ## Constraints
 
 - 浏览器通过同源 `/api/...` 访问服务；本地 Vite 优先连接 `127.0.0.1:8081/8082`，否则回退到 HTTPS 网关。
-- 部署使用 Tailscale 内网地址；后端仍使用固定访客用户，未完成服务端 Clerk 身份校验。
+- 部署使用 Tailscale 内网地址；前后端都没有服务端身份校验，后端使用固定访客用户。
 - CandleKit 版本固定为 `@getcandlekit/charts@0.1.0`；绘图持久化由应用项目模型负责，不使用 CandleKit 私有 localStorage。
 - Lightweight Charts 固定为 `lightweight-charts@5.2.1`，关闭 `attributionLogo` 时必须保留页脚署名链接。
 - 该 Tailscale 节点不得再配置监听 443 的 `tailscale serve`：它会劫持内网 HTTPS 且节点未启用 Tailscale 证书，导致按节点内网地址访问 HTTPS 时无法打开。
@@ -62,4 +61,3 @@ Last verified: 2026-09-13 @ working tree
 ## Next
 
 - 无活动工单；交易标记修复已部署到内网环境，部署版本、镜像标签与回滚目标见 `docs/deployment/docker-compose.md`。
-- 继续明确认证上线时机，并在验证 Clerk 配置后启用 `authEnabled`。

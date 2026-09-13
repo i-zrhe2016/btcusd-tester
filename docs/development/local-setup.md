@@ -68,19 +68,6 @@ Rust 依赖由 Cargo 在首次构建时自动解析：
 cargo build --workspace
 ```
 
-## 配置 Clerk 认证
-
-当前前端是 Vue + Vite，Clerk CLI 无法从仓库根目录自动识别嵌套的 Vite 应用，因此使用 CLI 链接应用并从 `frontend/` 目录拉取开发环境变量：
-
-```bash
-cd frontend
-clerk env pull --app <clerk-application-id> --file .env.local
-```
-
-`.env.local` 只用于本地开发，已被 Git 和 Docker 构建上下文排除。前端只读取 `VITE_CLERK_PUBLISHABLE_KEY`；不要把 `CLERK_SECRET_KEY` 写入 `VITE_` 变量或提交到仓库。
-
-生产 Docker 构建通过 `docker-compose.yml` 的 build arg 接收 `VITE_CLERK_PUBLISHABLE_KEY`。部署前在受保护的根目录 `.env` 或 CI secret 中提供该公开构建变量，未提供时前端镜像会主动构建失败。
-
 如果只想验证单个服务：
 
 ```bash
