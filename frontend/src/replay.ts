@@ -365,6 +365,20 @@ export function replayClockTimestamp(
     : limit
 }
 
+// Panes must stay inside the replay range: the cursor candle of the main timeframe can reach
+// past the project end when the project stops inside a bar, and a pane must not aggregate base
+// candles the replay never played.
+export function replayPaneClock(
+  candles: Pick<Candle, 'timestamp'>[],
+  cursorIndex: number,
+  fallbackStepSeconds: number,
+  projectEnd: number,
+): number | null {
+  const clock = replayClockTimestamp(candles, cursorIndex, fallbackStepSeconds)
+  if (clock === null) return null
+  return Number.isFinite(projectEnd) ? Math.min(clock, projectEnd) : clock
+}
+
 // Mirrors the market-data aggregation grid so a pane can request the bucket that contains a
 // timestamp: minute..day buckets are counted from the epoch, weeks start on Monday and months
 // start on the first day of the UTC month.

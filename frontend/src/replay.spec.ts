@@ -15,6 +15,7 @@ import {
   replayDelayMs,
   replayBucketStart,
   replayClockTimestamp,
+  replayPaneClock,
   replayPaneDisplayCandles,
   nextReplayPaneTimeframe,
   normalizeReplayPanes,
@@ -618,6 +619,16 @@ describe('replay multi-timeframe panes', () => {
     // Data gaps fall back to one timeframe step.
     expect(replayClockTimestamp([{ timestamp: 1_000_000 }], 0, 86_400)).toBe(1_086_400)
     expect(replayClockTimestamp(candles, 9, 60)).toBeNull()
+  })
+
+  it('keeps the pane clock inside the project range', () => {
+    const candles = [{ timestamp: 1_000_000 }, { timestamp: 1_000_060 }]
+
+    // A project that ends inside the last bar must not let panes read past that end.
+    expect(replayPaneClock(candles, 0, 60, 1_000_030)).toBe(1_000_030)
+    expect(replayPaneClock(candles, 0, 60, 1_000_060)).toBe(1_000_060)
+    expect(replayPaneClock(candles, 1, 60, 1_100_000)).toBe(1_000_120)
+    expect(replayPaneClock(candles, 9, 60, 1_100_000)).toBeNull()
   })
 
   it('derives pane buckets on the same grid the market data service aggregates with', () => {

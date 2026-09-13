@@ -39,7 +39,7 @@ import {
   reanchorManualTrades,
   reconcileReplayProject,
   replayBucketStart,
-  replayClockTimestamp,
+  replayPaneClock,
   replayCursorIndexAtOrBefore,
   replayCursorIndexAtOrAfter,
   replayPaneNeedsReload,
@@ -414,7 +414,12 @@ function paneClockTimestamp(): number | null {
   const project = activeProject.value
   const candles = replaySnapshot.value?.candles ?? []
   if (!project || !candles.length) return null
-  return replayClockTimestamp(candles, activePlaybackIndex.value, timeframeStepSeconds(project.timeframe))
+  return replayPaneClock(
+    candles,
+    activePlaybackIndex.value,
+    timeframeStepSeconds(project.timeframe),
+    project.to,
+  )
 }
 
 async function loadReplayPane(pane: ReplayPaneState, project: ReplayProject, anchorTimestamp: number): Promise<void> {
@@ -455,6 +460,9 @@ async function refreshReplayPaneForming(
   // played instant; the backend aggregates it from the data that closed by then.
   const bucket = replayBucketStart(clockTimestamp - 1, pane.timeframe)
   if (clockTimestamp === replayBucketStart(clockTimestamp, pane.timeframe)) {
+    // Invalidate a forming request that is still in flight for an earlier clock, otherwise its
+    // partial aggregation would overwrite the completed candle of this bucket.
+    pane.formingRequestId += 1
     pane.formingBucket = bucket
     pane.forming = candles.find((candle) => candle.timestamp === bucket) ?? null
     return
