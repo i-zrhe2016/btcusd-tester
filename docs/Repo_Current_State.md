@@ -1,6 +1,6 @@
 # Repository Current State
 
-Last verified: 2026-09-12 @ 60e5588
+Last verified: 2026-09-13 @ working tree
 
 ## Current Focus
 
@@ -15,7 +15,7 @@ Last verified: 2026-09-12 @ 60e5588
 - 图表保持黑白 K 线、无成交量副图；Stoch 副图以已播放收盘价计算 K/D，可在两组（四条曲线）与三组（六条曲线）间切换，不再绘制固定 20/50/80 参考线，按周期设置参数、恢复默认并在浏览器保存。
 - 图表关闭 Lightweight Charts 的 TradingView 图标，改在页面底部提供 TradingView 署名与链接（库许可证要求二选一）。
 - 图表支持右键菜单清除当前项目的全部绘图。
-- 行情聚合与复盘周期支持 1m、5m、15m、30m、1h、2h、3h、4h、1d、1w、1M；Stoch 使用用户提供的各周期 K1/K2 默认值，K3 取旧桌面端第三组默认值并使用户保存的两参数数组按两组解析。
+- 行情聚合与复盘周期支持 1m、5m、15m、30m、1h、2h、3h、4h、1d、1w、1M；Stoch 使用用户提供的各周期 K1/K2 默认值，K3 取桌面端第三组默认值并使用户保存的两参数数组按两组解析。
 - 图表为底部状态栏预留高度，窄屏及全屏下副图与时间轴不被遮挡；CandleKit 私有存储关闭，绘图使用应用项目状态。
 - 复盘行情首次加载、切换周期和恢复项目都以游标为锚点取「之前 500 根历史 + 之后 30 根」（单次上限 531 根，接口硬上限 5,000 根），窗口允许读到项目 `from` 之前的历史作为图表上下文；播放时按每批 60 根预取后续窗口，当前批次剩余 15 根未播放时后台加载，窗口末尾等待加载结果，失败暂停并支持手动重试。
 - 新行情窗口按 timestamp 去重、排序后追加，过期、重复和无进展请求不会覆盖当前复盘数据。
@@ -49,6 +49,7 @@ Last verified: 2026-09-12 @ 60e5588
 - CandleKit 版本固定为 `@getcandlekit/charts@0.1.0`；绘图持久化由应用项目模型负责，不使用 CandleKit 私有 localStorage。
 - Lightweight Charts 固定为 `lightweight-charts@5.2.1`，关闭 `attributionLogo` 时必须保留页脚署名链接。
 - 该 Tailscale 节点不得再配置监听 443 的 `tailscale serve`：它会劫持内网 HTTPS 且节点未启用 Tailscale 证书，导致 `https://100.112.13.103` 无法打开。
+- Windows 桌面端源码（原 `legacy/windows-desktop/`）、构建工作流和迁移文档已移除，仅保留在 Git 历史中；新功能不再对照 C++ 实现验收。
 
 ## Architecture Snapshot
 

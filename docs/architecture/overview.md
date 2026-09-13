@@ -2,7 +2,7 @@
 
 ## 目标
 
-系统从本地 Win32 单进程程序迁移为浏览器访问的服务端平台。第一原则是保持部署简单：一台 Linux 服务器、一个 Docker Compose 项目、一个公网入口。服务按业务职责拆分，但首个版本不引入消息队列、服务网格、Kubernetes 或独立 API Gateway。
+系统是浏览器访问的服务端平台。第一原则是保持部署简单：一台 Linux 服务器、一个 Docker Compose 项目、一个公网入口。服务按业务职责拆分，但首个版本不引入消息队列、服务网格、Kubernetes 或独立 API Gateway。
 
 架构图：[PlantUML 源码](../diagrams/system-context.puml) · [SVG](../diagrams/system-context.svg)
 
@@ -45,14 +45,12 @@
 - 策略配置与回测历史持久化。
 - Vue 响应式页面、Nginx HTTPS 和 Compose 单机部署。
 
-### M2：旧客户端功能等价
+### M2：复盘功能与数据迁移
 
 - 播放、暂停、单步、倍速和 UTC 时间同步。
 - 项目/回放会话保存、趋势线和 Buy/Sell 标记。
 - 同一会话的多周期图表联动。
 - 旧 `.replay`、CSV 数据和用户状态迁移工具。
-
-在 M2 验收前，旧客户端保持可构建、只读归档，不宣布完全替代。
 
 ## 非目标
 
