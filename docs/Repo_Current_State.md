@@ -60,4 +60,4 @@ Last verified: 2026-09-13 @ working tree
 
 ## Next
 
-- 无活动工单；交易标记修复已部署到内网环境，部署版本、镜像标签与回滚目标见 `docs/deployment/docker-compose.md`。
+- 无活动工单；含 Clerk 移除的 `main@5935791` 已部署到内网环境，部署版本、镜像标签与回滚目标见 `docs/deployment/docker-compose.md`。
