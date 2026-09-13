@@ -59,5 +59,5 @@ Last verified: 2026-09-13 @ working tree
 
 ## Next
 
-- 无活动工单；Stoch 两组/三组切换（PR #12）已合并并部署为 `btcusd-web:60e5588`。
+- 无活动工单；多分屏 K 线同步修复（PR #13）已合并并部署为 `btcusd-web:cd30e40`（回滚镜像 `btcusd-web:60e5588` 仍保留）。
 - 继续明确认证上线时机，并在验证 Clerk 配置后启用 `authEnabled`。
