@@ -573,11 +573,16 @@ function playbackWindowBars(count = visibleCandles.value.length) {
   return Math.min(Math.max(Math.floor(width / playbackBarSpacing(count)), 60), 180)
 }
 
-function setPlaybackRange(bars = playbackWindowBars()) {
+function setPlaybackRange() {
   const scale = priceChart?.timeScale()
   const count = visibleCandles.value.length
   if (!scale || !count) return
 
+  const barSpacing = playbackBarSpacing(count)
+  if (scale.options().barSpacing !== barSpacing) {
+    scale.applyOptions({ barSpacing })
+  }
+  const bars = playbackWindowBars(count)
   const rightOffset = Math.max(6, Math.floor(bars * 0.06))
   const right = count - 1 + rightOffset
   scale.setVisibleLogicalRange({
@@ -588,8 +593,6 @@ function setPlaybackRange(bars = playbackWindowBars()) {
 
 function setSeriesData() {
   if (!chartController || !candleSeries) return
-  const range = priceChart?.timeScale().getVisibleLogicalRange()
-  const bars = range ? range.to - range.from : playbackWindowBars()
   chartController.setData(visibleCandles.value.map(toCandleKitBar))
   candleSeries.setData(unloadedChartData())
   tradeMarkers?.setMarkers(visibleTradeMarkers.value)
