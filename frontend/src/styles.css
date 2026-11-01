@@ -2134,6 +2134,17 @@ select {
 }
 
 /* Stoch settings share the chart's compact, dark controls. */
+.stoch-visibility-toggle {
+  margin-right: 8px;
+  padding: 5px 10px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.stoch-visibility-toggle:focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
 .stoch-settings {
   position: relative;
   z-index: 7;

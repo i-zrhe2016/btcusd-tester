@@ -29,19 +29,12 @@ import {
   type WhitespaceData,
 } from 'lightweight-charts'
 import {
-  ArrowUpRight,
-  Circle,
-  GitBranch,
   Lock,
-  Minus,
-  MoveUpRight,
   MousePointer2,
-  Ruler,
   RotateCcw,
   Square,
   Spline,
   Trash2,
-  Triangle,
   Unlock,
   X,
   ZoomIn,
@@ -105,6 +98,16 @@ const emit = defineEmits<{
   (event: 'drawings-changed', drawings: ReplayDrawing[]): void
 }>()
 
+const stochVisible = ref(true)
+try { stochVisible.value = localStorage.getItem('btcusd.stoch.visible') !== 'false' } catch { /* Storage may be disabled. */ }
+
+function toggleStoch() {
+  stochVisible.value = !stochVisible.value
+  syncStochSeries()
+  updateStoch()
+  try { localStorage.setItem('btcusd.stoch.visible', String(stochVisible.value)) } catch { /* Storage may be disabled. */ }
+}
+
 const stochSettings = ref<Record<string, StochSetting>>({})
 try { stochSettings.value = readStochSettings(localStorage.getItem(STOCH_STORAGE_KEY)) } catch { /* Storage may be disabled. */ }
 const stochPeriod = computed(() => props.snapshot?.timeframe ?? '1m')
@@ -165,7 +168,7 @@ function applyStoch(reset = false) {
 
 function syncStochSeries() {
   if (!priceChart) return
-  const lines = stochLines.value
+  const lines = stochVisible.value ? stochLines.value : []
   while (stochSeries.length > lines.length) {
     const series = stochSeries.pop()
     if (series) priceChart.removeSeries(series)
@@ -210,34 +213,10 @@ interface DrawingToolGroup {
 
 const drawingToolGroups: DrawingToolGroup[] = [
   {
-    label: '线条',
+    label: '绘图',
     tools: [
       { id: 'TrendLine', label: '趋势线', icon: Spline },
-      { id: 'Ray', label: '射线', icon: MoveUpRight },
-      { id: 'ExtendedLine', label: '延长线', icon: Minus },
-      { id: 'HorizontalLine', label: '水平线', icon: Minus },
-      { id: 'HorizontalRay', label: '水平射线', icon: ArrowUpRight },
-      { id: 'VerticalLine', label: '垂直线', icon: Minus },
-      { id: 'CrossLine', label: '十字线', icon: MousePointer2 },
-      { id: 'Arrow', label: '箭头', icon: ArrowUpRight },
-    ],
-  },
-  {
-    label: '形状',
-    tools: [
       { id: 'Rectangle', label: '矩形', icon: Square },
-      { id: 'Circle', label: '椭圆', icon: Circle },
-      { id: 'Triangle', label: '三角形', icon: Triangle },
-      { id: 'ParallelChannel', label: '平行通道', icon: GitBranch },
-    ],
-  },
-  {
-    label: '测绘',
-    tools: [
-      { id: 'PriceRange', label: '价格区间', icon: Ruler },
-      { id: 'DateRange', label: '日期区间', icon: Ruler },
-      { id: 'FibRetracement', label: 'Fib 回撤', icon: MoveUpRight },
-      { id: 'FibExtension', label: 'Fib 扩展', icon: MoveUpRight },
     ],
   },
 ]
@@ -594,16 +573,11 @@ function playbackWindowBars(count = visibleCandles.value.length) {
   return Math.min(Math.max(Math.floor(width / playbackBarSpacing(count)), 60), 180)
 }
 
-function setPlaybackRange() {
+function setPlaybackRange(bars = playbackWindowBars()) {
   const scale = priceChart?.timeScale()
   const count = visibleCandles.value.length
   if (!scale || !count) return
 
-  const barSpacing = playbackBarSpacing(count)
-  if (scale.options().barSpacing !== barSpacing) {
-    scale.applyOptions({ barSpacing })
-  }
-  const bars = playbackWindowBars(count)
   const rightOffset = Math.max(6, Math.floor(bars * 0.06))
   const right = count - 1 + rightOffset
   scale.setVisibleLogicalRange({
@@ -614,6 +588,8 @@ function setPlaybackRange() {
 
 function setSeriesData() {
   if (!chartController || !candleSeries) return
+  const range = priceChart?.timeScale().getVisibleLogicalRange()
+  const bars = range ? range.to - range.from : playbackWindowBars()
   chartController.setData(visibleCandles.value.map(toCandleKitBar))
   candleSeries.setData(unloadedChartData())
   tradeMarkers?.setMarkers(visibleTradeMarkers.value)
@@ -907,6 +883,9 @@ onBeforeUnmount(() => {
     </div>
     <div v-else class="chart-stage" :class="{ 'chart-stage-with-controls': Boolean(stochLengths) }">
       <div class="chart-control-strip">
+        <button class="stoch-visibility-toggle" type="button" :aria-pressed="stochVisible" @click="toggleStoch">
+          {{ stochVisible ? '隐藏指标' : '显示指标' }}
+        </button>
         <details v-if="stochLengths" class="stoch-settings">
           <summary>Stoch · {{ stochPeriod }} · {{ stochLengths.join(' / ') }}</summary>
           <form @submit.prevent="applyStoch()">
@@ -966,16 +945,6 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="chart-tool-group chart-tool-group-actions" aria-label="绘图操作">
-          <button
-            class="chart-tool-button"
-            type="button"
-            data-testid="drawing-measurement"
-            aria-label="测量（Shift 加拖动）"
-            title="测量：按住 Shift 拖动"
-            @click="setToolFeedback('按住 Shift 并在图表上拖动即可测量。')"
-          >
-            <Ruler :size="16" aria-hidden="true" />
-          </button>
           <button
             class="chart-tool-button"
             type="button"
