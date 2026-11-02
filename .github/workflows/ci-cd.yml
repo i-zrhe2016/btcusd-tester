@@ -1,0 +1,63 @@
+name: CI and deployment
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --locked
+      - run: POSTGRES_PASSWORD=ci-only docker compose config --quiet
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [frontend, backend]
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST || 'deploy.taile2c45c.ts.net' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Connect to deployment network
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+      - name: Package tracked source
+        run: git archive --format=tar.gz -o /tmp/release.tar.gz HEAD
+      - name: Upload release
+        run: |
+          tailscale ssh "root@$DEPLOY_HOST" "cat > /tmp/btcusd-release-$GITHUB_SHA.tar.gz" < /tmp/release.tar.gz
+      - name: Deploy and verify
+        run: |
+          tailscale ssh "root@$DEPLOY_HOST" "bash -s -- '$GITHUB_SHA'" < deployment/deploy-release.sh
