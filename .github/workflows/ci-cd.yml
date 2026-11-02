@@ -53,6 +53,9 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
+      - name: Verify Tailscale login
+        run: |
+          tailscale status --json | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s.get("BackendState") == "Running", "Tailscale login failed: check OAuth tag:ci permission and tailnet policy"'
       - name: Verify SSH and production health
         run: |
           timeout 60 tailscale ssh "root@$DEPLOY_HOST" 'set -eu; cd /opt/btcusd-tester; docker compose ps; curl -fsS --max-time 15 http://localhost:8083/healthz; curl -fsS --max-time 30 http://localhost:8083/api/market/meta > /dev/null'
@@ -75,6 +78,9 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
+      - name: Verify Tailscale login
+        run: |
+          tailscale status --json | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s.get("BackendState") == "Running", "Tailscale login failed: check OAuth tag:ci permission and tailnet policy"'
       - name: Package tracked source
         run: git archive --format=tar.gz -o /tmp/release.tar.gz HEAD
       - name: Upload release
