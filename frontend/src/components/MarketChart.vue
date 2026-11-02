@@ -577,16 +577,11 @@ function playbackWindowBars(count = visibleCandles.value.length) {
   return Math.min(Math.max(Math.floor(width / playbackBarSpacing(count)), 60), 180)
 }
 
-function setPlaybackRange() {
+function setPlaybackRange(bars = playbackWindowBars()) {
   const scale = priceChart?.timeScale()
   const count = visibleCandles.value.length
   if (!scale || !count) return
 
-  const barSpacing = playbackBarSpacing(count)
-  if (scale.options().barSpacing !== barSpacing) {
-    scale.applyOptions({ barSpacing })
-  }
-  const bars = playbackWindowBars(count)
   const rightOffset = Math.max(6, Math.floor(bars * 0.06))
   const right = count - 1 + rightOffset
   scale.setVisibleLogicalRange({
@@ -597,22 +592,33 @@ function setPlaybackRange() {
 
 function setSeriesData() {
   if (!chartController || !candleSeries) return
+  const range = priceChart?.timeScale().getVisibleLogicalRange()
+  const addedBars = visibleCandles.value.length - chartController.getBars().length
   chartController.setData(visibleCandles.value.map(toCandleKitBar))
   candleSeries.setData(unloadedChartData())
   tradeMarkers?.setMarkers(visibleTradeMarkers.value)
   updateStoch()
-  setPlaybackRange()
+  if (range) {
+    // Follow replay progress without changing the user's zoom or right-hand space.
+    priceChart?.timeScale().setVisibleLogicalRange({
+      from: range.from + addedBars,
+      to: range.to + addedBars,
+    })
+  } else {
+    setPlaybackRange()
+  }
 }
 
 function resizeChart() {
   if (!priceChart) return
   const size = containerSize()
   priceChart.applyOptions(size)
-  setPlaybackRange()
 }
 
 function buildCharts() {
   if (!priceContainer.value || !props.snapshot?.candles.length) return
+  const range = priceChart?.timeScale().getVisibleLogicalRange()
+  const bars = range ? range.to - range.from : playbackWindowBars()
   disposeCharts()
 
   const controller = new ChartController(priceContainer.value, {
@@ -678,6 +684,7 @@ function buildCharts() {
 
   resizeChart()
   setSeriesData()
+  setPlaybackRange(bars)
 }
 
 function zoom(factor: number) {
@@ -822,7 +829,6 @@ watch(() => props.snapshot, async () => {
 watch(
   [
     () => props.playbackIndex,
-    () => props.playing,
     () => props.manualTrades,
     () => props.clockLimited,
     () => props.formingBucket,
