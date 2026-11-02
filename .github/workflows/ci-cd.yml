@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      connection_test:
+        description: Test Tailscale SSH without deploying
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -35,8 +40,25 @@ jobs:
       - run: cargo test --workspace --locked
       - run: POSTGRES_PASSWORD=ci-only docker compose config --quiet
 
+  connection-test:
+    if: github.event_name == 'workflow_dispatch' && inputs.connection_test
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST || 'deploy.taile2c45c.ts.net' }}
+    steps:
+      - uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+      - name: Verify SSH and production health
+        run: |
+          timeout 60 tailscale ssh "root@$DEPLOY_HOST" 'set -eu; cd /opt/btcusd-tester; docker compose ps; curl -fsS --max-time 15 http://localhost:8083/healthz; curl -fsS --max-time 30 http://localhost:8083/api/market/meta > /dev/null'
+
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !inputs.connection_test
     needs: [frontend, backend]
     runs-on: ubuntu-latest
     environment: production
