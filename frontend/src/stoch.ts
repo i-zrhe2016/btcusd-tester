@@ -1,8 +1,8 @@
 import type { Candle } from './types'
 
-export type StochGroupCount = 2 | 3
-export type StochLengths = [number, number, number]
-export type StochLineKey = 'k1' | 'd1' | 'k2' | 'd2' | 'k3' | 'd3'
+export type StochGroupCount = 2 | 3 | 4 | 5 | 6
+export type StochLengths = [number, number, number, number, number, number]
+export type StochLineKey = 'k1' | 'd1' | 'k2' | 'd2' | 'k3' | 'd3' | 'k4' | 'd4' | 'k5' | 'd5' | 'k6' | 'd6'
 
 export interface StochSetting {
   groups: StochGroupCount
@@ -17,12 +17,27 @@ export interface StochPoint {
   d2: number | null
   k3: number | null
   d3: number | null
+  k4: number | null
+  d4: number | null
+  k5: number | null
+  d5: number | null
+  k6: number | null
+  d6: number | null
 }
 
 export const STOCH_DEFAULTS: Record<string, StochLengths> = {
-  '1m': [10, 20, 840], '5m': [30, 180, 840], '15m': [30, 120, 960], '30m': [30, 120, 480],
-  '1h': [30, 120, 840], '2h': [30, 120, 840], '3h': [45, 180, 840], '4h': [30, 210, 840],
-  '1d': [10, 70, 280], '1w': [10, 40, 120], '1M': [10, 30, 120],
+  '1m': [30, 80, 150, 300, 600, 1200],
+  '5m': [30, 180, 720, 1440, 2880, 5760],
+  '15m': [10, 40, 160, 320, 640, 1280],
+  '30m': [10, 60, 480, 960, 1920, 3840],
+  '90m': [40, 160, 320, 640, 1280, 2560],
+  '1h': [10, 40, 240, 480, 960, 1920],
+  '2h': [30, 120, 840, 1680, 3360, 6720],
+  '3h': [20, 80, 560, 1120, 2240, 4480],
+  '4h': [10, 60, 420, 840, 1680, 3360],
+  '1d': [10, 70, 280, 560, 1120, 2240],
+  '1w': [10, 40, 120, 240, 480, 960],
+  '1M': [10, 30, 120, 240, 480, 960],
 }
 export const STOCH_STORAGE_KEY = 'btcusd.stoch.parameters.v1'
 
@@ -31,16 +46,16 @@ export function validStochLength(value: number): boolean {
 }
 
 export function validStochLengths(lengths: readonly number[]): boolean {
-  return lengths.length >= 2 && lengths.length <= 3 && lengths.every(validStochLength)
+  return lengths.length >= 2 && lengths.length <= 6 && lengths.every(validStochLength)
 }
 
 export function defaultStochSetting(period: string): StochSetting {
-  const lengths = STOCH_DEFAULTS[period] ?? STOCH_DEFAULTS['1m']
-  return { groups: 2, lengths: [...lengths] as StochLengths }
+  const lengths = STOCH_DEFAULTS[period] ?? STOCH_DEFAULTS['1h']
+  return { groups: 4, lengths: [...lengths] as StochLengths }
 }
 
 function numberEntries(value: unknown[]): value is number[] {
-  return value.length >= 2 && value.length <= 3 &&
+  return value.length >= 2 && value.length <= 6 &&
     value.every((entry) => typeof entry === 'number' && validStochLength(entry))
 }
 
@@ -52,20 +67,18 @@ function storedSetting(period: string, value: unknown): StochSetting | null {
     if (!numberEntries(value)) return null
     return {
       groups: value.length as StochGroupCount,
-      lengths: [value[0], value[1], value[2] ?? fallback[2]] as StochLengths,
+      lengths: fallback.map((length, index) => value[index] ?? length) as StochLengths,
     }
   }
   if (!value || typeof value !== 'object') return null
   const candidate = value as { groups?: unknown; lengths?: unknown }
-  if (candidate.groups !== 2 && candidate.groups !== 3) return null
+  if (typeof candidate.groups !== 'number' || !Number.isInteger(candidate.groups) ||
+      candidate.groups < 2 || candidate.groups > 6) return null
   if (!Array.isArray(candidate.lengths) || !numberEntries(candidate.lengths)) return null
   return {
-    groups: candidate.groups,
-    lengths: [
-      candidate.lengths[0],
-      candidate.lengths[1],
-      candidate.lengths[2] ?? fallback[2],
-    ] as StochLengths,
+    groups: candidate.groups as StochGroupCount,
+    lengths: fallback.map((length, index) => candidate.lengths instanceof Array
+      ? candidate.lengths[index] ?? length : length) as StochLengths,
   }
 }
 
@@ -94,7 +107,7 @@ function sma(values: Array<number | null>, length: number): Array<number | null>
 }
 
 function pair(closes: number[], length: number) {
-  const smooth = Math.max(1, Math.round(length * 0.3))
+  const smooth = Math.max(1, Math.round(length / 10 * 3))
   const lows: number[] = []
   const highs: number[] = []
   let lowHead = 0
@@ -109,7 +122,7 @@ function pair(closes: number[], length: number) {
     highs.push(index)
     const low = closes[lows[lowHead]]
     const high = closes[highs[highHead]]
-    return high === low ? 50 : (close - low) / (high - low) * 100
+    return high === low ? 0 : (close - low) / (high - low) * 100
   })
   const k = sma(raw, smooth)
   return { k, d: sma(k, smooth) }
@@ -117,7 +130,7 @@ function pair(closes: number[], length: number) {
 
 export function calculateStoch(candles: Candle[], lengths: readonly number[]): StochPoint[] {
   if (!validStochLengths(lengths)) {
-    throw new RangeError('Stoch lengths must contain two or three positive integers')
+    throw new RangeError('Stoch lengths must contain two to six positive integers')
   }
   const closes = candles.map((candle) => candle.close)
   const pairs = lengths.map((length) => pair(closes, length))
@@ -126,5 +139,8 @@ export function calculateStoch(candles: Candle[], lengths: readonly number[]): S
     k1: pairs[0].k[index], d1: pairs[0].d[index],
     k2: pairs[1].k[index], d2: pairs[1].d[index],
     k3: pairs[2]?.k[index] ?? null, d3: pairs[2]?.d[index] ?? null,
+    k4: pairs[3]?.k[index] ?? null, d4: pairs[3]?.d[index] ?? null,
+    k5: pairs[4]?.k[index] ?? null, d5: pairs[4]?.d[index] ?? null,
+    k6: pairs[5]?.k[index] ?? null, d6: pairs[5]?.d[index] ?? null,
   }))
 }

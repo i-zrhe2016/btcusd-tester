@@ -115,22 +115,24 @@ const stochSetting = computed(() => stochSettings.value[stochPeriod.value] ?? de
 const stochGroupCount = computed(() => stochSetting.value.groups)
 const stochLengths = computed(() => stochSetting.value.lengths.slice(0, stochGroupCount.value))
 const stochDraft = ref<StochLengths>([...defaultStochSetting('1m').lengths])
-const stochGroupsDraft = ref<StochGroupCount>(2)
+const stochGroupsDraft = ref<StochGroupCount>(4)
 const stochMessage = ref('')
-// The third group keeps the white/yellow pair but draws thicker so it stays readable
-// against the first group when all six lines share the pane.
+// K/D styles follow stoch_btc_v12.
 const STOCH_LINE_STYLES: Array<{ key: StochLineKey; color: string; lineWidth: LineWidth }> = [
   { key: 'k1', color: '#ffffff', lineWidth: 2 }, { key: 'd1', color: '#ffff00', lineWidth: 2 },
   { key: 'k2', color: '#ff0000', lineWidth: 2 }, { key: 'd2', color: '#00ffff', lineWidth: 2 },
   { key: 'k3', color: '#ffffff', lineWidth: 3 }, { key: 'd3', color: '#ffff00', lineWidth: 3 },
+  { key: 'k4', color: '#aa00ff', lineWidth: 3 }, { key: 'd4', color: '#00ff00', lineWidth: 3 },
+  { key: 'k5', color: '#ff8800', lineWidth: 3 }, { key: 'd5', color: '#0088ff', lineWidth: 3 },
+  { key: 'k6', color: '#ff66cc', lineWidth: 3 }, { key: 'd6', color: '#66ff99', lineWidth: 3 },
 ]
 const stochLines = computed(() => STOCH_LINE_STYLES.slice(0, stochGroupCount.value * 2))
-// Stoch 副图的中轴参考线：只在 50 平衡位画一条虚线，颜色弱于 K/D 曲线。
+// Pine reference levels: 20, 50, 80.
 const STOCH_MIDLINE: CreatePriceLineOptions = {
   price: 50,
   color: '#787b86',
   lineWidth: 1,
-  lineStyle: LineStyle.Dashed,
+  lineStyle: LineStyle.Solid,
   axisLabelVisible: true,
   title: '',
 }
@@ -144,15 +146,15 @@ watch(stochSetting, (setting) => {
 
 function applyStoch(reset = false) {
   const groups = stochGroupsDraft.value
-  const defaults = STOCH_DEFAULTS[stochPeriod.value] ?? STOCH_DEFAULTS['1m']
+  const defaults = STOCH_DEFAULTS[stochPeriod.value] ?? STOCH_DEFAULTS['1h']
   const active = stochDraft.value.slice(0, groups)
   if (!validStochLengths(active)) {
-    stochMessage.value = 'K1、K2、K3 必须是大于或等于 1 的整数。'
+    stochMessage.value = 'K1～K6 必须是大于或等于 1 的整数。'
     return
   }
   const setting: StochSetting = reset
     ? { groups, lengths: [...defaults] as StochLengths }
-    : { groups, lengths: [active[0], active[1], active[2] ?? defaults[2]] as StochLengths }
+    : { groups, lengths: [...stochDraft.value] as StochLengths }
   stochSettings.value = { ...stochSettings.value, [stochPeriod.value]: setting }
   stochGroupsDraft.value = setting.groups
   stochDraft.value = [...setting.lengths]
@@ -181,7 +183,9 @@ function syncStochSeries() {
       crosshairMarkerVisible: true,
       autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
     }, 1)
-    if (index === 0) series.createPriceLine(STOCH_MIDLINE)
+    if (index === 0) {
+      for (const price of [20, 50, 80]) series.createPriceLine({ ...STOCH_MIDLINE, price })
+    }
     stochSeries.push(series)
   }
   const panes = priceChart.panes()
@@ -896,12 +900,9 @@ onBeforeUnmount(() => {
             <p>按当前周期保存；平滑长度为参数 × 0.3 四舍五入，最小为 1。</p>
             <fieldset class="stoch-groups">
               <legend>组数</legend>
-              <label><input v-model="stochGroupsDraft" data-testid="stoch-groups-2" type="radio" :value="2" />两组 · K1/K2</label>
-              <label><input v-model="stochGroupsDraft" data-testid="stoch-groups-3" type="radio" :value="3" />三组 · 增加 K3</label>
+              <label v-for="count in ([2, 3, 4, 5, 6] as const)" :key="count"><input v-model="stochGroupsDraft" :data-testid="`stoch-groups-${count}`" type="radio" :value="count" />{{ count }} 组</label>
             </fieldset>
-            <label>K1 <input v-model.number="stochDraft[0]" aria-label="Stoch K1" type="number" min="1" step="1" required /></label>
-            <label>K2 <input v-model.number="stochDraft[1]" aria-label="Stoch K2" type="number" min="1" step="1" required /></label>
-            <label v-if="stochGroupsDraft === 3">K3 <input v-model.number="stochDraft[2]" aria-label="Stoch K3" type="number" min="1" step="1" required /></label>
+            <label v-for="index in stochGroupsDraft" :key="index">K{{ index }} <input v-model.number="stochDraft[index - 1]" :aria-label="`Stoch K${index}`" type="number" min="1" step="1" required /></label>
             <div class="stoch-legend"><span v-for="line in stochLines" :key="line.key" :style="{ color: line.color }">{{ line.key }}</span></div>
             <p>仅使用已播放行情；历史较短时曲线仍在预热。</p>
             <div class="stoch-actions"><button type="submit">应用参数</button><button type="button" @click="applyStoch(true)">恢复默认</button></div>
