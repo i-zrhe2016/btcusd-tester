@@ -1250,7 +1250,7 @@ onBeforeUnmount(() => {
                   <span>{{ speedToText(projectDraft.speed) }}</span>
                 </div>
               </div>
-              <p class="form-error" :class="{ hidden: !projectFormError }" role="alert">{{ projectFormError || ' ' }}</p>
+              <p class="form-error" :class="{ invisible: !projectFormError }" role="alert">{{ projectFormError || ' ' }}</p>
               <p v-if="projectError" class="form-error" role="alert">{{ projectError }}</p>
               <div class="form-actions">
                 <button class="primary-button" type="submit" :disabled="Boolean(projectFormError)">

@@ -32,7 +32,7 @@ BTCUSD 历史行情复盘与手动交易练习平台，采用可在单台 Linux 
 
 | 层 | 技术 | 作用 |
 | --- | --- | --- |
-| 前端 | Vue 3 + TypeScript + Vite | 项目库、K 线复盘和手动 Buy/Sell |
+| 前端 | Vue 3 + TypeScript + Vite + Tailwind CSS v4 | 项目库、K 线复盘和手动 Buy/Sell |
 | 行情服务 | Rust + Axum | Parquet 查询和周期聚合 |
 | 回测服务 | Rust + Axum | 策略执行、配置和回测记录 |
 | 数据库 | PostgreSQL | 用户、策略配置、回测状态与结果 |
