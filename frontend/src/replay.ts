@@ -296,13 +296,14 @@ export function replayWindowRange(
 
 function appendPaneTimeframe(panes: string[], value: unknown): void {
   if (typeof value !== 'string' || !REPLAY_TIMEFRAMES.includes(value)) return
-  if (panes.length >= MAX_REPLAY_PANES || panes.includes(value)) return
+  if (panes.length >= MAX_REPLAY_PANES) return
   panes.push(value)
 }
 
 export function normalizeReplayPanes(raw: unknown, timeframe: string): string[] {
   const panes = typeof timeframe === 'string' && timeframe.length > 0 ? [timeframe] : []
-  for (const value of Array.isArray(raw) ? raw : []) {
+  const values = Array.isArray(raw) ? raw : []
+  for (const value of values[0] === timeframe ? values.slice(1) : values) {
     appendPaneTimeframe(panes, value)
   }
   return panes
@@ -316,8 +317,6 @@ export function assignReplayPaneTimeframe(panes: string[], index: number, timefr
   const next = normalizeReplayPanes(panes, panes[0] ?? timeframe)
   if (index < 0 || index >= next.length || !REPLAY_TIMEFRAMES.includes(timeframe)) return next
   if (timeframe === next[index]) return next
-  const occupied = next.indexOf(timeframe)
-  if (occupied >= 0) next[occupied] = next[index]
   next[index] = timeframe
   return next
 }

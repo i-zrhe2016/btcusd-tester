@@ -368,7 +368,7 @@ function changeReplayTimeframeTo(timeframe: string, panes?: string[]) {
   }
   const nextProject = {
     ...createReplayProjectFromDraft(nextDraft, project),
-    panes: normalizeReplayPanes(panes ?? project.panes, timeframe),
+    panes: normalizeReplayPanes(panes ?? [timeframe, ...project.panes.slice(1)], timeframe),
     cursorIndex: 0,
     cursorTimestamp,
   }
@@ -494,8 +494,9 @@ function syncReplayPanes(): void {
     return
   }
   const current = secondaryPanes.value
-  secondaryPanes.value = project.panes.slice(1, MAX_REPLAY_PANES).map((timeframe) => {
-    const existing = current.find((pane) => pane.timeframe === timeframe && pane.projectId === project.id)
+  secondaryPanes.value = project.panes.slice(1, MAX_REPLAY_PANES).map((timeframe, index) => {
+    const candidate = current[index]
+    const existing = candidate?.timeframe === timeframe && candidate.projectId === project.id ? candidate : undefined
     return existing ?? {
       projectId: project.id,
       timeframe,
