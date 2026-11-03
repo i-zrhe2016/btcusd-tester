@@ -16,6 +16,7 @@ import {
   X,
 } from '@lucide/vue'
 import ChartLoadState from './components/ChartLoadState.vue'
+import TimeframeSwitcher from './components/TimeframeSwitcher.vue'
 
 const MarketChart = defineAsyncComponent({
   loader: () => import('./components/MarketChart.vue'),
@@ -1303,17 +1304,14 @@ onBeforeUnmount(() => {
           <div class="replay-pane">
             <div class="replay-pane-header">
               <span class="replay-pane-label">主屏</span>
-              <label class="sr-only" for="replay-pane-timeframe-0">主屏周期</label>
-              <select
+              <TimeframeSwitcher
                 id="replay-pane-timeframe-0"
-                data-testid="replay-pane-timeframe"
-                :value="currentTimeframeValue"
+                label="主屏周期"
+                :model-value="currentTimeframeValue"
+                :options="timeframeOptions"
+                :labels="timeframeLabels"
                 @change="changeReplayPaneTimeframe(0, $event)"
-              >
-                <option v-for="timeframe in timeframeOptions" :key="timeframe" :value="timeframe">
-                  {{ timeframeLabels[timeframe] ?? timeframe }}
-                </option>
-              </select>
+              />
             </div>
             <MarketChart
               :key="`${activeProjectId}-${currentTimeframeValue}`"
@@ -1335,17 +1333,14 @@ onBeforeUnmount(() => {
           <div v-for="(pane, index) in secondaryPanes" :key="`${pane.projectId}-${index}-${pane.timeframe}`" class="replay-pane">
             <div class="replay-pane-header">
               <span class="replay-pane-label">第 {{ index + 2 }} 屏</span>
-              <label class="sr-only" :for="`replay-pane-timeframe-${index + 1}`">第 {{ index + 2 }} 屏周期</label>
-              <select
+              <TimeframeSwitcher
                 :id="`replay-pane-timeframe-${index + 1}`"
-                data-testid="replay-pane-timeframe"
-                :value="pane.timeframe"
+                :label="`第 ${index + 2} 屏周期`"
+                :model-value="pane.timeframe"
+                :options="timeframeOptions"
+                :labels="timeframeLabels"
                 @change="changeReplayPaneTimeframe(index + 1, $event)"
-              >
-                <option v-for="timeframe in timeframeOptions" :key="timeframe" :value="timeframe">
-                  {{ timeframeLabels[timeframe] ?? timeframe }}
-                </option>
-              </select>
+              />
               <button
                 class="replay-pane-remove"
                 type="button"
