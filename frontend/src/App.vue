@@ -736,6 +736,40 @@ function nextReplayRequestFrom(snapshot: MarketSnapshot, project: ReplayProject,
   return nextFrom < project.to ? nextFrom : null
 }
 
+const replayHistoryBefore = ref<number | null>(null)
+const replayHistoryLoading = ref(false)
+const replayHistoryError = ref('')
+
+async function loadReplayHistory() {
+  const project = activeProject.value
+  const before = replayHistoryBefore.value
+  if (!project || before === null || replayHistoryLoading.value || replayLoading.value) return
+  const requestId = snapshotRequestId
+  const from = Math.max(project.from, before - timeframeStepSeconds(project.timeframe) * 500)
+  replayHistoryLoading.value = true
+  replayHistoryError.value = ''
+  try {
+    const page = await getMarketSnapshot({
+      timeframe: project.timeframe, from, to: before, limit: 501, lengths: replayLengths,
+    })
+    if (requestId !== snapshotRequestId || !replaySnapshot.value) return
+    const timestamp = currentCandle.value?.timestamp
+    const merged = mergeMarketSnapshots(replaySnapshot.value, page)
+    replaySnapshot.value = merged
+    replayHistoryBefore.value = from > project.from ? from : null
+    reanchorProjectTrades(project.id, merged.candles)
+    if (timestamp !== undefined) {
+      updateProjectCursor(project.id, replayCursorIndexAtOrBefore(merged.candles, timestamp), timestamp)
+    }
+  } catch (caught) {
+    if (requestId === snapshotRequestId) {
+      replayHistoryError.value = caught instanceof Error ? caught.message : '历史行情加载失败，请重试。'
+    }
+  } finally {
+    if (requestId === snapshotRequestId) replayHistoryLoading.value = false
+  }
+}
+
 const jumpTimeInput = ref('')
 const jumpError = ref('')
 
@@ -765,6 +799,9 @@ async function loadReplaySnapshot(
   replayNextFrom.value = null
   resumePlaybackAfterWindowRetry.value = false
   replaySnapshot.value = null
+  replayHistoryBefore.value = null
+  replayHistoryLoading.value = false
+  replayHistoryError.value = ''
 
   try {
     const step = timeframeStepSeconds(project.timeframe)
@@ -774,22 +811,15 @@ async function loadReplaySnapshot(
       ? Math.min(Math.max(requestedCursorTimestamp as number, project.from), Math.max(project.from, project.to - step))
       : null
     const windowRange = replayWindowRange(boundedCursorTimestamp ?? project.from, project)
-    let snapshot: MarketSnapshot | null = null
-    // Keep the initial context, and fill every bar from the project start when resuming or jumping.
-    const historyFrom = Math.min(project.from, windowRange.from)
-    const pageSpan = step * 4_999
-    for (let from = historyFrom; from < windowRange.to; from += pageSpan) {
-      const page = await getMarketSnapshot({
-        timeframe: project.timeframe,
-        from,
-        to: Math.min(from + pageSpan, windowRange.to),
-        limit: historyFrom === windowRange.from ? windowRange.limit : 5_000,
-        lengths: replayLengths,
-      })
-      if (requestId !== snapshotRequestId) return
-      snapshot = snapshot ? mergeMarketSnapshots(snapshot, page) : page
-    }
-    if (!snapshot || requestId !== snapshotRequestId) return
+    const snapshot = await getMarketSnapshot({
+      timeframe: project.timeframe,
+      from: windowRange.from,
+      to: windowRange.to,
+      limit: windowRange.limit,
+      lengths: replayLengths,
+    })
+    if (requestId !== snapshotRequestId) return
+    replayHistoryBefore.value = windowRange.from > project.from ? windowRange.from : null
     replaySnapshot.value = snapshot
     replayNextFrom.value = nextReplayRequestFrom(snapshot, project, windowRange.to)
     if (snapshot.candles.length) {
@@ -1242,6 +1272,8 @@ onBeforeUnmount(() => {
               :key="`${activeProjectId}-${currentTimeframeValue}`"
               ref="marketChartRef"
               class="fullscreen-chart"
+              :history-available="replayHistoryBefore !== null && !replayHistoryError"
+              @load-history="loadReplayHistory"
               :snapshot="replaySnapshot"
               :loading="replayLoading"
               :playback-index="chartPlaybackIndex"
@@ -1318,6 +1350,10 @@ onBeforeUnmount(() => {
               </select>
             </label>
 
+            <button v-if="replayHistoryBefore !== null" class="text-button" type="button" :disabled="replayHistoryLoading || replayLoading" data-testid="load-replay-history" @click="loadReplayHistory">
+              {{ replayHistoryLoading ? '加载历史中…' : replayHistoryError ? '重试加载历史' : '加载更早行情' }}
+            </button>
+            <span v-if="replayHistoryError" role="alert">{{ replayHistoryError }}</span>
             <form class="timeframe-control" @submit.prevent="jumpToCandle">
               <label for="replay-jump-time">跳转时间（UTC）</label>
               <input id="replay-jump-time" v-model="jumpTimeInput" type="datetime-local" :disabled="replayLoading" required />

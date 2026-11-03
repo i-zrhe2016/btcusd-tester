@@ -73,6 +73,7 @@ const props = withDefaults(defineProps<{
   loading: boolean
   playbackIndex?: number
   playing?: boolean
+  historyAvailable?: boolean
   projectName?: string
   showHeader?: boolean
   showTools?: boolean
@@ -96,6 +97,7 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   (event: 'drawings-changed', drawings: ReplayDrawing[]): void
+  (event: 'load-history'): void
 }>()
 
 const stochVisible = ref(true)
@@ -671,7 +673,11 @@ function buildCharts() {
   lastDrawingSnapshot = serializeReplayDrawings(props.drawings)
   drawingChangeUnsubscribe = engine.onChange(syncDrawingChange)
 
-  visibleRangeHandler = () => bumpToolbar()
+  visibleRangeHandler = () => {
+    bumpToolbar()
+    const range = priceChart?.timeScale().getVisibleLogicalRange()
+    if (props.historyAvailable && range && range.from < 30) emit('load-history')
+  }
   priceChart.timeScale().subscribeVisibleLogicalRangeChange(visibleRangeHandler)
 
   if (typeof ResizeObserver !== 'undefined') {
