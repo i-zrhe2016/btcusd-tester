@@ -3,7 +3,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, nextTick, onMounted, onUnmounted } from 'vue'
 import App from './App.vue'
 import { getMarketMetadata, getMarketSnapshot } from './api'
-import { createSeedReplayProject, loadReplayProjects, replayWindowRange, saveActiveReplayProjectId, saveReplayProjects } from './replay'
+import { createSeedReplayProject, loadReplayProjects, replayWindowRange, saveActiveReplayProjectId, saveReplayProjects, timeframeStepSeconds } from './replay'
 import type { MarketMetadata, MarketSnapshot } from './types'
 
 const chartLife = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }))
@@ -11,7 +11,8 @@ vi.mock('./api', () => ({ getMarketMetadata: vi.fn(), getMarketSnapshot: vi.fn()
 vi.mock('./components/MarketChart.vue', () => ({
   __esModule: true,
   default: defineComponent({
-    props: ['snapshot', 'loading'],
+    name: 'MarketChartMock',
+    props: ['snapshot', 'loading', 'formingBucket', 'formingCandle', 'clockLimited'],
     setup(props) {
       onMounted(() => chartLife.mounts++)
       onUnmounted(() => chartLife.unmounts++)
@@ -58,6 +59,142 @@ beforeEach(() => {
   vi.mocked(getMarketSnapshot).mockImplementation(async (query) => snapshot(query.timeframe))
 })
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
+
+describe('multi-timeframe replay synchronization', () => {
+  const start = Math.floor(market.first_timestamp / 300) * 300
+  const extended = { ...market, first_timestamp: start, last_timestamp: start + 20_000 * 60 }
+  type Query = Parameters<typeof getMarketSnapshot>[0]
+  function response(query: Query): MarketSnapshot {
+    const step = timeframeStepSeconds(query.timeframe)
+    const first = Math.max(start, Math.floor(query.from / step) * step)
+    return { ...snapshot(query.timeframe), candles: Array.from(
+      { length: Math.max(0, Math.ceil((query.to - first) / step)) },
+      (_, index) => ({ ...snapshot().candles[0], timestamp: first + index * step }),
+    ).slice(-(query.limit ?? 500)) }
+  }
+  function setup(timestamp = start) {
+    vi.mocked(getMarketMetadata).mockResolvedValue(extended)
+    const project = { ...createSeedReplayProject(extended), id: 'panes', panes: ['1m', '5m'], cursorTimestamp: timestamp }
+    saveReplayProjects([project])
+    saveActiveReplayProjectId(project.id)
+    localStorage.setItem('btcusd.workspace.view.v2', 'replay')
+  }
+  async function jump(timestamp: number) {
+    await wrapper!.find('#replay-jump-time').setValue(new Date(timestamp * 1000).toISOString().slice(0, 16))
+    await wrapper!.find('#replay-jump-time').element.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flushPromises()
+  }
+  const pane = () => wrapper!.findAllComponents({ name: 'MarketChartMock' })[1]
+
+  it('reloads a pane for the latest jump even when its previous window is still loading', async () => {
+    setup()
+    const old = deferred<MarketSnapshot>()
+    let oldQuery!: Query
+    vi.mocked(getMarketSnapshot).mockImplementation((query) => {
+      if (query.timeframe === '5m' && !oldQuery) { oldQuery = query; return old.promise }
+      return Promise.resolve(response(query))
+    })
+    wrapper = mount(App)
+    await flushPromises()
+    const target = start + 6_000 * 60
+    await jump(target)
+    old.resolve(response(oldQuery))
+    await flushPromises()
+    const candles = (pane().props('snapshot') as MarketSnapshot).candles
+    expect(candles.some((bar) => bar.timestamp === target)).toBe(true)
+    expect(pane().props('formingBucket')).toBe(target)
+    expect(pane().props('formingCandle')?.timestamp).toBe(target)
+    expect(pane().props('loading')).toBe(false)
+  })
+
+  it('catches up after playback leaves an in-flight pane window', async () => {
+    setup()
+    const project = loadReplayProjects()[0]
+    const anchor = start + 100 * 3600
+    saveReplayProjects([{ ...project, timeframe: '1h', panes: ['1h', '1m'], cursorTimestamp: anchor }])
+    const old = deferred<MarketSnapshot>()
+    let oldQuery!: Query
+    vi.mocked(getMarketSnapshot).mockImplementation((query) => {
+      if (query.timeframe === '1m' && !oldQuery) { oldQuery = query; return old.promise }
+      return Promise.resolve(response(query))
+    })
+    wrapper = mount(App)
+    await flushPromises()
+    ;(wrapper.vm as unknown as { setPlaybackCursor: (index: number, pause: boolean) => void }).setPlaybackCursor(120, false)
+    await flushPromises()
+    const latest = loadReplayProjects()[0].cursorTimestamp!
+    expect(latest).toBeGreaterThan(anchor + 500 * 60)
+    old.resolve(response(oldQuery))
+    await flushPromises()
+    const candles = (pane().props('snapshot') as MarketSnapshot).candles
+    expect(candles.some((bar) => bar.timestamp === latest)).toBe(true)
+    expect(pane().props('formingBucket')).toBe(latest + 3540)
+    expect(pane().props('loading')).toBe(false)
+  })
+
+  it('reports a pane window failure and synchronizes after explicit retry', async () => {
+    setup()
+    vi.mocked(getMarketSnapshot).mockImplementation(async (query) => response(query))
+    vi.mocked(getMarketSnapshot).mockImplementationOnce(async (query) => response(query))
+      .mockRejectedValueOnce(new Error('副屏服务暂不可用'))
+    wrapper = mount(App)
+    await flushPromises()
+    expect(wrapper.find('.replay-pane-error').text()).toContain('副屏服务暂不可用')
+    expect(pane().props('loading')).toBe(false)
+    expect(pane().props('snapshot')).toBeNull()
+    await wrapper.find('.replay-pane-error button').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.replay-pane-error').exists()).toBe(false)
+    expect(pane().props('formingCandle')?.timestamp).toBe(start)
+  })
+
+  it('clears later partial prices on a backward jump and discards the old response', async () => {
+    const forward = start + 6_003 * 60
+    const backward = start + 6_001 * 60
+    setup(forward)
+    const old = deferred<MarketSnapshot>()
+    const latest = deferred<MarketSnapshot>()
+    const queries: Query[] = []
+    vi.mocked(getMarketSnapshot).mockImplementation((query) => {
+      if (query.timeframe === '5m' && query.limit === 1) {
+        queries.push(query)
+        return queries.length === 1 ? old.promise : latest.promise
+      }
+      return Promise.resolve(response(query))
+    })
+    wrapper = mount(App)
+    await flushPromises()
+    await jump(backward)
+    expect(pane().props('formingCandle')).toBeNull()
+    old.resolve({ ...response(queries[0]), candles: [{ ...snapshot().candles[0], timestamp: start + 6_000 * 60, close: 999 }] })
+    await flushPromises()
+    expect(pane().props('formingCandle')).toBeNull()
+    latest.resolve(response(queries[1]))
+    await flushPromises()
+    expect(pane().props('formingCandle')?.timestamp).toBe(start + 6_000 * 60)
+    expect(pane().props('formingCandle')?.close).toBe(11)
+    expect(loadReplayProjects()[0].cursorTimestamp).toBe(backward)
+  })
+
+  it('synchronizes a same-time jump and ignores partial candles returned for the previous clock', async () => {
+    const target = start + 6_001 * 60
+    setup(target)
+    const old = deferred<MarketSnapshot>()
+    let oldQuery!: Query
+    vi.mocked(getMarketSnapshot).mockImplementation((query) => {
+      if (query.timeframe === '5m' && query.limit === 1 && !oldQuery) { oldQuery = query; return old.promise }
+      return Promise.resolve(response(query))
+    })
+    wrapper = mount(App)
+    await flushPromises()
+    await jump(target)
+    expect(pane().props('formingCandle')?.timestamp).toBe(Math.floor(target / 300) * 300)
+    old.resolve({ ...response(oldQuery), candles: [{ ...snapshot().candles[0], timestamp: start, close: 999 }] })
+    await flushPromises()
+    expect(pane().props('formingCandle')?.timestamp).toBe(Math.floor(target / 300) * 300)
+    expect(pane().props('formingCandle')?.close).not.toBe(999)
+  })
+})
 
 describe('workspace loading', () => {
   it('jumps with bounded work, loads history on demand without moving the cursor, and rejects invalid times', async () => {
