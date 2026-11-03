@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import {
   ChartCandlestick,
   FolderOpen,
@@ -106,7 +106,7 @@ const timeframeLabels: Record<string, string> = {
 const metadata = ref<MarketMetadata | null>(null)
 const projects = ref<ReplayProject[]>([])
 const activeProjectId = ref('')
-const replaySnapshot = ref<MarketSnapshot | null>(null)
+const replaySnapshot = shallowRef<MarketSnapshot | null>(null)
 const replayLoading = ref(true)
 const replayError = ref('')
 const replayWindowLoading = ref(false)
