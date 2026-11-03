@@ -736,6 +736,22 @@ function nextReplayRequestFrom(snapshot: MarketSnapshot, project: ReplayProject,
   return nextFrom < project.to ? nextFrom : null
 }
 
+const jumpTimeInput = ref('')
+const jumpError = ref('')
+
+function jumpToCandle() {
+  const project = activeProject.value
+  if (!project || replayLoading.value) return
+  const timestamp = fromUtcInput(jumpTimeInput.value)
+  if (!Number.isFinite(timestamp) || timestamp < project.from || timestamp >= project.to) {
+    jumpError.value = '请选择项目开始时间至结束时间之间的 UTC 时间。'
+    return
+  }
+  jumpError.value = ''
+  pausePlayback()
+  void loadReplaySnapshot(project, { cursorTimestamp: timestamp })
+}
+
 async function loadReplaySnapshot(
   project: ReplayProject,
   options: { cursorTimestamp?: number; notice?: string } = {},
@@ -758,14 +774,22 @@ async function loadReplaySnapshot(
       ? Math.min(Math.max(requestedCursorTimestamp as number, project.from), Math.max(project.from, project.to - step))
       : null
     const windowRange = replayWindowRange(boundedCursorTimestamp ?? project.from, project)
-    const snapshot = await getMarketSnapshot({
-      timeframe: project.timeframe,
-      from: windowRange.from,
-      to: windowRange.to,
-      limit: windowRange.limit,
-      lengths: replayLengths,
-    })
-    if (requestId !== snapshotRequestId) return
+    let snapshot: MarketSnapshot | null = null
+    // Keep the initial context, and fill every bar from the project start when resuming or jumping.
+    const historyFrom = Math.min(project.from, windowRange.from)
+    const pageSpan = step * 4_999
+    for (let from = historyFrom; from < windowRange.to; from += pageSpan) {
+      const page = await getMarketSnapshot({
+        timeframe: project.timeframe,
+        from,
+        to: Math.min(from + pageSpan, windowRange.to),
+        limit: historyFrom === windowRange.from ? windowRange.limit : 5_000,
+        lengths: replayLengths,
+      })
+      if (requestId !== snapshotRequestId) return
+      snapshot = snapshot ? mergeMarketSnapshots(snapshot, page) : page
+    }
+    if (!snapshot || requestId !== snapshotRequestId) return
     replaySnapshot.value = snapshot
     replayNextFrom.value = nextReplayRequestFrom(snapshot, project, windowRange.to)
     if (snapshot.candles.length) {
@@ -1293,6 +1317,13 @@ onBeforeUnmount(() => {
                 </option>
               </select>
             </label>
+
+            <form class="timeframe-control" @submit.prevent="jumpToCandle">
+              <label for="replay-jump-time">跳转时间（UTC）</label>
+              <input id="replay-jump-time" v-model="jumpTimeInput" type="datetime-local" :disabled="replayLoading" required />
+              <button class="text-button" type="submit" :disabled="!activeProject || replayLoading">跳转</button>
+              <span v-if="jumpError" role="alert">{{ jumpError }}</span>
+            </form>
 
             <label class="replay-speed-control">
               <span>速度</span>

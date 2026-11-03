@@ -60,6 +60,38 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
 
 describe('workspace loading', () => {
+  it('jumps across pages with every historical candle retained and rejects out-of-range times', async () => {
+    const start = market.first_timestamp
+    const extended = { ...market, last_timestamp: start + 7_000 * 60 }
+    vi.mocked(getMarketMetadata).mockResolvedValue(extended)
+    const project = { ...createSeedReplayProject(extended), id: 'jump' }
+    saveReplayProjects([project])
+    saveActiveReplayProjectId(project.id)
+    localStorage.setItem('btcusd.workspace.view.v2', 'replay')
+    vi.mocked(getMarketSnapshot).mockImplementation(async (query) => ({
+      ...snapshot(),
+      candles: Array.from({ length: 7_001 }, (_, index) => ({
+        ...snapshot().candles[0], timestamp: start + index * 60,
+      })).filter((bar) => bar.timestamp >= query.from && bar.timestamp < query.to).slice(-(query.limit ?? 500)),
+    }))
+    wrapper = mount(App)
+    await flushPromises()
+    const target = start + 6_000 * 60
+    await wrapper.find('#replay-jump-time').setValue(new Date(target * 1000).toISOString().slice(0, 16))
+    await wrapper.find('#replay-jump-time').element.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    await flushPromises()
+    const rendered = JSON.parse(wrapper.find('[data-testid="chart-mock"]').text()) as MarketSnapshot
+    const history = rendered.candles.filter((bar) => bar.timestamp <= target)
+    expect(history.map((bar) => bar.timestamp)).toEqual(Array.from({ length: 6_001 }, (_, index) => start + index * 60))
+    expect(loadReplayProjects()[0].cursorTimestamp).toBe(target)
+    const calls = vi.mocked(getMarketSnapshot).mock.calls.length
+    await wrapper.find('#replay-jump-time').setValue('2000-01-01T00:00')
+    await wrapper.find('#replay-jump-time').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('请选择项目开始时间至结束时间之间的 UTC 时间。')
+    expect(vi.mocked(getMarketSnapshot).mock.calls).toHaveLength(calls)
+    expect(loadReplayProjects()[0].cursorTimestamp).toBe(target)
+  })
   it('restores the library before metadata, keeps local projects after failure, and opens once', async () => {
     stored()
     const meta = deferred<MarketMetadata>()
