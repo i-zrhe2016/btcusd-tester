@@ -106,5 +106,3 @@ async function submitAuth() {
     </div>
   </div>
 </template>
-
-<style src="./product.css"></style>

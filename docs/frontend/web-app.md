@@ -4,6 +4,12 @@
 
 前端使用 Vue 3 Composition API、TypeScript 和 Vite。它负责复盘项目管理、K 线回放和手动 Buy/Sell/平仓交易记录，不在浏览器计算聚合或交易信号。
 
+## UI 样式
+
+UI 统一使用 Tailwind CSS v4，由 `@tailwindcss/vite` 编译。`frontend/src/styles.css` 是唯一的样式入口，依次加载 Tailwind 主题、工具类、工作台和产品页组件样式。
+
+新增界面优先使用 Tailwind 工具类；重复的组件样式通过 `@apply` 组合，沿用现有语义类和状态选择器。主题色、图表颜色和圆角保留为 CSS 变量，动态坐标、尺寸和指标颜色继续由 Vue 绑定。为保持现有界面的原生元素行为，入口不加载 Preflight，基础样式由工作台样式文件统一定义。
+
 ## 页面结构
 
 单页工作台采用两个明确视图，避免把建项和复盘操作挤在同一个页面：
