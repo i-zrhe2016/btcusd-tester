@@ -73,6 +73,12 @@ curl -I http://localhost/
 curl -k https://localhost/healthz
 ```
 
+## 加载性能配置
+
+`deployment/nginx/default.conf` 对文本资源（包括 JS、CSS、JSON）启用 gzip，并返回 `Vary: Accept-Encoding`。`/assets/` 下带内容哈希的构建资源使用一年 `immutable` 缓存；`index.html` 使用 `no-cache`，每次重新验证，确保新版本入口及时生效。缺失的 assets 返回 404，不回退到 HTML；普通前端路由继续使用 SPA 回退。行情 API 不启用代理响应缓存。
+
+缓存头与现有安全头在同一 server 层设置，资源 location 不覆盖安全头。如果部署通过 Compose override 挂载另一份 HTTP/Nginx 配置，需要同步 map、压缩及资源 location 规则；只更新镜像内的默认配置不会改变被覆盖的文件。Tailnet 部署可使用 `deployment/nginx/default.http.conf`，通过 `node scripts/generate-http-nginx.mjs` 从标准配置生成，保留 HTTP 直达和 HTTPS 两种入口。发布前以 `nginx -T` 确认有效配置，并检查实际入口（包括非标准端口）的 JS `Content-Encoding`、`Vary`、`Cache-Control`、HTML 重新验证和缺失资源 404。API 与普通路由仍须保留原有安全响应头。
+
 ## 发布流程
 
 1. 在 CI 通过 Rust、前端、文档和 Compose 校验。

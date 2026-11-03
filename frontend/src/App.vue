@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ChartCandlestick,
   FolderOpen,
@@ -15,7 +15,15 @@ import {
   TrendingUp,
   X,
 } from '@lucide/vue'
-import MarketChart from './components/MarketChart.vue'
+import ChartLoadState from './components/ChartLoadState.vue'
+
+const MarketChart = defineAsyncComponent({
+  loader: () => import('./components/MarketChart.vue'),
+  loadingComponent: ChartLoadState,
+  errorComponent: ChartLoadState,
+  delay: 0,
+  timeout: 30_000,
+})
 import { getMarketMetadata, getMarketSnapshot } from './api'
 import { fromUtcInput, formatNumber, formatUtc } from './format'
 import {
@@ -118,6 +126,11 @@ const projectDraft = reactive<ReplayProjectDraft>(createReplayDraft(null))
 const marketChartRef = ref<{ activateTrendLine: () => void } | null>(null)
 
 let snapshotRequestId = 0
+let snapshotProjectKey = ''
+let metadataPending = true
+let initializationId = 0
+let localStateRestored = false
+let disposed = false
 let playbackTimer: number | null = null
 
 const activeProject = computed(() => projects.value.find((project) => project.id === activeProjectId.value) ?? null)
@@ -363,6 +376,7 @@ function changeReplayTimeframeTo(timeframe: string, panes?: string[]) {
   updateProject(nextProject)
   syncDraftFromProject(nextProject)
   const timeframeLabel = timeframeLabels[timeframe] ?? timeframe
+  if (metadataPending) return
   void loadReplaySnapshot(nextProject, {
     cursorTimestamp,
     notice: cursorTimestamp
@@ -496,7 +510,7 @@ function syncReplayPanes(): void {
     }
   })
   const anchor = paneCursorTimestamp()
-  if (anchor === null) return
+  if (anchor === null || replayLoading.value || !replaySnapshot.value) return
   const clock = paneClockTimestamp()
   for (const pane of secondaryPanes.value) {
     if (pane.loading) continue
@@ -523,7 +537,6 @@ function updateReplayPanes(panes: string[]): void {
   const next = normalizeReplayPanes(panes, project.timeframe)
   if (next.join(',') === project.panes.join(',')) return
   updateProject({ ...project, panes: next })
-  syncReplayPanes()
 }
 
 function changeReplayPaneCount(event: Event): void {
@@ -555,6 +568,18 @@ function openReplay() {
     return
   }
   activeView.value = 'replay'
+  ensureReplaySnapshot()
+}
+
+function replayProjectKey(project: ReplayProject): string {
+  return JSON.stringify([project.id, project.timeframe, project.from, project.to])
+}
+
+function ensureReplaySnapshot(force = false) {
+  const project = activeProject.value
+  if (disposed || metadataPending || activeView.value !== 'replay' || !project) return
+  if (!force && snapshotProjectKey === replayProjectKey(project)) return
+  void loadReplaySnapshot(project)
 }
 
 function togglePlayback() {
@@ -647,8 +672,7 @@ function createProject() {
     saveReplayProjects(projects.value)
     syncDraftFromProject(project)
     playbackPlaying.value = false
-    activeView.value = 'replay'
-    void loadReplaySnapshot(project)
+    openReplay()
     setNotice(changed ? marketAlignmentNotice(project) : `项目“${project.name}”已创建。`)
   } catch (caught) {
     projectError.value = caught instanceof Error ? caught.message : '项目创建失败。'
@@ -671,8 +695,7 @@ function saveActiveProject() {
     saveReplayProjects(projects.value)
     syncDraftFromProject(next)
     playbackPlaying.value = false
-    activeView.value = 'replay'
-    void loadReplaySnapshot(next)
+    openReplay()
     setNotice(changed ? marketAlignmentNotice(next) : `项目“${next.name}”已保存。`)
   } catch (caught) {
     projectError.value = caught instanceof Error ? caught.message : '项目保存失败。'
@@ -688,8 +711,7 @@ function selectProject(projectId: string) {
   saveActiveReplayProjectId(project.id)
   syncDraftFromProject(project)
   playbackPlaying.value = false
-  activeView.value = 'replay'
-  void loadReplaySnapshot(project)
+  openReplay()
   if (changed) setNotice(`${marketAlignmentNotice(project)}旧区间交易记录已清除。`)
 }
 
@@ -717,6 +739,7 @@ async function loadReplaySnapshot(
   project: ReplayProject,
   options: { cursorTimestamp?: number; notice?: string } = {},
 ) {
+  snapshotProjectKey = replayProjectKey(project)
   const requestId = ++snapshotRequestId
   replayLoading.value = true
   replayError.value = ''
@@ -839,48 +862,45 @@ function retryLoadMoreReplay() {
 }
 
 async function initialize() {
+  const requestId = ++initializationId
   pageError.value = ''
+  metadataPending = true
+  if (!localStateRestored) {
+    localStateRestored = true
+    projects.value = loadReplayProjects()
+    const storedActive = loadActiveReplayProjectId()
+    const active = projects.value.find((project) => project.id === storedActive) ?? projects.value[0]
+    activeProjectId.value = active?.id ?? ''
+    if (active) saveActiveReplayProjectId(active.id)
+    activeView.value = loadAppView()
+    if (active) syncDraftFromProject(active)
+  }
   try {
-    metadata.value = await getMarketMetadata()
-    const requestedView = loadAppView()
-    activeView.value = requestedView === 'replay' ? 'replay' : 'projects'
-
-    const storedProjects = loadReplayProjects()
-    if (!storedProjects.length && metadata.value) {
-      const seed = createSeedReplayProject(metadata.value)
+    const market = await getMarketMetadata()
+    if (disposed || requestId !== initializationId) return
+    metadata.value = market
+    if (!projects.value.length) {
+      const seed = createSeedReplayProject(market)
       projects.value = [seed]
       activeProjectId.value = seed.id
-      saveReplayProjects(projects.value)
-      saveActiveReplayProjectId(seed.id)
+      persistProjectsState()
       syncDraftFromProject(seed)
-      await loadReplaySnapshot(seed)
-      return
-    }
-
-    projects.value = storedProjects
-    const storedActive = loadActiveReplayProjectId()
-    const storedActiveProject = projects.value.find((project) => project.id === storedActive) ?? projects.value[0]
-    const alignedActiveProject = storedActiveProject
-      ? alignProjectToMarket(storedActiveProject)
-      : { project: storedActiveProject, changed: false }
-    const active = alignedActiveProject.project
-    activeProjectId.value = active?.id ?? ''
-    if (activeProjectId.value) {
-      saveActiveReplayProjectId(activeProjectId.value)
-    }
-    if (active) {
-      syncDraftFromProject(active)
-      await loadReplaySnapshot(active)
-      if (alignedActiveProject.changed) {
-        setNotice(`${marketAlignmentNotice(active)}旧区间交易记录已清除。`)
+    } else if (activeProject.value) {
+      const { project, changed } = alignProjectToMarket(activeProject.value)
+      if (changed) {
+        syncDraftFromProject(project)
+        setNotice(`${marketAlignmentNotice(project)}旧区间交易记录已清除。`)
       }
-    } else {
-      activeView.value = 'projects'
-      Object.assign(projectDraft, createReplayDraft(metadata.value))
     }
   } catch (caught) {
+    if (disposed || requestId !== initializationId) return
     pageError.value = caught instanceof Error ? caught.message : '平台初始化失败。'
-    replayLoading.value = false
+  } finally {
+    if (!disposed && requestId === initializationId) {
+      metadataPending = false
+      if (!snapshotProjectKey) replayLoading.value = false
+      ensureReplaySnapshot(Boolean(replayError.value))
+    }
   }
 }
 
@@ -959,6 +979,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  disposed = true
+  initializationId += 1
+  snapshotRequestId += 1
   clearPlaybackTimer()
   document.removeEventListener('fullscreenchange', syncReplayFullscreen)
   window.removeEventListener('keydown', handleReplayShortcut)
@@ -1191,6 +1214,7 @@ onBeforeUnmount(() => {
               </select>
             </div>
             <MarketChart
+              :key="`${activeProjectId}-${currentTimeframeValue}`"
               ref="marketChartRef"
               class="fullscreen-chart"
               :snapshot="replaySnapshot"
@@ -1204,7 +1228,7 @@ onBeforeUnmount(() => {
               @drawings-changed="updateProjectDrawings"
             />
           </div>
-          <div v-for="(pane, index) in secondaryPanes" :key="`${index}-${pane.timeframe}`" class="replay-pane">
+          <div v-for="(pane, index) in secondaryPanes" :key="`${pane.projectId}-${index}-${pane.timeframe}`" class="replay-pane">
             <div class="replay-pane-header">
               <span class="replay-pane-label">第 {{ index + 2 }} 屏</span>
               <label class="sr-only" :for="`replay-pane-timeframe-${index + 1}`">第 {{ index + 2 }} 屏周期</label>

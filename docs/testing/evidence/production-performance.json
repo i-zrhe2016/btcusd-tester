@@ -1,0 +1,41 @@
+[
+  {
+    "name": "minute",
+    "before": {
+      "samples": 10,
+      "medianMs": 12.938,
+      "p90Ms": 14.215
+    },
+    "after": {
+      "samples": 10,
+      "medianMs": 2.039,
+      "p90Ms": 2.508
+    }
+  },
+  {
+    "name": "forming",
+    "before": {
+      "samples": 10,
+      "medianMs": 11.620000000000001,
+      "p90Ms": 12.144
+    },
+    "after": {
+      "samples": 10,
+      "medianMs": 1.3679999999999999,
+      "p90Ms": 1.534
+    }
+  },
+  {
+    "name": "month",
+    "before": {
+      "samples": 10,
+      "medianMs": 536.167,
+      "p90Ms": 564.98
+    },
+    "after": {
+      "samples": 10,
+      "medianMs": 301.0435,
+      "p90Ms": 325.91700000000003
+    }
+  }
+]

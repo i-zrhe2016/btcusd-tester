@@ -1,0 +1,14 @@
+{
+  "result": "pass",
+  "origin": "http://deploy.taile2c45c.ts.net:8083",
+  "advancedCandles": 120,
+  "elapsedMs": 14630,
+  "maximumConcurrentSnapshots": 16,
+  "completedSnapshots": 316,
+  "snapshotMedianMs": 420,
+  "snapshotP90Ms": 578,
+  "allCanvasesRetained": true,
+  "longTasksMs": [],
+  "status": "已暂停\n121 / 150\n空仓",
+  "errors": []
+}

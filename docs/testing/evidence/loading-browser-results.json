@@ -1,0 +1,83 @@
+{
+  "origin": "https://localhost:8448",
+  "source": "real Rust + local Parquet + Nginx TLS + production frontend",
+  "metadata": {
+    "symbol": "BTCUSD",
+    "base_timeframe": "1m",
+    "source": "Parquet",
+    "candle_count": 10080,
+    "first_timestamp": 1791963900,
+    "last_timestamp": 1792568640,
+    "supported_timeframes": [
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "3h",
+      "4h",
+      "1d",
+      "1w",
+      "1M"
+    ]
+  },
+  "checks": [
+    {
+      "name": "project library: no snapshot or chart module",
+      "elapsedMs": 715,
+      "result": "pass"
+    },
+    {
+      "name": "create project: one snapshot, usable canvas",
+      "elapsedMs": 261,
+      "result": "pass"
+    },
+    {
+      "name": "append window: preserve canvas and drawings",
+      "elapsedMs": 124,
+      "result": "pass"
+    },
+    {
+      "name": "manual trading: buy, close, sell, close",
+      "elapsedMs": 164,
+      "result": "pass"
+    },
+    {
+      "name": "all supported timeframe switches",
+      "elapsedMs": 283,
+      "result": "pass"
+    },
+    {
+      "name": "four panes and fast playback",
+      "elapsedMs": 1198,
+      "result": "pass"
+    },
+    {
+      "name": "indicator settings, visibility and fullscreen",
+      "elapsedMs": 426,
+      "result": "pass"
+    },
+    {
+      "name": "reload restores project, cursor, trades, drawings and four panes",
+      "elapsedMs": 698,
+      "result": "pass"
+    },
+    {
+      "name": "return to library, save project, reopen",
+      "elapsedMs": 200,
+      "result": "pass"
+    },
+    {
+      "name": "snapshot transport failure has a working retry",
+      "elapsedMs": 108,
+      "result": "pass"
+    },
+    {
+      "name": "browser cache reuse",
+      "result": "N/A",
+      "reason": "Chromium does not reuse scripts from this local self-signed TLS origin; production cache checked separately"
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "query": "minute",
+    "result": "pass",
+    "candles": 531,
+    "stochastic": 531,
+    "payloadSha256": "d5ec00d339bb5c00d7819843e9ab37dd1bd396569d28f6ae0d9549b0b3ff1cb5"
+  },
+  {
+    "query": "month",
+    "result": "pass",
+    "candles": 95,
+    "stochastic": 95,
+    "payloadSha256": "c58ec8cc484b343dfcfc48b0481abe18697ab95643cf2cf0aea1c7c592ee6516"
+  }
+]

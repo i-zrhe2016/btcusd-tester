@@ -239,6 +239,8 @@ let resizeObserver: ResizeObserver | null = null
 let visibleRangeHandler: (() => void) | null = null
 let feedbackTimer: number | null = null
 let lastDrawingSnapshot = ''
+let mounted = false
+let disposed = false
 
 const measurementResult = ref<MeasurementResult | null>(null)
 const toolbarRevision = ref(0)
@@ -615,12 +617,8 @@ function resizeChart() {
   priceChart.applyOptions(size)
 }
 
-function buildCharts(preservePosition = false) {
-  if (!priceContainer.value || !props.snapshot?.candles.length) return
-  const range = priceChart?.timeScale().getVisibleLogicalRange()
-  const bars = range ? range.to - range.from : playbackWindowBars()
-  const addedBars = visibleCandles.value.length - (chartController?.getBars().length ?? 0)
-  disposeCharts()
+function buildCharts() {
+  if (disposed || chartController || !priceContainer.value || !props.snapshot?.candles.length) return
 
   const controller = new ChartController(priceContainer.value, {
     theme: chartTheme,
@@ -685,15 +683,6 @@ function buildCharts(preservePosition = false) {
 
   resizeChart()
   setSeriesData()
-  if (preservePosition && range) {
-    // Loading another replay window must keep the user's horizontal position and zoom.
-    priceChart.timeScale().setVisibleLogicalRange({
-      from: range.from + addedBars,
-      to: range.to + addedBars,
-    })
-  } else {
-    setPlaybackRange(bars)
-  }
 }
 
 function zoom(factor: number) {
@@ -826,44 +815,48 @@ function handleKeyDown(event: KeyboardEvent) {
   }
 }
 
-watch(() => props.snapshot, async (snapshot, previousSnapshot) => {
-  await nextTick()
-  if (props.snapshot?.candles.length) {
-    buildCharts(snapshot?.timeframe === previousSnapshot?.timeframe)
-  } else {
+function updateCharts() {
+  if (!mounted || disposed) return
+  if (!props.snapshot?.candles.length) {
     disposeCharts()
+  } else if (!chartController) {
+    buildCharts()
+  } else {
+    resizeChart()
+    setSeriesData()
   }
-}, { immediate: true })
+}
 
+// One post-render update handles snapshot and cursor changes together. App keys own
+// project/timeframe resets; appending a window keeps drawing plugins and zoom alive.
 watch(
   [
+    () => props.snapshot,
+    () => props.loading,
     () => props.playbackIndex,
     () => props.manualTrades,
     () => props.clockLimited,
     () => props.formingBucket,
     () => props.formingCandle,
   ],
-  async () => {
-    await nextTick()
-    resizeChart()
-    setSeriesData()
-  },
+  updateCharts,
+  { flush: 'post' },
 )
 
 watch(() => props.drawings, () => {
   syncDrawingsFromProps()
 }, { deep: true })
 
-onMounted(async () => {
+onMounted(() => {
+  mounted = true
   window.addEventListener('keydown', handleKeyDown)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
-  await nextTick()
-  if (props.snapshot?.candles.length && !chartController) {
-    buildCharts()
-  }
+  updateCharts()
 })
 
 onBeforeUnmount(() => {
+  disposed = true
+  mounted = false
   window.removeEventListener('keydown', handleKeyDown)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   closeContextMenu()
