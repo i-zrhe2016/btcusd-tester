@@ -7,12 +7,13 @@ const charts = vi.hoisted(() => ({ instances: [] as any[] }))
 vi.mock('@getcandlekit/charts', () => ({
   ChartController: class {
     bars: unknown[] = []
+    rangeHandler: (() => void) | null = null
     range: { from: number; to: number } | null = null
     series = { applyOptions() {}, setData() {}, createPriceLine() {} }
     scale = {
       getVisibleLogicalRange: () => this.range,
       setVisibleLogicalRange: (range: { from: number; to: number }) => { this.range = range },
-      subscribeVisibleLogicalRangeChange() {},
+      subscribeVisibleLogicalRangeChange: (handler: () => void) => { this.rangeHandler = handler },
       unsubscribeVisibleLogicalRangeChange() {},
     }
     chart = {
@@ -60,6 +61,28 @@ const current = () => charts.instances.at(-1)!
 beforeEach(() => { charts.instances.length = 0 })
 
 describe('replay viewport', () => {
+  it('requests history only near the left edge and preserves the visible timestamps after prepending', async () => {
+    const full = snapshot(700)
+    const wrapper = mount(MarketChart, { props: {
+      snapshot: { ...full, candles: full.candles.slice(500) }, loading: false,
+      playbackIndex: 199, historyAvailable: true,
+    } })
+    await flushPromises()
+    current().range = { from: 80, to: 180 }
+    current().rangeHandler()
+    expect(wrapper.emitted('load-history')).toBeUndefined()
+    current().range = { from: 10, to: 110 }
+    current().rangeHandler()
+    expect(wrapper.emitted('load-history')).toHaveLength(1)
+    await wrapper.setProps({ snapshot: full, playbackIndex: 699, historyAvailable: false })
+    await flushPromises()
+    expect(current().range).toEqual({ from: 510, to: 610 })
+    expect(full.candles[510].timestamp).toBe(full.candles.slice(500)[10].timestamp)
+    current().rangeHandler()
+    expect(wrapper.emitted('load-history')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
   it.each([{ from: 12.5, to: 72.5 }, { from: 80, to: 210 }])(
     'keeps panned and zoomed position across resume, prefetch and subsequent playback: %o',
     async (range) => {

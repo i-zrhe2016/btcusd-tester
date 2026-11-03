@@ -60,7 +60,7 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
 
 describe('workspace loading', () => {
-  it('jumps across pages with every historical candle retained and rejects out-of-range times', async () => {
+  it('jumps with bounded work, loads history on demand without moving the cursor, and rejects invalid times', async () => {
     const start = market.first_timestamp
     const extended = { ...market, last_timestamp: start + 7_000 * 60 }
     vi.mocked(getMarketMetadata).mockResolvedValue(extended)
@@ -80,10 +80,19 @@ describe('workspace loading', () => {
     await wrapper.find('#replay-jump-time').setValue(new Date(target * 1000).toISOString().slice(0, 16))
     await wrapper.find('#replay-jump-time').element.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await flushPromises()
-    const rendered = JSON.parse(wrapper.find('[data-testid="chart-mock"]').text()) as MarketSnapshot
+    let rendered = JSON.parse(wrapper.find('[data-testid="chart-mock"]').text()) as MarketSnapshot
+    expect(rendered.candles.length).toBeLessThanOrEqual(531)
+    expect(rendered.candles.some((bar) => bar.timestamp === target)).toBe(true)
+    expect(getMarketSnapshot).toHaveBeenCalledTimes(2)
+    expect(loadReplayProjects()[0].cursorTimestamp).toBe(target)
+    while (wrapper.find('[data-testid="load-replay-history"]').exists()) {
+      await wrapper.find('[data-testid="load-replay-history"]').trigger('click')
+      await flushPromises()
+      expect(loadReplayProjects()[0].cursorTimestamp).toBe(target)
+    }
+    rendered = JSON.parse(wrapper.find('[data-testid="chart-mock"]').text()) as MarketSnapshot
     const history = rendered.candles.filter((bar) => bar.timestamp <= target)
     expect(history.map((bar) => bar.timestamp)).toEqual(Array.from({ length: 6_001 }, (_, index) => start + index * 60))
-    expect(loadReplayProjects()[0].cursorTimestamp).toBe(target)
     const calls = vi.mocked(getMarketSnapshot).mock.calls.length
     await wrapper.find('#replay-jump-time').setValue('2000-01-01T00:00')
     await wrapper.find('#replay-jump-time').trigger('submit')
@@ -92,6 +101,41 @@ describe('workspace loading', () => {
     expect(vi.mocked(getMarketSnapshot).mock.calls).toHaveLength(calls)
     expect(loadReplayProjects()[0].cursorTimestamp).toBe(target)
   })
+  it('restores a multi-year cursor with one bounded request and keeps the chart usable after a history failure', async () => {
+    const start = market.first_timestamp
+    const target = start + 2_000_000 * 60
+    const extended = { ...market, last_timestamp: target + 600 }
+    vi.mocked(getMarketMetadata).mockResolvedValue(extended)
+    const project = { ...createSeedReplayProject(extended), id: 'large', cursorTimestamp: target }
+    saveReplayProjects([project])
+    saveActiveReplayProjectId(project.id)
+    localStorage.setItem('btcusd.workspace.view.v2', 'replay')
+    vi.mocked(getMarketSnapshot).mockImplementation(async (query) => ({
+      ...snapshot(),
+      candles: Array.from({ length: Math.ceil((query.to - query.from) / 60) }, (_, index) => ({
+        ...snapshot().candles[0], timestamp: query.from + index * 60,
+      })),
+    }))
+    wrapper = mount(App)
+    await flushPromises()
+    expect(getMarketSnapshot).toHaveBeenCalledTimes(1)
+    const initial = wrapper.find('[data-testid="chart-mock"]').text()
+    expect((JSON.parse(initial) as MarketSnapshot).candles.length).toBeLessThanOrEqual(531)
+    expect(loadReplayProjects()[0].cursorTimestamp).toBe(target)
+    vi.mocked(getMarketSnapshot).mockRejectedValueOnce(new Error('历史服务暂不可用'))
+    await wrapper.find('[data-testid="load-replay-history"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('历史服务暂不可用')
+    expect(wrapper.find('[data-testid="load-replay-history"]').text()).toBe('重试加载历史')
+    expect(wrapper.find('[data-testid="chart-mock"]').text()).toBe(initial)
+    expect(loadReplayProjects()[0].cursorTimestamp).toBe(target)
+    await wrapper.find('[data-testid="load-replay-history"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('历史服务暂不可用')
+    expect((JSON.parse(wrapper.find('[data-testid="chart-mock"]').text()) as MarketSnapshot).candles.length).toBeGreaterThan(531)
+    expect(loadReplayProjects()[0].cursorTimestamp).toBe(target)
+  })
+
   it('restores the library before metadata, keeps local projects after failure, and opens once', async () => {
     stored()
     const meta = deferred<MarketMetadata>()
