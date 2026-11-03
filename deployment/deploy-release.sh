@@ -11,7 +11,7 @@ test -s "$archive"
 backup="/opt/btcusd-tester-backups/$revision"
 mkdir -p "$backup"
 chmod 700 "$backup"
-docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$backup/database.sql"
+docker compose exec -T --interactive=false postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$backup/database.sql"
 chmod 600 "$backup/database.sql"
 services=(web market-data backtest)
 for service in "${services[@]}"; do

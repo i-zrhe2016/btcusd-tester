@@ -39,6 +39,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --locked
       - run: POSTGRES_PASSWORD=ci-only docker compose config --quiet
+      - name: Deployment regression tests
+        run: python3 -I deployment/test_deploy_release.py
 
   connection-test:
     if: github.event_name == 'workflow_dispatch' && inputs.connection_test
@@ -88,4 +90,9 @@ jobs:
           tailscale ssh "root@$DEPLOY_HOST" "cat > /tmp/btcusd-release-$GITHUB_SHA.tar.gz" < /tmp/release.tar.gz
       - name: Deploy and verify
         run: |
-          tailscale ssh "root@$DEPLOY_HOST" "bash -s -- '$GITHUB_SHA'" < deployment/deploy-release.sh
+          tailscale ssh "root@$DEPLOY_HOST" "tar -xOf '/tmp/btcusd-release-$GITHUB_SHA.tar.gz' deployment/deploy-release.sh > '/tmp/btcusd-deploy-$GITHUB_SHA.sh' && bash '/tmp/btcusd-deploy-$GITHUB_SHA.sh' '$GITHUB_SHA'" </dev/null
+          deployed_revision=$(tailscale ssh "root@$DEPLOY_HOST" 'cat /opt/btcusd-tester/.deployed-revision' </dev/null)
+          if [ "$deployed_revision" != "$GITHUB_SHA" ]; then
+            printf 'Deployment revision mismatch: expected %s, got %s\n' "$GITHUB_SHA" "$deployed_revision" >&2
+            exit 1
+          fi
