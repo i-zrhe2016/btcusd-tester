@@ -615,10 +615,11 @@ function resizeChart() {
   priceChart.applyOptions(size)
 }
 
-function buildCharts() {
+function buildCharts(preservePosition = false) {
   if (!priceContainer.value || !props.snapshot?.candles.length) return
   const range = priceChart?.timeScale().getVisibleLogicalRange()
   const bars = range ? range.to - range.from : playbackWindowBars()
+  const addedBars = visibleCandles.value.length - (chartController?.getBars().length ?? 0)
   disposeCharts()
 
   const controller = new ChartController(priceContainer.value, {
@@ -684,7 +685,15 @@ function buildCharts() {
 
   resizeChart()
   setSeriesData()
-  setPlaybackRange(bars)
+  if (preservePosition && range) {
+    // Loading another replay window must keep the user's horizontal position and zoom.
+    priceChart.timeScale().setVisibleLogicalRange({
+      from: range.from + addedBars,
+      to: range.to + addedBars,
+    })
+  } else {
+    setPlaybackRange(bars)
+  }
 }
 
 function zoom(factor: number) {
@@ -817,10 +826,10 @@ function handleKeyDown(event: KeyboardEvent) {
   }
 }
 
-watch(() => props.snapshot, async () => {
+watch(() => props.snapshot, async (snapshot, previousSnapshot) => {
   await nextTick()
   if (props.snapshot?.candles.length) {
-    buildCharts()
+    buildCharts(snapshot?.timeframe === previousSnapshot?.timeframe)
   } else {
     disposeCharts()
   }
