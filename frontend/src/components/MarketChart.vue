@@ -181,7 +181,7 @@ function syncStochSeries() {
     const index = stochSeries.length
     const { key, color, lineWidth } = lines[index]
     const series = priceChart.addSeries(LineSeries, {
-      title: key, color, lineWidth, priceLineVisible: false,
+      title: key, color, lineWidth, priceLineVisible: false, lastValueVisible: false,
       crosshairMarkerVisible: true,
       autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
     }, 1)
