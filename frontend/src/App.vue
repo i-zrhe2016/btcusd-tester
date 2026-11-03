@@ -658,6 +658,14 @@ function handleReplayShortcut(event: KeyboardEvent) {
   ) return
 
   switch (event.key.toLowerCase()) {
+    case ' ':
+      event.preventDefault()
+      setPlaybackCursor(activePlaybackIndex.value + 1)
+      break
+    case 'enter':
+      event.preventDefault()
+      setPlaybackCursor(activePlaybackIndex.value - 1)
+      break
     case 'a':
       event.preventDefault()
       togglePlayback()
@@ -1435,7 +1443,7 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <span class="console-shortcuts" aria-label="复盘快捷键">A 播放/暂停 · B Buy · S Sell · C 趋势线</span>
+            <span class="console-shortcuts" aria-label="复盘快捷键">空格 前进 1 根 · 回车 回退 1 根 · A 播放/暂停 · B Buy · S Sell · C 趋势线</span>
 
             <div class="console-quick-stats" aria-label="复盘辅助信息">
               <span class="console-stat">{{ currentTimeLabel }}</span>
