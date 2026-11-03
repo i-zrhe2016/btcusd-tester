@@ -872,7 +872,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="chart-card" :class="{ 'chart-card-bare': !showHeader }" aria-labelledby="market-chart-title">
+  <section class="chart-card" :class="{ 'chart-card-bare': !showHeader, 'chart-timeframe-enter': !loading }" aria-labelledby="market-chart-title">
     <div v-if="showHeader" class="card-heading chart-heading">
       <div>
         <p class="eyebrow">PLAYBACK VIEW</p>

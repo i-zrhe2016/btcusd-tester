@@ -1,5 +1,27 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+
+const shortcutsElement = ref<HTMLElement | null>(null)
+const highlight = ref({ width: '0px', transform: 'translateX(0px)', opacity: 0 })
+let resizeObserver: ResizeObserver | undefined
+function updateHighlight() {
+  const container = shortcutsElement.value
+  const active = container?.querySelector<HTMLElement>('.active')
+  if (!container || !active) return
+  highlight.value = {
+    width: `${active.offsetWidth}px`,
+    transform: `translateX(${active.offsetLeft}px)`,
+    opacity: 1,
+  }
+}
+onMounted(() => {
+  updateHighlight()
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(updateHighlight)
+    if (shortcutsElement.value) resizeObserver.observe(shortcutsElement.value)
+  }
+})
+onBeforeUnmount(() => resizeObserver?.disconnect())
 
 const props = defineProps<{
   id: string
@@ -8,6 +30,10 @@ const props = defineProps<{
   labels: Record<string, string>
   label: string
 }>()
+watch(() => [props.modelValue, props.options, props.labels], async () => {
+  await nextTick()
+  updateHighlight()
+}, { deep: true })
 const emit = defineEmits<{ change: [event: Event] }>()
 const shortcuts = computed(() => ['15m', '30m', '1h', '4h', '1d', '1w', '1M'].filter(value => props.options.includes(value)))
 const compactLabels: Record<string, string> = { '15m': '15分', '30m': '30分', '1h': '1小时', '4h': '4小时', '1d': '天', '1w': '周', '1M': '月' }
@@ -21,7 +47,8 @@ function choose(value: string) {
 
 <template>
   <div class="timeframe-switcher" role="group" :aria-label="label">
-    <div class="timeframe-shortcuts">
+    <div ref="shortcutsElement" class="timeframe-shortcuts">
+      <span class="timeframe-highlight" :style="highlight" aria-hidden="true"></span>
       <button v-for="value in shortcuts" :key="value" type="button" class="timeframe-shortcut"
         :class="{ active: modelValue === value }" :aria-pressed="modelValue === value"
         @click="choose(value)">{{ compactLabels[value] }}</button>
