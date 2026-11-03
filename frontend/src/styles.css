@@ -630,7 +630,67 @@ select {
   font: 700 11px/16px "Fira Code", ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 
-.replay-pane-header select,
+.timeframe-switcher {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 3px;
+  color: #d1d4dc;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+}
+
+.timeframe-shortcuts {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.timeframe-shortcuts::-webkit-scrollbar { display: none; }
+
+.timeframe-shortcut {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: 500 14px/1 Arial, "Microsoft YaHei", sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.timeframe-shortcut:hover { background: rgba(255, 255, 255, 0.1); }
+.timeframe-shortcut.active { background: #303030; color: #fff; }
+.timeframe-shortcut:focus-visible { outline: 2px solid #a3bffa; outline-offset: -2px; }
+
+.timeframe-more {
+  position: relative;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  height: 32px;
+  border-radius: 6px;
+}
+.timeframe-more:hover { background: rgba(255, 255, 255, 0.1); }
+.replay-pane-header .timeframe-more select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.timeframe-more:focus-within { outline: 2px solid #a3bffa; }
+.replay-pane-remove { margin-left: auto; flex-shrink: 0; }
+
 .replay-pane-remove {
   height: 26px;
   border: 1px solid rgba(255, 255, 255, 0.4);
@@ -2178,3 +2238,4 @@ select {
 .stoch-legend, .stoch-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .stoch-actions button { padding: 7px 10px; }
 .stoch-settings :focus-visible { outline: 2px solid #facc15; outline-offset: 2px; }
+
