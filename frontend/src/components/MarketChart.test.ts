@@ -81,6 +81,33 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.unstubAllGlobals() })
 
 describe('chart lifecycle and data contracts', () => {
+  it('keeps the live chart container attached across repeated background loading and failed refreshes', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false } })
+    await nextTick()
+    const container = wrapper.get('.price-chart').element
+    const controller = mocks.controllers[0]
+    controller.range = { from: -20, to: 40 }
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      await wrapper.setProps({ loading: true })
+      expect(wrapper.get('.price-chart').element).toBe(container)
+      expect(wrapper.element.contains(container)).toBe(true)
+      // A failed refresh leaves the old snapshot; a successful one replaces it.
+      await wrapper.setProps({ loading: false, ...(cycle === 1 ? {} : { snapshot: snapshot([...candles]) }) })
+      expect(wrapper.get('.price-chart').element).toBe(container)
+      expect(controller.range).toEqual({ from: -20, to: 40 })
+    }
+    expect(mocks.controllers).toHaveLength(1)
+    expect(controller.destroy).not.toHaveBeenCalled()
+  })
+
+  it('waits for initial loading to finish before attaching a chart', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: null, loading: true } })
+    expect(wrapper.find('.price-chart').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="正在加载行情"]').exists()).toBe(true)
+    await wrapper.setProps({ snapshot: snapshot(), loading: false })
+    expect(wrapper.find('.price-chart').exists()).toBe(true)
+    expect(mocks.controllers).toHaveLength(1)
+  })
   it('creates once, reuses plugins on snapshot append, preserves zoom, drawings and future whitespace', async () => {
     wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, playbackIndex: 0, drawings: [drawing] } })
     await nextTick()
