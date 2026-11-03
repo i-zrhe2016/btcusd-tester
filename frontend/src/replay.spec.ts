@@ -600,9 +600,13 @@ describe('replay multi-timeframe panes', () => {
     expect(normalizeReplayPanes('1h', '5m')).toEqual(['5m'])
   })
 
-  it('deduplicates panes, drops unknown timeframes, and caps the layout at four panes', () => {
+  it('preserves repeated timeframes, drops unknown values, and caps the layout at four panes', () => {
     expect(normalizeReplayPanes(['15m', '1h', '15m', 'bogus', '1d', '4h'], '1h'))
-      .toEqual(['1h', '15m', '1d', '4h'])
+      .toEqual(['1h', '15m', '1h', '15m'])
+    expect(normalizeReplayPanes(['1h', '1h', '1h', '1h'], '1h'))
+      .toEqual(['1h', '1h', '1h', '1h'])
+    expect(normalizeReplayPanes(['1h', 'bogus', '5m', '5m'], '1h'))
+      .toEqual(['1h', '5m', '5m'])
     expect(normalizeReplayPanes(['1h', '5m', '15m', '30m', '1d'], '1h'))
       .toEqual(['1h', '5m', '15m', '30m'])
   })
@@ -613,19 +617,19 @@ describe('replay multi-timeframe panes', () => {
     expect(nextReplayPaneTimeframe(REPLAY_TIMEFRAMES)).toBe('1m')
   })
 
-  it('switches the timeframe of a single pane and keeps every pane unique', () => {
+  it('switches only the selected pane and allows repeated timeframes', () => {
     expect(assignReplayPaneTimeframe(['1h', '5m'], 1, '4h')).toEqual(['1h', '4h'])
-    expect(assignReplayPaneTimeframe(['1h', '5m', '15m'], 2, '5m')).toEqual(['1h', '15m', '5m'])
+    expect(assignReplayPaneTimeframe(['1h', '5m', '15m'], 2, '5m')).toEqual(['1h', '5m', '5m'])
     expect(assignReplayPaneTimeframe(['1h', '5m'], 1, '5m')).toEqual(['1h', '5m'])
     expect(assignReplayPaneTimeframe(['1h', '5m'], 1, 'bogus')).toEqual(['1h', '5m'])
     expect(assignReplayPaneTimeframe(['1h', '5m'], 5, '4h')).toEqual(['1h', '5m'])
     expect(assignReplayPaneTimeframe(['1h', '5m'], -1, '4h')).toEqual(['1h', '5m'])
   })
 
-  it('offers the 30m timeframe on every screen and swaps with the primary screen', () => {
+  it('allows every screen to share the primary timeframe without swapping', () => {
     expect(REPLAY_TIMEFRAMES).toContain('30m')
-    expect(assignReplayPaneTimeframe(['30m', '5m'], 1, '30m')).toEqual(['5m', '30m'])
-    expect(assignReplayPaneTimeframe(['1h', '30m'], 0, '30m')).toEqual(['30m', '1h'])
+    expect(assignReplayPaneTimeframe(['30m', '5m'], 1, '30m')).toEqual(['30m', '30m'])
+    expect(assignReplayPaneTimeframe(['1h', '30m'], 0, '30m')).toEqual(['30m', '30m'])
     expect(assignReplayPaneTimeframe(['1h', '5m'], 0, '30m')).toEqual(['30m', '5m'])
     expect(assignReplayPaneTimeframe(['1h', '5m'], 0, '1h')).toEqual(['1h', '5m'])
   })
@@ -744,7 +748,7 @@ describe('replay multi-timeframe panes', () => {
       { ...draftFromProject(project), timeframe: '15m' },
       project,
     )
-    expect(collapsed.panes).toEqual(['15m'])
+    expect(collapsed.panes).toEqual(['15m', '15m'])
   })
 
   it('persists panes with the project and normalizes stored projects', () => {
@@ -763,7 +767,7 @@ describe('replay multi-timeframe panes', () => {
     expect(loadReplayProjects(storage).map((stored) => stored.panes)).toEqual([['1h', '15m']])
 
     saveReplayProjects([{ ...project, panes: ['1h', '1h', 'bogus'] }], storage)
-    expect(loadReplayProjects(storage).map((stored) => stored.panes)).toEqual([['1h']])
+    expect(loadReplayProjects(storage).map((stored) => stored.panes)).toEqual([['1h', '1h']])
 
     storage.setItem('btcusd.replay.projects.v2', JSON.stringify([{ ...project, panes: undefined }]))
     expect(loadReplayProjects(storage).map((stored) => stored.panes)).toEqual([['1h']])
