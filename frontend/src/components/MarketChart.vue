@@ -897,7 +897,8 @@ onBeforeUnmount(() => {
     </div>
 
     <p class="sr-only" role="status">{{ summary }}</p>
-    <div v-if="loading" class="chart-skeleton" aria-label="正在加载行情" />
+    <!-- Background refreshes must keep the container bound to the live chart instance. -->
+    <div v-if="loading && !snapshot?.candles.length" class="chart-skeleton" aria-label="正在加载行情" />
     <div v-else-if="!snapshot?.candles.length" class="empty-state">
       <p>当前时间范围没有行情数据。</p>
       <span>请调整 UTC 时间范围后重新加载。</span>
