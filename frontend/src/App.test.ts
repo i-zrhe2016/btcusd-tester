@@ -234,9 +234,19 @@ describe('workspace loading', () => {
     await wrapper.find('#replay-jump-time').setValue('2000-01-01T00:00')
     await wrapper.find('#replay-jump-time').trigger('submit')
     await flushPromises()
-    expect(wrapper.text()).toContain('请选择项目开始时间至结束时间之间的 UTC 时间。')
-    expect(vi.mocked(getMarketSnapshot).mock.calls).toHaveLength(calls)
-    expect(loadReplayProjects()[0].cursorTimestamp).toBe(target)
+    expect(wrapper.text()).not.toContain('请选择项目开始时间至结束时间之间的 UTC 时间。')
+    expect(vi.mocked(getMarketSnapshot).mock.calls).toHaveLength(calls + 1)
+    expect(loadReplayProjects()[0].from).toBe(Date.parse('2000-01-01T00:00:00Z') / 1000)
+    expect(vi.mocked(getMarketSnapshot).mock.calls.at(-1)?.[0].from).toBeLessThanOrEqual(loadReplayProjects()[0].from)
+
+    const afterEnd = extended.last_timestamp + 3_600
+    await wrapper.find('#replay-jump-time').setValue(new Date(afterEnd * 1000).toISOString().slice(0, 16))
+    await wrapper.find('#replay-jump-time').trigger('submit')
+    await flushPromises()
+    expect(loadReplayProjects()[0].to).toBe(afterEnd + timeframeStepSeconds(project.timeframe))
+    const query = vi.mocked(getMarketSnapshot).mock.calls.at(-1)![0]
+    expect(query.from).toBeLessThanOrEqual(afterEnd)
+    expect(query.to).toBeGreaterThan(afterEnd)
   })
   it('restores a multi-year cursor with one bounded request and keeps the chart usable after a history failure', async () => {
     const start = market.first_timestamp

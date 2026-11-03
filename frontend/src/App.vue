@@ -802,13 +802,22 @@ function jumpToCandle() {
   const project = activeProject.value
   if (!project || replayLoading.value) return
   const timestamp = fromUtcInput(jumpTimeInput.value)
-  if (!Number.isFinite(timestamp) || timestamp < project.from || timestamp >= project.to) {
-    jumpError.value = '请选择项目开始时间至结束时间之间的 UTC 时间。'
+  if (!Number.isFinite(timestamp)) {
+    jumpError.value = '请选择有效的 UTC 时间。'
     return
   }
   jumpError.value = ''
   pausePlayback()
-  void loadReplaySnapshot(project, { cursorTimestamp: timestamp })
+  const next = {
+    ...project,
+    from: Math.min(project.from, timestamp),
+    to: Math.max(project.to, timestamp + timeframeStepSeconds(project.timeframe)),
+  }
+  if (next.from !== project.from || next.to !== project.to) {
+    updateProject(next)
+    syncDraftFromProject(next)
+  }
+  void loadReplaySnapshot(next, { cursorTimestamp: timestamp })
 }
 
 async function loadReplaySnapshot(
