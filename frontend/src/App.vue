@@ -84,6 +84,7 @@ interface ReplayPaneState {
   formingBucket: number | null
   forming: Candle | null
   formingRequestId: number
+  formingClock: number | null
 }
 
 const viewKey = 'btcusd.workspace.view.v2'
@@ -424,7 +425,12 @@ async function loadReplayPane(pane: ReplayPaneState, project: ReplayProject, anc
   pane.requestId = requestId
   pane.loading = true
   pane.error = ''
+  pane.formingRequestId += 1
+  pane.formingBucket = null
+  pane.forming = null
+  pane.formingClock = null
   const range = replayPaneWindow(anchorTimestamp, project, pane.timeframe)
+  let loaded = false
   try {
     const snapshot = await getMarketSnapshot({
       timeframe: pane.timeframe,
@@ -434,6 +440,9 @@ async function loadReplayPane(pane: ReplayPaneState, project: ReplayProject, anc
       lengths: replayLengths,
     })
     if (pane.requestId !== requestId) return
+    loaded = true
+    const anchor = paneCursorTimestamp()
+    if (anchor === null || replayPaneNeedsReload(range, anchor)) return
     pane.snapshot = snapshot
     pane.range = range
     const clock = paneClockTimestamp()
@@ -442,7 +451,11 @@ async function loadReplayPane(pane: ReplayPaneState, project: ReplayProject, anc
     if (pane.requestId !== requestId) return
     pane.error = caught instanceof Error ? caught.message : '副屏行情加载失败。'
   } finally {
-    if (pane.requestId === requestId) pane.loading = false
+    if (pane.requestId === requestId) {
+      pane.loading = false
+      const anchor = paneCursorTimestamp()
+      if (loaded && anchor !== null && replayPaneNeedsReload(range, anchor)) syncReplayPanes()
+    }
   }
 }
 
@@ -456,6 +469,8 @@ async function refreshReplayPaneForming(
   // The candle still forming at the replay clock starts in the bucket that contains the last
   // played instant; the backend aggregates it from the data that closed by then.
   const bucket = replayBucketStart(clockTimestamp - 1, pane.timeframe)
+  if (pane.formingClock !== null && clockTimestamp < pane.formingClock) pane.forming = null
+  pane.formingClock = clockTimestamp
   if (clockTimestamp === replayBucketStart(clockTimestamp, pane.timeframe)) {
     // Invalidate a forming request that is still in flight for an earlier clock, otherwise its
     // partial aggregation would overwrite the completed candle of this bucket.
@@ -479,11 +494,12 @@ async function refreshReplayPaneForming(
       limit: 1,
       lengths: replayLengths,
     })
-    if (pane.formingRequestId !== requestId) return
+    if (pane.formingRequestId !== requestId || paneClockTimestamp() !== clockTimestamp) return
     pane.forming = snapshot.candles.at(-1) ?? null
-  } catch {
-    // Keep the last rendered candle: a failed refresh must not blank the pane.
-    if (pane.formingRequestId !== requestId) return
+    pane.error = ''
+  } catch (caught) {
+    if (pane.formingRequestId !== requestId || paneClockTimestamp() !== clockTimestamp) return
+    pane.error = caught instanceof Error ? caught.message : '副屏当前 K 线同步失败，请重试。'
   }
 }
 
@@ -508,6 +524,7 @@ function syncReplayPanes(): void {
       formingBucket: null,
       forming: null,
       formingRequestId: 0,
+      formingClock: null,
     }
   })
   const anchor = paneCursorTimestamp()
@@ -792,6 +809,17 @@ async function loadReplaySnapshot(
 ) {
   snapshotProjectKey = replayProjectKey(project)
   const requestId = ++snapshotRequestId
+  for (const pane of secondaryPanes.value) {
+    pane.requestId = ++replayPaneRequestId
+    pane.formingRequestId += 1
+    pane.loading = false
+    pane.snapshot = null
+    pane.range = null
+    pane.formingBucket = null
+    pane.forming = null
+    pane.formingClock = null
+    pane.error = ''
+  }
   replayLoading.value = true
   replayError.value = ''
   replayWindowLoading.value = false
@@ -1020,6 +1048,8 @@ watch(
     () => activeView.value,
     () => activeProject.value?.id ?? '',
     () => activeProject.value?.panes.join(',') ?? '',
+    () => activeProject.value ? replayProjectKey(activeProject.value) : '',
+    () => replayLoading.value,
     () => paneCursorTimestamp() ?? 0,
     () => paneClockTimestamp() ?? 0,
   ],
