@@ -1,0 +1,11 @@
+{
+  "date": "2026-11-03T05:47:48.490Z",
+  "origin": "http://deploy.taile2c45c.ts.net:8083",
+  "rollback": "/opt/btcusd-tester-backups/loading-20261103",
+  "sources": {
+    "frontend/src/App.vue": "ad10c7c36a0c5ad0ac17dc50b444506f34f75466aca03af03686af91c11d6c2d",
+    "frontend/src/components/MarketChart.vue": "90d57d0102234004437845d46e3ba114e4dd8d7ae3d1e4b5bf05c2ceaebb6ad4",
+    "services/market-data/src/market.rs": "aeddbcefb48d801c69682b0508c26284f05c5befd925ef750465b9e9c35d1762",
+    "deployment/nginx/default.http.conf": "1f391da74bb14a493f60b016d455934f1347f218ad9d54483b39d38f8184d7a6"
+  }
+}

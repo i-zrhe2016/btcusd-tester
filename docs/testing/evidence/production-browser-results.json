@@ -1,0 +1,83 @@
+{
+  "origin": "http://deploy.taile2c45c.ts.net:8083",
+  "source": "deployed frontend + production Nginx + Rust + complete real Parquet",
+  "metadata": {
+    "symbol": "BTCUSD",
+    "base_timeframe": "1m",
+    "source": "Parquet",
+    "candle_count": 4117327,
+    "first_timestamp": 1546300800,
+    "last_timestamp": 1793505720,
+    "supported_timeframes": [
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "3h",
+      "4h",
+      "1d",
+      "1w",
+      "1M"
+    ]
+  },
+  "checks": [
+    {
+      "name": "project library: no snapshot or chart module",
+      "elapsedMs": 2038,
+      "result": "pass"
+    },
+    {
+      "name": "create project: one snapshot, usable canvas",
+      "elapsedMs": 889,
+      "result": "pass"
+    },
+    {
+      "name": "append window: preserve canvas and drawings",
+      "elapsedMs": 357,
+      "result": "pass"
+    },
+    {
+      "name": "manual trading: buy, close, sell, close",
+      "elapsedMs": 167,
+      "result": "pass"
+    },
+    {
+      "name": "all supported timeframe switches",
+      "elapsedMs": 3746,
+      "result": "pass"
+    },
+    {
+      "name": "four panes and fast playback",
+      "elapsedMs": 2635,
+      "result": "pass"
+    },
+    {
+      "name": "indicator settings, visibility and fullscreen",
+      "elapsedMs": 426,
+      "result": "pass"
+    },
+    {
+      "name": "reload restores project, cursor, trades, drawings and four panes",
+      "elapsedMs": 2848,
+      "result": "pass"
+    },
+    {
+      "name": "return to library, save project, reopen",
+      "elapsedMs": 120,
+      "result": "pass"
+    },
+    {
+      "name": "snapshot transport failure has a working retry",
+      "elapsedMs": 881,
+      "result": "pass"
+    },
+    {
+      "name": "second page reuses cached versioned scripts",
+      "elapsedMs": 7614,
+      "result": "pass"
+    }
+  ],
+  "errors": []
+}

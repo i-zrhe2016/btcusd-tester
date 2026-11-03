@@ -1,0 +1,22 @@
+{
+  "result": "pass",
+  "origin": "https://localhost:8448",
+  "asset": "/assets/index-C_xXE3Nf.js",
+  "bytes": 110765,
+  "gzipBytes": 40739,
+  "htmlRevalidatedStatus": 304,
+  "missingAssetStatus": 404,
+  "actualParquetCandles": 10080,
+  "checks": [
+    "gzip decoded payload identical",
+    "immutable hashed asset",
+    "HTML no-cache and 304",
+    "SPA route fallback",
+    "missing asset 404 without long cache",
+    "security headers retained",
+    "real Rust API via proxy",
+    "snapshot inclusive from/exclusive to",
+    "structured API error",
+    "no immutable API cache"
+  ]
+}

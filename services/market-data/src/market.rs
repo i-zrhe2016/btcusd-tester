@@ -31,13 +31,14 @@ pub fn snapshot(all_candles: &[Candle], query: SnapshotQuery) -> Result<MarketSn
     }
     let lengths = parse_lengths(query.lengths.as_deref())?;
 
-    let filtered: Vec<Candle> = all_candles
-        .iter()
-        .copied()
-        .filter(|candle| query.from.is_none_or(|from| candle.timestamp >= from))
-        .filter(|candle| query.to.is_none_or(|to| candle.timestamp < to))
-        .collect();
-    let mut candles = aggregate(&filtered, timeframe);
+    // Parquet loading sorts and deduplicates timestamps, so only visit the requested range.
+    let start = query.from.map_or(0, |from| {
+        all_candles.partition_point(|candle| candle.timestamp < from)
+    });
+    let end = query.to.map_or(all_candles.len(), |to| {
+        all_candles.partition_point(|candle| candle.timestamp < to)
+    });
+    let mut candles = aggregate(&all_candles[start..end], timeframe);
     if candles.len() > query.limit {
         candles.drain(..candles.len() - query.limit);
     }
@@ -165,6 +166,114 @@ mod tests {
             assert_eq!(result[0].close, 13.0);
             assert_eq!(result[0].volume, 6.0);
             assert_eq!(result[1].timestamp, seconds);
+        }
+    }
+
+    fn reference_snapshot(all_candles: &[Candle], query: &SnapshotQuery) -> MarketSnapshot {
+        let filtered: Vec<_> = all_candles
+            .iter()
+            .copied()
+            .filter(|candle| query.from.is_none_or(|from| candle.timestamp >= from))
+            .filter(|candle| query.to.is_none_or(|to| candle.timestamp < to))
+            .collect();
+        let mut candles = aggregate(&filtered, Timeframe::parse(&query.timeframe).unwrap());
+        if candles.len() > query.limit {
+            candles.drain(..candles.len() - query.limit);
+        }
+        let lengths = parse_lengths(query.lengths.as_deref()).unwrap();
+        let stochastic = calculate_stochastic(&candles, lengths);
+        MarketSnapshot {
+            symbol: "BTCUSD".to_owned(),
+            timeframe: query.timeframe.clone(),
+            source: "Parquet",
+            candles,
+            stochastic,
+        }
+    }
+
+    fn query(timeframe: &str, from: Option<i64>, to: Option<i64>, limit: usize) -> SnapshotQuery {
+        SnapshotQuery {
+            symbol: "BTCUSD".to_owned(),
+            timeframe: timeframe.to_owned(),
+            from,
+            to,
+            limit,
+            lengths: Some("2,3,4".to_owned()),
+        }
+    }
+
+    #[test]
+    fn indexed_snapshot_matches_scan_with_gaps_and_partial_buckets() {
+        let start = Utc.with_ymd_and_hms(2024, 1, 28, 0, 0, 0).unwrap().timestamp();
+        let candles: Vec<_> = (0..12_000)
+            .filter(|index| index % 7 != 0)
+            .map(|index| candle(start + index * 60, (index % 97) as f64))
+            .collect();
+        let ranges = [
+            (None, None),
+            (None, Some(start + 5_001)),
+            (Some(start + 60), None),
+            (Some(start + 60), Some(start + 600)),
+            (Some(start + 61), Some(start + 421)),
+            (Some(start - 120), Some(start)),
+            (Some(start + 720_000), None),
+            (Some(start + 120), Some(start + 121)),
+        ];
+        for timeframe in ["1m", "5m", "1h", "1d", "1w", "1M"] {
+            for (from, to) in ranges {
+                for limit in [1, 20, 5_000] {
+                    let request = query(timeframe, from, to, limit);
+                    let expected = reference_snapshot(&candles, &request);
+                    let actual = snapshot(&candles, request).unwrap();
+                    assert_eq!(
+                        serde_json::to_value(actual).unwrap(),
+                        serde_json::to_value(expected).unwrap(),
+                        "timeframe={timeframe} from={from:?} to={to:?} limit={limit}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn snapshot_excludes_data_at_and_after_to() {
+        let candles = [candle(0, 10.0), candle(60, 12.0), candle(120, 999.0)];
+        let result = snapshot(&candles, query("5m", Some(60), Some(120), 10)).unwrap();
+        assert_eq!(result.candles.len(), 1);
+        assert_eq!(result.candles[0].open, 12.0);
+        assert_eq!(result.candles[0].close, 13.0);
+        assert_eq!(result.candles[0].volume, 3.0);
+        for invalid in [query("1m", Some(60), Some(60), 1), query("1m", None, None, 0)] {
+            assert!(snapshot(&candles, invalid).is_err());
+        }
+    }
+
+    #[test]
+    #[ignore = "manual release-mode performance comparison on synthetic history"]
+    fn benchmark_indexed_snapshot() {
+        use std::{hint::black_box, time::Instant};
+        let candles: Vec<_> = (0..4_117_327)
+            .map(|index| candle(index * 60, (index % 97) as f64))
+            .collect();
+        for (timeframe, from, to, limit) in [
+            ("1m", 120_000_000, 120_031_860, 531),
+            ("1h", 120_000_000, 120_001_800, 1),
+            ("1M", 0, 247_039_620, 1001),
+        ] {
+            let request = query(timeframe, Some(from), Some(to), limit);
+            let expected = reference_snapshot(&candles, &request);
+            let actual = snapshot(&candles, query(timeframe, Some(from), Some(to), limit)).unwrap();
+            assert_eq!(serde_json::to_value(&actual).unwrap(), serde_json::to_value(&expected).unwrap());
+            let started = Instant::now();
+            for _ in 0..20 {
+                black_box(reference_snapshot(black_box(&candles), &request));
+            }
+            let scan = started.elapsed();
+            let started = Instant::now();
+            for _ in 0..20 {
+                black_box(snapshot(black_box(&candles), query(timeframe, Some(from), Some(to), limit)).unwrap());
+            }
+            println!("synthetic {timeframe} limit={limit}: scan={scan:?}, indexed={:?} (20 requests)", started.elapsed());
         }
     }
 
