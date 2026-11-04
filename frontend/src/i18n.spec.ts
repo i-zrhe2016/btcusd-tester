@@ -1,24 +1,23 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { formatUtc } from './format'
-import { locale, setLocale, t, timeframeLabel, toggleLocale } from './i18n'
+import { locale, resolveLocale, setLocale, t, timeframeLabel } from './i18n'
 
 afterEach(() => {
   setLocale('zh')
-  document.documentElement.lang = ''
 })
 
 describe('Chinese and English support', () => {
-  it('defaults to Chinese and interpolates placeholders', () => {
-    expect(locale.value).toBe('zh')
+  it('interpolates placeholders in Chinese', () => {
+    setLocale('zh')
     expect(t('app.paneN', { n: 2 })).toBe('第 2 屏')
     expect(timeframeLabel('1h')).toBe('1 小时')
   })
 
-  it('switches to English, persists the choice and updates the document language', () => {
+  it('switches to English and updates the document language', () => {
     setLocale('en')
     expect(locale.value).toBe('en')
-    expect(localStorage.getItem('btcusd.locale.v1')).toBe('en')
     expect(document.documentElement.lang).toBe('en')
+    expect(document.title).toBe('grailab · Market replay and trading practice')
     expect(t('app.paneN', { n: 2 })).toBe('Pane 2')
     expect(timeframeLabel('1h')).toBe('1h')
   })
@@ -32,11 +31,23 @@ describe('Chinese and English support', () => {
     expect(chinese).not.toBe(english)
     expect(chinese).toContain('2023')
   })
+})
 
-  it('toggles back to Chinese', () => {
-    setLocale('en')
-    toggleLocale()
-    expect(locale.value).toBe('zh')
-    expect(localStorage.getItem('btcusd.locale.v1')).toBe('zh')
+describe('browser language detection', () => {
+  it.each(['zh', 'zh-CN', 'zh-TW', 'zh-Hans-CN', 'ZH-cn'])('uses Chinese for %s', language => {
+    expect(resolveLocale([language])).toBe('zh')
+  })
+
+  it.each(['en', 'en-US', 'en-GB', 'ja-JP', 'de', 'fr-FR', ''])('falls back to English for %s', language => {
+    expect(resolveLocale([language])).toBe('en')
+  })
+
+  it('uses English when the browser reports no languages', () => {
+    expect(resolveLocale([])).toBe('en')
+  })
+
+  it('only considers the primary browser language', () => {
+    expect(resolveLocale(['zh-CN', 'en-US'])).toBe('zh')
+    expect(resolveLocale(['en-US', 'zh-CN'])).toBe('en')
   })
 })

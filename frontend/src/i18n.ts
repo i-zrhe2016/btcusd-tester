@@ -4,12 +4,15 @@ export type Locale = 'zh' | 'en'
 export type MessageParams = Record<string, string | number>
 type Message = string | ((params: MessageParams) => string)
 
-const storageKey = 'btcusd.locale.v1'
-
 const zh = {
   // Shared
   'common.retry': '重试',
   'common.close': '关闭',
+
+  // Document
+  'meta.title': 'grailab · 历史行情回放与交易训练',
+  'meta.description': 'grailab：历史行情回放、模拟交易与交易复盘，在真实历史行情中打磨交易方法。',
+  'app.skipToContent': '跳到主要内容',
 
   // Landing page
   'product.returnHome': '← 返回产品首页',
@@ -20,7 +23,6 @@ const zh = {
   'product.navPlans': '产品方案',
   'product.login': '登录',
   'product.signup': '注册账户',
-  'product.languageSwitch': '切换到英文',
   'product.heroTitle': '历史行情回放与交易训练',
   'product.heroLead': '回放真实历史行情，进行模拟交易，复盘交易表现，提升交易能力。',
   'product.markets': '支持外汇、期货、比特币等加密货币',
@@ -109,7 +111,6 @@ const zh = {
   'app.paused': '已暂停',
   'app.library': '项目库',
   'app.settings': '设置',
-  'app.languageSwitch': '切换到英文',
   'app.storageUnavailable': '浏览器无法保存设置，本次使用仍然生效。',
   'app.flat': '空仓',
   'app.long': '多',
@@ -332,6 +333,10 @@ const en: Record<MessageKey, Message> = {
   'common.retry': 'Retry',
   'common.close': 'Close',
 
+  'meta.title': 'grailab · Market replay and trading practice',
+  'meta.description': 'grailab: replay historical price action, practise simulated trading, and review your trades to sharpen your approach on real market history.',
+  'app.skipToContent': 'Skip to main content',
+
   'product.returnHome': '← Back to home',
   'product.homeLabel': 'grailab home',
   'product.navLabel': 'Main navigation',
@@ -340,7 +345,6 @@ const en: Record<MessageKey, Message> = {
   'product.navPlans': 'Plans',
   'product.login': 'Log in',
   'product.signup': 'Sign up',
-  'product.languageSwitch': 'Switch to Chinese',
   'product.heroTitle': 'Replay historical markets. Practice trading.',
   'product.heroLead': 'Replay real historical price action, place simulated trades, review your performance and sharpen your trading skills.',
   'product.markets': 'Supports forex, futures, Bitcoin and other cryptocurrencies',
@@ -426,7 +430,6 @@ const en: Record<MessageKey, Message> = {
   'app.paused': 'Paused',
   'app.library': 'Project library',
   'app.settings': 'Settings',
-  'app.languageSwitch': 'Switch to Chinese',
   'app.storageUnavailable': "Your browser couldn't save settings; they still apply for this session.",
   'app.flat': 'Flat',
   'app.long': 'Long',
@@ -685,36 +688,38 @@ export function timeframeShortLabel(value: string): string {
   return (locale.value === 'zh' ? compactZh : compactEn)[value] ?? value
 }
 
-function loadLocale(): Locale {
-  if (typeof window === 'undefined') return 'zh'
-  try {
-    const saved = window.localStorage.getItem(storageKey)
-    if (saved === 'zh' || saved === 'en') return saved
-  } catch {
-    // Storage may be unavailable; fall back to the product's primary language.
-  }
-  return 'zh'
+function browserLanguages(): readonly string[] {
+  if (typeof navigator === 'undefined') return []
+  if (navigator.languages?.length) return navigator.languages
+  return navigator.language ? [navigator.language] : []
 }
 
-export const locale = ref<Locale>(loadLocale())
+// The product ships in Chinese and English only: Chinese browsers get Chinese, every
+// other browser language falls back to English.
+export function resolveLocale(languages: readonly string[]): Locale {
+  const primary = languages[0]?.toLowerCase() ?? ''
+  return primary === 'zh' || primary.startsWith('zh-') ? 'zh' : 'en'
+}
 
-function applyLanguageTag(value: Locale) {
-  if (typeof document !== 'undefined') {
-    document.documentElement.lang = value === 'zh' ? 'zh-CN' : 'en'
-  }
+export const locale = ref<Locale>(resolveLocale(browserLanguages()))
+
+// The static shell in index.html is written in Chinese; keep its language tag,
+// title, description and skip link in step with the detected locale.
+function applyDocumentLocale(value: Locale) {
+  if (typeof document === 'undefined') return
+  document.documentElement.lang = value === 'zh' ? 'zh-CN' : 'en'
+  document.title = t('meta.title')
+  document.querySelector('meta[name="description"]')?.setAttribute('content', t('meta.description'))
+  const skipLink = document.querySelector('.skip-link')
+  if (skipLink) skipLink.textContent = t('app.skipToContent')
 }
 
 export function setLocale(value: Locale) {
   locale.value = value
-  try {
-    window.localStorage.setItem(storageKey, value)
-  } catch {
-    // The choice still applies for this session when storage is unavailable.
-  }
 }
 
-export function toggleLocale() {
-  setLocale(locale.value === 'zh' ? 'en' : 'zh')
+if (typeof window !== 'undefined') {
+  window.addEventListener('languagechange', () => { locale.value = resolveLocale(browserLanguages()) })
 }
 
 export function t(key: MessageKey, params: MessageParams = {}): string {
@@ -723,4 +728,4 @@ export function t(key: MessageKey, params: MessageParams = {}): string {
   return message.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? `{${name}}`))
 }
 
-watch(locale, applyLanguageTag, { immediate: true, flush: 'sync' })
+watch(locale, applyDocumentLocale, { immediate: true, flush: 'sync' })

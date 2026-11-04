@@ -2,7 +2,7 @@
 import { computed, defineAsyncComponent, onBeforeUnmount, ref } from 'vue'
 import { UserButton, useAuth, useClerk } from '@clerk/vue'
 import { ArrowRight, Play, Zap, ChartNoAxesColumnIncreasing, Check, ArrowUpRight } from '@lucide/vue'
-import { locale, t, toggleLocale } from './i18n'
+import { t } from './i18n'
 // Literal utility strings remain visible to Tailwind's source scanner.
 const productButtonClass = 'inline-flex justify-center items-center gap-[23px] font-semibold leading-[1.3] cursor-pointer transition-colors duration-150'
 const Workspace = defineAsyncComponent(() => import('./App.vue'))
@@ -56,9 +56,8 @@ function featureLines(key: 'product.featureReplayBody' | 'product.featureTradeBo
           <button class="gate-button gate-button-secondary bg-white text-[color:#111] [border:1px_solid_#111] rounded-[8px] [padding:12px_26px] text-[length:15px] min-h-[46px] cursor-pointer [font-family:inherit]" @click="openAuth('login')">{{ t('product.login') }}</button>
           <button class="gate-button bg-black text-[color:#fff] [border:1px_solid_#000] rounded-[8px] [padding:12px_26px] text-[length:15px] min-h-[46px] cursor-pointer [font-family:inherit]" @click="openAuth('register')">{{ t('product.signup') }}</button>
         </div>
-        <div class="flex items-center justify-center gap-[18px] mt-[24px]">
+        <div class="mt-[24px]">
           <a class="text-[length:13px] text-[color:#777]" href="#">{{ t('product.returnHome') }}</a>
-          <button class="text-[length:13px] text-[color:#111] underline underline-offset-4 [border:0] bg-transparent cursor-pointer [padding:4px] [font-family:inherit]" type="button" data-testid="locale-toggle" :aria-label="t('product.languageSwitch')" @click="toggleLocale">{{ locale === 'zh' ? 'English' : '中文' }}</button>
         </div>
       </section>
     </div>
@@ -77,7 +76,6 @@ function featureLines(key: 'product.featureReplayBody' | 'product.featureTradeBo
         </a>
       </nav>
       <div class="product-account flex items-center gap-[24px] [@media(max-width:1000px)]:gap-[17px] [@media(max-width:700px)]:ml-auto [@media(max-width:700px)]:gap-[15px]">
-        <button class="product-lang [border:0] bg-transparent text-[color:#080808] [padding:10px_0] cursor-pointer text-[length:17px] [@media(max-width:700px)]:text-[length:14px] [font-family:inherit]" type="button" data-testid="locale-toggle" :aria-label="t('product.languageSwitch')" @click="toggleLocale">{{ locale === 'zh' ? 'EN' : '中文' }}</button>
         <button class="product-login [border:0] bg-transparent text-[color:#080808] [padding:10px_0] cursor-pointer text-[length:17px] [@media(max-width:700px)]:text-[length:14px] disabled:opacity-[.5] disabled:cursor-wait [font-family:inherit]" @click="openAuth('login')">{{ t('product.login') }}
         </button>
         <button class="product-button compact disabled:opacity-[.5] disabled:cursor-wait bg-black text-[color:#fff] [border:1px_solid_#000] rounded-[8px] [padding:13px_23px] text-[length:16px] min-h-[46px] hover:bg-[#292929] [@media(max-width:700px)]:[padding:10px_13px] [@media(max-width:700px)]:text-[length:13px] [@media(max-width:700px)]:min-h-[38px] [font-family:inherit]" :class="productButtonClass" @click="openAuth('register')">{{ t('product.signup') }}
