@@ -687,17 +687,6 @@ select {
     [font:700_11px/1.2_"Fira_Code",_ui-monospace,_SFMono-Regular,_Consolas,_monospace] overflow-hidden
     text-ellipsis whitespace-nowrap;
 }
-.console-load-control {
-  @apply flex;
-}
-.console-load-control > span {
-  @apply overflow-hidden text-[color:var(--text-dim)]
-    [font:700_10px/1.2_"Fira_Code",_ui-monospace,_SFMono-Regular,_Consolas,_monospace] text-ellipsis
-    whitespace-nowrap;
-}
-.console-load-button {
-  @apply min-h-[28px] [padding:0_8px] [border:1px_solid_var(--border)] [background:var(--surface-2)];
-}
 .console-body {
   @apply grid grid-cols-[minmax(380px,_540px)_auto_minmax(360px,_1fr)]
     [grid-template-areas:"trade_controls_meta"_"log_candles_candles"] gap-[12px] items-center
@@ -1039,9 +1028,6 @@ select {
   }
   .console-quick-stats > .console-stat {
     @apply max-w-[160px];
-  }
-  .console-load-control > span {
-    @apply hidden;
   }
 }
 @media (max-width: 640px), (pointer: coarse) and (max-height: 500px) {

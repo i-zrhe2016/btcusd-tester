@@ -226,10 +226,6 @@ const zh = {
   'app.more': '更多',
   'app.speed': '速度',
   'app.manualTrades': '手动交易',
-  'app.loadingMore': '加载中…',
-  'app.loadFailed': '加载失败',
-  'app.retryLoad': '重试加载',
-  'app.loadMore': '加载更多',
   'app.fullscreen': '进入全屏',
   'app.exitFullscreen': '退出全屏',
 
@@ -577,10 +573,6 @@ const en: Record<MessageKey, Message> = {
   'app.more': 'More',
   'app.speed': 'Speed',
   'app.manualTrades': 'Manual trading',
-  'app.loadingMore': 'Loading…',
-  'app.loadFailed': 'Load failed',
-  'app.retryLoad': 'Retry',
-  'app.loadMore': 'Load more',
   'app.fullscreen': 'Enter fullscreen',
   'app.exitFullscreen': 'Exit fullscreen',
 
