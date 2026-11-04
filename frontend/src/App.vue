@@ -1097,10 +1097,10 @@ onBeforeUnmount(() => {
     :class="{ 'replay-active': activeView === 'replay', 'replay-immersive': isReplayFullscreen }"
   >
     <header class="topbar top-0 z-[30] items-center justify-between [border-bottom:1px_solid_var(--border)] [background:rgba(255,_255,_255,_0.92)] [backdrop-filter:blur(12px)]">
-      <a class="brand items-center no-underline" href="/" aria-label="BTCUSD 复盘平台首页">
+      <a class="brand items-center no-underline" href="/" aria-label="grailab 首页">
         <span class="brand-mark grid place-items-center [border:1px_solid_var(--border-strong)] [background:var(--text)] text-[color:var(--surface)]" aria-hidden="true"><ChartCandlestick :size="20" /></span>
         <span>
-          <strong>BTCUSD</strong>
+          <strong>grailab</strong>
           <small v-if="activeView === 'replay'">{{ currentTimeframeValue }} REPLAY</small>
           <small v-else>REPLAY WORKSPACE</small>
         </span>
