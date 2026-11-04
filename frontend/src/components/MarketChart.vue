@@ -352,7 +352,6 @@ const visibleTradeMarkers = computed<SeriesMarker<Time>[]>(() => {
     .map(({ trade, ordinal }) => ({
       id: trade.id,
       time: candles[replayCursorIndexAtOrBefore(candles, trade.timestamp)].timestamp as UTCTimestamp,
-      size: 1.25,
       ...manualTradeMarker(trade, ordinal),
     }))
 })
