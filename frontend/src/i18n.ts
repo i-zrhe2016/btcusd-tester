@@ -4,6 +4,7 @@ export type Locale = 'zh' | 'en'
 export type MessageParams = Record<string, string | number>
 type Message = string | ((params: MessageParams) => string)
 
+
 const zh = {
   // Shared
   'common.retry': '重试',
@@ -53,7 +54,17 @@ const zh = {
   'product.planFeature2': '速度控制与多周期 K 线',
   'product.planFeature3': '模拟交易与收益记录',
   'product.planFeature4': '训练项目管理',
-  'product.planNote': '订阅支付尚未开放，注册不会产生扣费。',
+  'product.planNote': '测试支付：请使用测试凭据和测试卡。',
+  'product.checkout': '前往测试支付',
+  'product.checkoutLoading': '正在打开支付页面…',
+  'product.checkoutError': '无法打开支付页面，请稍后重试。',
+  'payment.success': '付款成功',
+  'payment.successBody': '已收到付款确认，感谢你的支持。',
+  'payment.checking': '正在确认付款',
+  'payment.pending': '我们正在等待支付平台确认，请稍候。',
+  'payment.error': '暂时无法确认付款，请稍后重试。',
+  'payment.signIn': '请登录付款时使用的账户以查看结果。',
+  'payment.retry': '重新确认',
   'product.footerDisclaimer': '仅用于模拟交易训练，不构成投资建议。',
 
   // Account dialog
@@ -362,7 +373,17 @@ const en: Record<MessageKey, Message> = {
   'product.planFeature2': 'Speed control and multi-timeframe charts',
   'product.planFeature3': 'Simulated trading and performance records',
   'product.planFeature4': 'Practice project management',
-  'product.planNote': "Payments aren't open yet; signing up won't charge you.",
+  'product.planNote': 'Test checkout: use test credentials and a test card.',
+  'product.checkout': 'Go to test checkout',
+  'product.checkoutLoading': 'Opening checkout…',
+  'product.checkoutError': 'Could not open checkout. Please try again later.',
+  'payment.success': 'Payment successful',
+  'payment.successBody': 'Your payment has been confirmed. Thank you for your support.',
+  'payment.checking': 'Confirming your payment',
+  'payment.pending': 'Waiting for confirmation from the payment provider.',
+  'payment.error': 'We could not confirm your payment. Please try again later.',
+  'payment.signIn': 'Sign in with the account you used to pay to see the result.',
+  'payment.retry': 'Check again',
   'product.footerDisclaimer': 'For simulated trading practice only. Not investment advice.',
 
   'auth.close': 'Close',

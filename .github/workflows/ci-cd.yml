@@ -31,6 +31,20 @@ jobs:
       - run: npm run build
         working-directory: frontend
 
+  payments:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/payments/package-lock.json
+      - run: npm ci
+        working-directory: services/payments
+      - run: npm test
+        working-directory: services/payments
+
   backend:
     runs-on: ubuntu-latest
     steps:
@@ -64,7 +78,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !inputs.connection_test
-    needs: [frontend, backend]
+    needs: [frontend, backend, payments]
     runs-on: ubuntu-latest
     environment: production
     concurrency:
