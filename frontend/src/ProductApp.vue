@@ -67,8 +67,8 @@ async function submitAuth() {
   </template>
   <div v-else class="product-page box-border [&_*]:box-border bg-white text-[color:#080808] min-h-[100vh] [font-family:Arial,'Microsoft_YaHei','PingFang_SC',sans-serif] [-webkit-font-smoothing:antialiased] [&_:focus-visible]:[outline:2px_solid_#111] [&_:focus-visible]:outline-offset-[5px] motion-reduce:[&_*]:scroll-auto motion-reduce:[&_*]:transition-none">
     <header class="product-header max-w-[1440px] m-auto [padding:28px_48px] flex items-center gap-[45px] [@media(max-width:1000px)]:[padding:24px] [@media(max-width:1000px)]:gap-[25px] [@media(max-width:700px)]:[padding:21px_20px] [@media(max-width:700px)]:flex-wrap [@media(max-width:700px)]:gap-[24px_10px]">
-      <a class="product-brand inline-flex items-center gap-[17px] text-[length:27px] font-[750] whitespace-nowrap tracking-[-.8px] [@media(max-width:1000px)]:text-[length:22px] [@media(max-width:700px)]:text-[length:20px] [@media(max-width:700px)]:gap-[10px] text-inherit no-underline" href="#" aria-label="BTCUSD Tester 首页">
-        <span class="product-mark inline-block w-[31px] h-[30px] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)] shrink-0 [@media(max-width:700px)]:w-[24px] [@media(max-width:700px)]:h-[23px]"></span>BTCUSD Tester
+      <a class="product-brand inline-flex items-center gap-[17px] text-[length:27px] font-[750] whitespace-nowrap tracking-[-.8px] [@media(max-width:1000px)]:text-[length:22px] [@media(max-width:700px)]:text-[length:20px] [@media(max-width:700px)]:gap-[10px] text-inherit no-underline" href="#" aria-label="grailab 首页">
+        <span class="product-mark inline-block w-[31px] h-[30px] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)] shrink-0 [@media(max-width:700px)]:w-[24px] [@media(max-width:700px)]:h-[23px]"></span>grailab
       </a>
       <nav class="product-nav ml-auto flex gap-[39px] items-center text-[length:17px] [@media(max-width:1000px)]:gap-[20px] [@media(max-width:1000px)]:text-[length:14px] [@media(max-width:700px)]:[order:3] [@media(max-width:700px)]:w-full [@media(max-width:700px)]:justify-center [@media(max-width:700px)]:gap-[37px]" aria-label="主导航">
         <a class="text-inherit no-underline flex items-center gap-[9px]" href="#features">功能
@@ -200,7 +200,7 @@ async function submitAuth() {
     </main>
     <footer class="product-footer max-w-[1344px] [padding:45px_48px_30px] m-auto flex items-center flex-wrap gap-[22px] [@media(max-width:700px)]:[padding:30px_24px] [@media(max-width:700px)]:gap-[15px]">
       <a class="product-brand inline-flex items-center gap-[10px] text-[length:18px] font-[750] whitespace-nowrap tracking-[-.8px] text-inherit no-underline" href="#">
-        <span class="product-mark inline-block w-[20px] h-[19px] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)] shrink-0"></span>BTCUSD Tester
+        <span class="product-mark inline-block w-[20px] h-[19px] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)] shrink-0"></span>grailab
       </a>
       <span class="text-[length:13px] text-[color:#777] ml-auto [@media(max-width:700px)]:text-[length:11px]">专注训练，沉淀判断。</span>
       <p class="w-full text-[length:12px] text-[color:#999] m-0">仅用于模拟交易训练，不构成投资建议。</p>
@@ -212,7 +212,7 @@ async function submitAuth() {
         </button>
         <span class="product-mark inline-block w-[25px] h-[24px] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)] shrink-0"></span>
         <h2 class="text-[length:28px] tracking-[-.8px] [margin:23px_0_10px] [@media(max-width:700px)]:text-[length:25px] font-bold" id="auth-title">{{ mode === 'login' ? '欢迎回来' : '开始你的交易训练' }}</h2>
-        <p class="text-[length:14px] text-[color:#777] leading-[1.7] mb-[25px] m-0">{{ mode === 'login' ? '登录 BTCUSD Tester，继续你的练习。' : '注册 BTCUSD Tester，建立自己的训练节奏。' }}</p>
+        <p class="text-[length:14px] text-[color:#777] leading-[1.7] mb-[25px] m-0">{{ mode === 'login' ? '登录 grailab，继续你的练习。' : '注册 grailab，建立自己的训练节奏。' }}</p>
         <form class="flex flex-col" @submit.prevent="submitAuth">
           <label :class="authLabelClass" for="auth-email">邮箱地址
           </label>
