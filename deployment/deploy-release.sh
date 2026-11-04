@@ -32,7 +32,7 @@ rollback() {
 trap rollback ERR
 # git archive excludes production .env, Compose overrides, data and certificates.
 tar -xzf "$archive"
-docker compose build web market-data backtest
+docker compose build web market-data backtest payments
 docker compose up -d --no-build --wait --wait-timeout 180
 curl --fail --silent --show-error --max-time 15 http://localhost:8083/healthz
 curl --fail --silent --show-error --max-time 30 http://localhost:8083/api/market/meta > /dev/null

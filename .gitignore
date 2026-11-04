@@ -6,6 +6,8 @@
 /frontend/dist/
 /.verification/
 /.env
+/.env.waffo-sandbox
+/services/payments/node_modules/
 /frontend/.env*
 /deployment/certs/
 /AGENTS.md

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { UserButton, useAuth, useClerk } from '@clerk/vue'
 import { ArrowRight, Play, Globe, ChartNoAxesColumnIncreasing, Check, ArrowUpRight } from '@lucide/vue'
 import { t } from './i18n'
+import { createCheckout, getPaymentStatus } from './api'
 // Literal utility strings remain visible to Tailwind's source scanner.
 const productButtonClass = 'inline-flex justify-center items-center gap-[23px] font-semibold leading-[1.3] cursor-pointer transition-colors duration-150'
 const Workspace = defineAsyncComponent(() => import('./App.vue'))
@@ -14,18 +15,86 @@ window.addEventListener('hashchange', updateRoute)
 onBeforeUnmount(() => window.removeEventListener('hashchange', updateRoute))
 const inWorkspace = computed(() => route.value === '#workspace')
 const canUseWorkspace = computed(() => isLoaded.value === true && isSignedIn.value === true)
-function openAuth(mode: 'login' | 'register') {
-  const options = {
-    forceRedirectUrl: window.location.origin + '/?auth=1#workspace',
+const isPaymentReturn = window.location.pathname === '/payment-return'
+const paymentOrder = new URLSearchParams(window.location.search).get('order') || ''
+const paymentStatus = ref<'pending' | 'paid' | 'error'>('pending')
+const checkingPayment = ref(false)
+let paymentTimer: ReturnType<typeof setTimeout> | undefined
+let paymentAttempts = 0
+let paymentStopped = false
+async function checkPayment() {
+  if (checkingPayment.value || !isSignedIn.value) return
+  if (!paymentOrder) { paymentStatus.value = 'error'; return }
+  checkingPayment.value = true
+  try {
+    const result = await getPaymentStatus(paymentOrder)
+    if (paymentStopped) return
+    paymentStatus.value = result.status
+    if (result.status === 'pending' && ++paymentAttempts < 12) {
+      paymentTimer = setTimeout(checkPayment, 5000)
+    }
+  } catch {
+    if (!paymentStopped) paymentStatus.value = 'error'
+  } finally {
+    checkingPayment.value = false
   }
+}
+onMounted(() => {
+  if (isPaymentReturn) watch([isLoaded, isSignedIn], ([loaded, signedIn]) => {
+    if (loaded && signedIn) void checkPayment()
+  }, { immediate: true })
+})
+onBeforeUnmount(() => { paymentStopped = true; clearTimeout(paymentTimer) })
+function paymentSignIn() {
+  clerk.value?.openSignIn({ forceRedirectUrl: window.location.href })
+}
+function retryPayment() {
+  clearTimeout(paymentTimer)
+  paymentAttempts = 0
+  paymentStatus.value = 'pending'
+  void checkPayment()
+}
+function openAuth(mode: 'login' | 'register') {
+  const options = { forceRedirectUrl: window.location.origin + '/?auth=1#workspace' }
   if (mode === 'login') clerk.value?.openSignIn(options)
   else clerk.value?.openSignUp(options)
+}
+const checkoutLoading = ref(false)
+const checkoutError = ref(false)
+async function startCheckout() {
+  if (!isSignedIn.value) {
+    clerk.value?.openSignUp({ forceRedirectUrl: window.location.origin + '/#plans' })
+    return
+  }
+  checkoutLoading.value = true
+  checkoutError.value = false
+  try {
+    const { checkoutUrl } = await createCheckout()
+    const url = new URL(checkoutUrl)
+    if (url.protocol !== 'https:') throw new Error('Invalid checkout URL')
+    window.location.assign(url.href)
+  } catch {
+    checkoutError.value = true
+  } finally {
+    checkoutLoading.value = false
+  }
 }
 </script>
 
 <template>
   <AuthBridge />
-  <template v-if="inWorkspace">
+  <div v-if="isPaymentReturn" class="gate fixed inset-0 bg-white flex items-center justify-center [padding:24px] [font-family:Arial,'Microsoft_YaHei','PingFang_SC',sans-serif]">
+    <main class="gate-card text-center w-[420px] max-w-full" aria-live="polite">
+      <span class="product-mark inline-block w-[31px] h-[30px] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)]"></span>
+      <h1 class="text-[length:26px] font-[750] tracking-[-.6px] [margin:22px_0_10px]">{{ paymentStatus === 'paid' ? t('payment.success') : t('payment.checking') }}</h1>
+      <p class="text-[color:#777] text-[length:14px] leading-[1.8] [margin:0_0_26px]">{{ !isLoaded ? t('workspace.gateLoading') : !isSignedIn ? t('payment.signIn') : paymentStatus === 'paid' ? t('payment.successBody') : paymentStatus === 'error' ? t('payment.error') : t('payment.pending') }}</p>
+      <button v-if="isLoaded && !isSignedIn" class="bg-black text-white rounded-[8px] [padding:12px_26px] cursor-pointer" @click="paymentSignIn">{{ t('product.login') }}</button>
+      <button v-else-if="isSignedIn && paymentStatus !== 'paid'" class="bg-black text-white rounded-[8px] [padding:12px_26px] cursor-pointer disabled:opacity-50" :disabled="checkingPayment" @click="retryPayment">{{ t('payment.retry') }}</button>
+      <a v-else-if="paymentStatus === 'paid'" href="/#workspace" class="inline-block bg-black text-white rounded-[8px] [padding:12px_26px] no-underline">{{ t('product.enterWorkspace') }}</a>
+      <div class="mt-[24px]"><a class="text-[length:13px] text-[color:#777]" href="/">{{ t('product.returnHome') }}</a></div>
+    </main>
+  </div>
+  <template v-else-if="inWorkspace">
     <template v-if="canUseWorkspace">
     <a class="product-return fixed bottom-[15px] left-[18px] z-[100] bg-white text-[color:#111] [border:1px_solid_#ddd] rounded-[6px] [padding:8px_12px] text-[length:12px] no-underline" href="#">{{ t('product.returnHome') }}
     </a>
@@ -157,9 +226,10 @@ function openAuth(mode: 'login' | 'register') {
               <Check :size="18" />{{ t('product.planFeature4') }}
             </li>
           </ul>
-          <button class="product-button disabled:opacity-[.5] disabled:cursor-wait bg-black text-[color:#fff] [border:1px_solid_#000] rounded-[9px] [padding:14px] text-[length:16px] min-h-[50px] hover:bg-[#292929] w-full [font-family:inherit]" :class="productButtonClass" @click="openAuth('register')">{{ t('product.signup') }} <ArrowRight :size="21" />
+          <button class="product-button disabled:opacity-[.5] disabled:cursor-wait bg-black text-[color:#fff] [border:1px_solid_#000] rounded-[9px] [padding:14px] text-[length:16px] min-h-[50px] hover:bg-[#292929] w-full [font-family:inherit]" :class="productButtonClass" :disabled="checkoutLoading || !isLoaded" @click="startCheckout">{{ checkoutLoading ? t('product.checkoutLoading') : t('product.checkout') }} <ArrowRight :size="21" />
           </button>
           <small class="block text-[color:#777] text-center text-[length:12px] mt-[15px]">{{ t('product.planNote') }}</small>
+          <p v-if="checkoutError" role="alert" class="text-center text-[color:#b91c1c] text-[length:13px]">{{ t('product.checkoutError') }}</p>
         </div>
       </section>
     </main>

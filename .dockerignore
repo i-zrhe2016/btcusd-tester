@@ -8,6 +8,7 @@ build
 data
 projects
 frontend/node_modules
+services/payments/node_modules
 frontend/dist
 .verification
 

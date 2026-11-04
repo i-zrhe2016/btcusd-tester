@@ -34,6 +34,14 @@ async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Pro
   return (await response.json()) as T
 }
 
+export function getPaymentStatus(order: string): Promise<{ status: 'paid' | 'pending' }> {
+  return requestJson(`/api/payments/status?order=${encodeURIComponent(order)}`)
+}
+
+export function createCheckout(): Promise<{ checkoutUrl: string }> {
+  return requestJson('/api/payments/checkout', { method: 'POST' })
+}
+
 export function getMarketMetadata(): Promise<MarketMetadata> {
   return requestJson('/api/market/meta')
 }
