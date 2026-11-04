@@ -14,20 +14,9 @@ window.addEventListener('hashchange', updateRoute)
 onBeforeUnmount(() => window.removeEventListener('hashchange', updateRoute))
 const inWorkspace = computed(() => route.value === '#workspace')
 const canUseWorkspace = computed(() => isLoaded.value === true && isSignedIn.value === true)
-// Only email sign-in and sign-up are supported for now, so keep the social
-// buttons and the "or" divider out of the Clerk modal.
-const emailOnlyAppearance = {
-  elements: {
-    socialButtons: { display: 'none' },
-    socialButtonsBlockButton: { display: 'none' },
-    dividerRow: { display: 'none' },
-    dividerText: { display: 'none' },
-  },
-}
 function openAuth(mode: 'login' | 'register') {
   const options = {
     forceRedirectUrl: window.location.origin + '/?auth=1#workspace',
-    appearance: emailOnlyAppearance,
   }
   if (mode === 'login') clerk.value?.openSignIn(options)
   else clerk.value?.openSignUp(options)
