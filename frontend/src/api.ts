@@ -1,5 +1,6 @@
 import { markRaw } from 'vue'
 import { getAuthToken } from './auth'
+import { t } from './i18n'
 import type {
   MarketMetadata,
   MarketSnapshot,
@@ -28,7 +29,7 @@ async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Pro
     } catch {
       // The status text is a safe fallback when an upstream returns no JSON.
     }
-    throw new Error(body.message || `请求失败（HTTP ${response.status}）`)
+    throw new Error(body.message || t('api.requestFailed', { status: response.status }))
   }
   return (await response.json()) as T
 }
