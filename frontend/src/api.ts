@@ -1,4 +1,5 @@
 import { markRaw } from 'vue'
+import { getAuthToken } from './auth'
 import type {
   MarketMetadata,
   MarketSnapshot,
@@ -10,10 +11,12 @@ interface ApiErrorBody {
 }
 
 async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+  const token = await getAuthToken()
   const response = await fetch(input, {
     ...init,
     headers: {
       Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
       ...init?.headers,
     },

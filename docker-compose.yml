@@ -9,6 +9,8 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-}
     depends_on:
       market-data:
         condition: service_healthy
@@ -82,9 +84,12 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-btcusd}:${POSTGRES_PASSWORD:-btcusd}@postgres:5432/${POSTGRES_DB:-btcusd}
       MARKET_DATA_URL: http://market-data:8081
       MARKET_DATA_TIMEOUT_SECONDS: ${MARKET_DATA_TIMEOUT_SECONDS:-30}
+      CLERK_ISSUER: ${CLERK_ISSUER:-}
+      CLERK_AUTHORIZED_PARTIES: ${CLERK_AUTHORIZED_PARTIES:-}
       RUST_LOG: ${RUST_LOG:-info}
     networks:
       - private
+      - public
     cpus: "${BACKTEST_CPUS:-1.00}"
     read_only: true
     tmpfs:

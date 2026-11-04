@@ -1,68 +1,28 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref } from 'vue'
-import { ArrowRight, Play, Zap, ChartNoAxesColumnIncreasing, X, Check, ArrowUpRight } from '@lucide/vue'
-// Literal utility strings remain visible to Tailwind's source scanner.
+import { computed, defineAsyncComponent, onBeforeUnmount, ref } from 'vue'
+import { Show, UserButton, useClerk } from '@clerk/vue'
+import { ArrowRight, Play, Zap, ChartNoAxesColumnIncreasing, Check, ArrowUpRight } from '@lucide/vue'
 const productButtonClass = 'inline-flex justify-center items-center gap-[23px] font-semibold leading-[1.3] cursor-pointer transition-colors duration-150'
-const authLabelClass = 'grid gap-[6px] text-[#4b5563] font-semibold text-[length:14px] [margin:0_0_8px]'
-const authInputClass = 'bg-white text-[color:#111] [border:1px_solid_#d7d7d7] rounded-[6px] [padding:12px_13px] min-h-[46px] mb-[19px] min-w-0 w-full text-[length:15px] [font-family:inherit] font-normal leading-normal [font-variant-numeric:tabular-nums] transition-none hover:border-[#b9b4a8] placeholder:text-[#71717a]'
 const Workspace = defineAsyncComponent(() => import('./App.vue'))
+const clerk = useClerk()
 const route = ref(window.location.hash)
 const updateRoute = () => { route.value = window.location.hash }
 window.addEventListener('hashchange', updateRoute)
 onBeforeUnmount(() => window.removeEventListener('hashchange', updateRoute))
 const inWorkspace = computed(() => route.value === '#workspace')
-const mode = ref<'login' | 'register' | null>(null)
-const email = ref('')
-const password = ref('')
-const confirmation = ref('')
-const accepted = ref(false)
-const pending = ref(false)
-const message = ref('')
-let authTrigger: HTMLElement | null = null
-async function openAuth(next: 'login' | 'register') {
-  if (!mode.value) authTrigger = document.activeElement as HTMLElement | null
-  mode.value = next
-  message.value = ''
-  password.value = ''
-  confirmation.value = ''
-  accepted.value = false
-  document.body.style.overflow = 'hidden'
-  await nextTick()
-  document.getElementById('auth-email')?.focus()
-}
-function closeAuth() {
-  if (pending.value) return
-  mode.value = null
-  document.body.style.overflow = ''
-  authTrigger?.focus()
-}
-function trapFocus(event: KeyboardEvent) {
-  const elements = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), a[href]'))
-  const first = elements[0]
-  const last = elements.at(-1)
-  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
-  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
-}
-async function submitAuth() {
-  message.value = ''
-  if (mode.value === 'register' && password.value !== confirmation.value) { message.value = '两次输入的密码不一致，请重新输入。'; return }
-  pending.value = true
-  try {
-    const response = await fetch(`/api/auth/${mode.value}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.value, password: password.value }) })
-    if (!response.headers.get('content-type')?.includes('application/json') || response.status === 404 || response.status === 503) throw new Error('账户服务尚未开放，请稍后再试。你仍可直接进入训练工作台。')
-    if (!response.ok) { message.value = response.status === 401 ? '邮箱或密码不正确，请重试。' : response.status === 409 ? '该邮箱已注册，请直接登录。' : '暂时无法完成请求，请稍后重试。'; return }
-    pending.value = false
-    closeAuth()
-    window.location.hash = 'workspace'
-  } catch (error) { message.value = error instanceof Error && error.message.includes('账户服务') ? error.message : '连接账户服务失败，请检查网络后重试。' }
-  finally { pending.value = false }
+function openAuth(mode: 'login' | 'register') {
+  const options = { forceRedirectUrl: window.location.origin + '/?auth=1#workspace' }
+  if (mode === 'login') clerk.value?.openSignIn(options)
+  else clerk.value?.openSignUp(options)
 }
 </script>
 
 <template>
+  <AuthBridge />
   <template v-if="inWorkspace">
     <a class="product-return fixed bottom-[15px] left-[18px] z-[100] bg-white text-[color:#111] [border:1px_solid_#ddd] rounded-[6px] [padding:8px_12px] text-[length:12px] no-underline" href="#">← 返回产品首页
     </a>
+    <div class="fixed top-4 right-4 z-[200]"><Show when="signed-in"><UserButton /></Show><Show when="signed-out"><button class="rounded bg-white px-4 py-2 text-black border" @click="openAuth('login')">登录账户</button></Show></div>
     <Workspace />
   </template>
   <div v-else class="product-page box-border [&_*]:box-border bg-white text-[color:#080808] min-h-[100vh] [font-family:Arial,'Microsoft_YaHei','PingFang_SC',sans-serif] [-webkit-font-smoothing:antialiased] [&_:focus-visible]:[outline:2px_solid_#111] [&_:focus-visible]:outline-offset-[5px] motion-reduce:[&_*]:scroll-auto motion-reduce:[&_*]:transition-none">
@@ -79,10 +39,13 @@ async function submitAuth() {
         </a>
       </nav>
       <div class="product-account flex items-center gap-[24px] [@media(max-width:1000px)]:gap-[17px] [@media(max-width:700px)]:ml-auto [@media(max-width:700px)]:gap-[15px]">
+        <Show when="signed-out">
         <button class="product-login [border:0] bg-transparent text-[color:#080808] [padding:10px_0] cursor-pointer text-[length:17px] [@media(max-width:700px)]:text-[length:14px] disabled:opacity-[.5] disabled:cursor-wait [font-family:inherit]" @click="openAuth('login')">登录
         </button>
         <button class="product-button compact disabled:opacity-[.5] disabled:cursor-wait bg-black text-[color:#fff] [border:1px_solid_#000] rounded-[8px] [padding:13px_23px] text-[length:16px] min-h-[46px] hover:bg-[#292929] [@media(max-width:700px)]:[padding:10px_13px] [@media(max-width:700px)]:text-[length:13px] [@media(max-width:700px)]:min-h-[38px] [font-family:inherit]" :class="productButtonClass" @click="openAuth('register')">注册账户
         </button>
+        </Show>
+        <Show when="signed-in"><UserButton /></Show>
       </div>
     </header>
     <main id="main-content">
@@ -206,38 +169,6 @@ async function submitAuth() {
       <span class="text-[length:13px] text-[color:#777] ml-auto [@media(max-width:700px)]:text-[length:11px]">专注训练，沉淀判断。</span>
       <p class="w-full text-[length:12px] text-[color:#999] m-0">仅用于模拟交易训练，不构成投资建议。</p>
     </footer>
-    <div v-if="mode" class="product-modal-backdrop fixed inset-0 [background:#0006] [backdrop-filter:blur(5px)] z-[1000] flex items-center justify-center [padding:24px] overflow-auto" @click.self="closeAuth" @keydown.esc="closeAuth">
-      <section class="product-auth relative bg-white [border:1px_solid_#eee] rounded-[16px] [padding:38px] w-[460px] max-h-[calc(100dvh_-_48px)] overflow-auto [box-shadow:0_20px_90px_#0002] [@media(max-width:700px)]:[padding:30px_25px]" role="dialog" aria-modal="true" aria-labelledby="auth-title" @keydown.tab="trapFocus">
-        <button class="product-auth-close absolute right-[20px] top-[20px] bg-transparent [border:0] [padding:6px] cursor-pointer text-[color:#555] disabled:opacity-[.5] disabled:cursor-wait [font-family:inherit]" aria-label="关闭" :disabled="pending" @click="closeAuth">
-          <X :size="22" />
-        </button>
-        <span class="product-mark inline-block w-[25px] h-[24px] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)] shrink-0"></span>
-        <h2 class="text-[length:28px] tracking-[-.8px] [margin:23px_0_10px] [@media(max-width:700px)]:text-[length:25px] font-bold" id="auth-title">{{ mode === 'login' ? '欢迎回来' : '开始你的交易训练' }}</h2>
-        <p class="text-[length:14px] text-[color:#777] leading-[1.7] mb-[25px] m-0">{{ mode === 'login' ? '登录 grailab，继续你的练习。' : '注册 grailab，建立自己的训练节奏。' }}</p>
-        <form class="flex flex-col" @submit.prevent="submitAuth">
-          <label :class="authLabelClass" for="auth-email">邮箱地址
-          </label>
-          <input :class="authInputClass" id="auth-email" v-model="email" type="email" autocomplete="email" placeholder="you@example.com" required :disabled="pending" autofocus />
-          <label :class="authLabelClass" for="auth-password">密码
-          </label>
-          <input :class="authInputClass" id="auth-password" v-model="password" type="password" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" :minlength="mode === 'register' ? 8 : 1" maxlength="128" :placeholder="mode === 'register' ? '至少 8 位字符' : '输入你的密码'" required :disabled="pending" />
-          <template v-if="mode === 'register'">
-            <label :class="authLabelClass" for="auth-confirm">确认密码
-            </label>
-            <input :class="authInputClass" id="auth-confirm" v-model="confirmation" type="password" autocomplete="new-password" placeholder="再次输入密码" required :disabled="pending" />
-            <label class="product-consent flex items-start gap-[8px] text-[length:12px] text-[#777] font-semibold leading-[1.8] [margin:0_0_22px]">
-              <input class="[margin:4px_0_0] p-0 w-[15px] h-[15px] min-h-[15px] [flex:0_0_15px] accent-[#000] bg-white text-[#111] [border:1px_solid_#d9d6cc] rounded-[8px] transition-none hover:border-[#b9b4a8]" v-model="accepted" type="checkbox" required :disabled="pending" />我了解本产品用于模拟训练，不提供投资建议。
-            </label>
-          </template>
-          <p v-if="message" class="product-auth-error text-[color:#a52a2a] text-[length:13px] leading-[1.7] [margin:0_0_17px]" role="alert">{{ message }}</p>
-          <button class="product-button disabled:opacity-[.5] disabled:cursor-wait bg-black text-[color:#fff] [border:1px_solid_#000] rounded-[9px] [padding:13px] text-[length:16px] min-h-[49px] hover:bg-[#292929] mt-[4px] [font-family:inherit]" :class="productButtonClass" type="submit" :disabled="pending">{{ pending ? '正在处理…' : mode === 'login' ? '登录' : '创建账户' }}<ArrowRight v-if="!pending" :size="20" />
-          </button>
-        </form>
-        <div class="product-auth-switch flex items-center justify-center gap-[8px] text-[length:13px] text-[color:#777] mt-[24px]">{{ mode === 'login' ? '还没有账户？' : '已有账户？' }} <button class="[border:0] bg-transparent text-[color:#111] cursor-pointer [padding:4px] font-semibold disabled:opacity-[.5] disabled:cursor-wait [font-family:inherit]" :disabled="pending" @click="openAuth(mode === 'login' ? 'register' : 'login')">{{ mode === 'login' ? '立即注册' : '去登录' }}
-          </button>
-        </div>
-      </section>
-    </div>
   </div>
 </template>
 

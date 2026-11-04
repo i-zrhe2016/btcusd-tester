@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-pub const GUEST_USER_ID: Uuid = Uuid::from_u128(1);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyParameters {
