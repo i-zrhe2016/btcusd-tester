@@ -22,6 +22,12 @@ window.addEventListener('hashchange', updateRoute)
 onBeforeUnmount(() => window.removeEventListener('hashchange', updateRoute))
 const inWorkspace = computed(() => route.value === '#workspace')
 const canUseWorkspace = computed(() => isLoaded.value === true && isSignedIn.value === true)
+const enterLibrary = ref(false)
+function enterWorkspace() {
+  enterLibrary.value = true
+  if (route.value !== '#workspace') window.location.hash = '#workspace'
+}
+const workspaceInitialView = computed(() => (enterLibrary.value ? 'projects' : undefined))
 const isPaymentReturn = window.location.pathname === '/payment-return'
 const paymentOrder = new URLSearchParams(window.location.search).get('order') || ''
 const workspaceUrl = window.location.origin + '/?auth=1#workspace'
@@ -81,6 +87,10 @@ function retryPayment() {
   void checkPayment()
 }
 function openAuth(mode: 'login' | 'register') {
+  if (isSignedIn.value) {
+    enterWorkspace()
+    return
+  }
   sessionStorage.setItem(authPendingKey, '1')
   const options = {
     forceRedirectUrl: workspaceUrl,
@@ -150,7 +160,7 @@ async function startCheckout() {
     <a class="fixed bottom-[15px] left-[18px] z-[100] inline-flex min-h-[44px] items-center rounded-[8px] bg-[#fffdf9] px-3 text-[length:12px] text-[#342b25] no-underline [border:1px_solid_#e8e0d7]" href="#">{{ t('product.returnHome') }}
     </a>
     <div class="fixed top-4 right-4 z-[200]"><UserButton /></div>
-    <Workspace :user-id="userId ?? undefined" />
+    <Workspace :user-id="userId ?? undefined" :initial-view="workspaceInitialView" />
     </template>
     <div v-else class="gate">
       <section class="gate-card">
@@ -192,7 +202,7 @@ async function startCheckout() {
           <div class="hero-rail">
             <p class="hero-lead">{{ t('product.heroLead') }}</p>
             <div class="hero-actions">
-              <a class="btn btn-primary" href="#workspace">{{ t('product.start') }} <ArrowRight :size="18" :stroke-width="1.9" /></a>
+              <a class="btn btn-primary" href="#workspace" @click.prevent="enterWorkspace">{{ t('product.start') }} <ArrowRight :size="18" :stroke-width="1.9" /></a>
               <a class="text-link" href="#features">{{ t('product.learn') }} <ArrowUpRight :size="15" :stroke-width="1.9" /></a>
             </div>
             <p class="hero-markets">{{ t('product.markets') }}</p>
@@ -274,7 +284,7 @@ async function startCheckout() {
               <h2 class="section-title">{{ t('product.guideTitle') }}</h2>
               <p class="section-lead">{{ t('product.guideLead') }}</p>
             </div>
-            <a class="text-link" href="#workspace">{{ t('product.enterWorkspace') }} <ArrowRight :size="16" :stroke-width="1.9" /></a>
+            <a class="text-link" href="#workspace" @click.prevent="enterWorkspace">{{ t('product.enterWorkspace') }} <ArrowRight :size="16" :stroke-width="1.9" /></a>
           </div>
           <ol class="steps">
             <li>
@@ -340,7 +350,7 @@ async function startCheckout() {
         <div class="footer-links">
           <a href="#features">{{ t('product.navFeatures') }}</a>
           <a href="#plans">{{ t('product.navPlans') }}</a>
-          <a href="#workspace">{{ t('product.enterWorkspace') }}</a>
+          <a href="#workspace" @click.prevent="enterWorkspace">{{ t('product.enterWorkspace') }}</a>
         </div>
         <p class="footer-note">{{ t('product.footerDisclaimer') }}</p>
       </div>

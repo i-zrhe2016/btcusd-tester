@@ -22,7 +22,7 @@ import { t, timeframeLabel, TIMEFRAMES } from './i18n'
 import { loadShortcuts, shortcutActions, shortcutStorageKey, type ShortcutBindings } from './shortcuts'
 import { hasStorageUser, scopedStorageKey, setStorageUser } from './userStorage'
 
-const props = defineProps<{ userId?: string }>()
+const props = defineProps<{ userId?: string; initialView?: AppView }>()
 setStorageUser(props.userId)
 
 const workspaceSettings = ref<InstanceType<typeof WorkspaceSettings> | null>(null)
@@ -1149,8 +1149,8 @@ async function initialize() {
     const active = projects.value.find((project) => project.id === storedActive) ?? projects.value[0]
     activeProjectId.value = active?.id ?? ''
     if (active) saveActiveReplayProjectId(active.id)
-    activeView.value = loadAppView()
-    if (new URLSearchParams(window.location.search).get('auth') === '1') activeView.value = 'projects'
+    activeView.value = props.initialView
+      ?? (new URLSearchParams(window.location.search).get('auth') === '1' ? 'projects' : loadAppView())
     if (active) syncDraftFromProject(active)
   }
   await restoreServerProjects(requestId)
