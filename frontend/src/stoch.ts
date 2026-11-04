@@ -40,6 +40,12 @@ export const STOCH_DEFAULTS: Record<string, StochLengths> = {
   '1M': [10, 30, 120, 240, 480, 960],
 }
 export const STOCH_STORAGE_KEY = 'btcusd.stoch.parameters.v1'
+export const STOCH_VISIBILITY_KEY = 'btcusd.stoch.visible'
+
+// New projects start with the indicator hidden; every project keeps its own choice.
+export function stochVisibilityKey(projectId?: string): string {
+  return projectId ? `${STOCH_VISIBILITY_KEY}.${projectId}` : STOCH_VISIBILITY_KEY
+}
 
 export function validStochLength(value: number): boolean {
   return Number.isSafeInteger(value) && value >= 1

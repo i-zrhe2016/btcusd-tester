@@ -63,6 +63,8 @@ import {
   readStochSettings,
   STOCH_DEFAULTS,
   STOCH_STORAGE_KEY,
+  STOCH_VISIBILITY_KEY,
+  stochVisibilityKey,
   validStochLengths,
   type StochGroupCount,
   type StochLineKey,
@@ -100,6 +102,7 @@ const props = withDefaults(defineProps<{
   playing?: boolean
   historyAvailable?: boolean
   projectName?: string
+  projectId?: string
   showHeader?: boolean
   showTools?: boolean
   manualTrades?: ManualTrade[]
@@ -111,6 +114,7 @@ const props = withDefaults(defineProps<{
   playbackIndex: undefined,
   playing: false,
   projectName: '',
+  projectId: '',
   showHeader: true,
   showTools: true,
   manualTrades: () => [],
@@ -145,14 +149,21 @@ function toggleAutoScale() {
   setAutoScale(!autoScale.value)
 }
 
-const stochVisible = ref(true)
-try { stochVisible.value = localStorage.getItem(scopedStorageKey('btcusd.stoch.visible')) !== 'false' } catch { /* Storage may be disabled. */ }
+// Visibility is per project so a new project opens on a clean chart. Projects that
+// predate the per-project key fall back to the shared preference.
+const stochVisible = ref(false)
+try {
+  const stored = localStorage.getItem(scopedStorageKey(stochVisibilityKey(props.projectId)))
+  stochVisible.value = stored !== null
+    ? stored !== 'false'
+    : localStorage.getItem(scopedStorageKey(STOCH_VISIBILITY_KEY)) !== 'false'
+} catch { /* Storage may be disabled. */ }
 
 function toggleStoch() {
   stochVisible.value = !stochVisible.value
   syncStochSeries()
   updateStoch()
-  try { localStorage.setItem(scopedStorageKey('btcusd.stoch.visible'), String(stochVisible.value)) } catch { /* Storage may be disabled. */ }
+  try { localStorage.setItem(scopedStorageKey(stochVisibilityKey(props.projectId)), String(stochVisible.value)) } catch { /* Storage may be disabled. */ }
 }
 
 const stochSettings = ref<Record<string, StochSetting>>({})
