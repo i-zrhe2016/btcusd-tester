@@ -1002,6 +1002,7 @@ async function initialize() {
     activeProjectId.value = active?.id ?? ''
     if (active) saveActiveReplayProjectId(active.id)
     activeView.value = loadAppView()
+    if (new URLSearchParams(window.location.search).get('auth') === '1') activeView.value = 'projects'
     if (active) syncDraftFromProject(active)
   }
   try {
