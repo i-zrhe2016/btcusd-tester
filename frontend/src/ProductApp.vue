@@ -54,11 +54,36 @@ function retryPayment() {
   paymentStatus.value = 'pending'
   void checkPayment()
 }
+const workspaceUrl = window.location.origin + '/?auth=1#workspace'
+const authPendingKey = 'grailab.auth.pending'
 function openAuth(mode: 'login' | 'register') {
-  const options = { forceRedirectUrl: window.location.origin + '/?auth=1#workspace' }
-  if (mode === 'login') clerk.value?.openSignIn(options)
-  else clerk.value?.openSignUp(options)
+  sessionStorage.setItem(authPendingKey, '1')
+  const options = {
+    forceRedirectUrl: workspaceUrl,
+    fallbackRedirectUrl: workspaceUrl,
+    oauthFlow: 'redirect' as const,
+  }
+  if (mode === 'login') {
+    clerk.value?.openSignIn({
+      ...options,
+      signUpForceRedirectUrl: workspaceUrl,
+      signUpFallbackRedirectUrl: workspaceUrl,
+    })
+  } else {
+    clerk.value?.openSignUp({
+      ...options,
+      signInForceRedirectUrl: workspaceUrl,
+      signInFallbackRedirectUrl: workspaceUrl,
+    })
+  }
 }
+watch([isLoaded, isSignedIn], ([loaded, signedIn]) => {
+  if (!loaded || !signedIn) return
+  if (sessionStorage.getItem(authPendingKey) !== '1') return
+  sessionStorage.removeItem(authPendingKey)
+  const onHome = window.location.pathname === '/' || window.location.pathname === '/index.html'
+  if (onHome && window.location.hash !== '#workspace') window.location.assign(workspaceUrl)
+}, { immediate: true })
 const checkoutLoading = ref(false)
 const checkoutError = ref(false)
 async function startCheckout() {
