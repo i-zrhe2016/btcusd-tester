@@ -315,6 +315,14 @@ describe('workspace loading', () => {
     expect(getMarketSnapshot).toHaveBeenCalledTimes(1)
   })
 
+  it('opens the entry view instead of the last opened replay', async () => {
+    stored('replay')
+    wrapper = mount(App, { props: { initialView: 'projects' } })
+    await flushPromises()
+    expect(wrapper.find('.workspace-projects').exists()).toBe(true)
+    expect(wrapper.find('.workspace-replay').exists()).toBe(false)
+  })
+
   it('creates the default project without fetching a snapshot in the library', async () => {
     wrapper = mount(App)
     await flushPromises()
