@@ -1,3 +1,4 @@
+mod auth;
 mod config;
 mod db;
 mod engine;
@@ -8,7 +9,7 @@ use axum::{
     extract::{Path, Query, State},
     http::{header, HeaderValue, Method},
     routing::get,
-    Json, Router,
+    Extension, Json, Router,
 };
 use config::Config;
 use error::ApiError;
@@ -24,6 +25,7 @@ use uuid::Uuid;
 #[derive(Clone)]
 struct AppState {
     pool: PgPool,
+    auth: auth::ClerkAuth,
     client: reqwest::Client,
     market_data_url: String,
 }
@@ -49,7 +51,9 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
 
+    let auth = auth::ClerkAuth::new(config.clerk_issuer, config.clerk_authorized_parties).await?;
     let state = AppState {
+        auth,
         pool,
         client: reqwest::Client::builder()
             .timeout(config.request_timeout)
@@ -69,12 +73,15 @@ fn router(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(HeaderValue::from_static("http://localhost:5173"))
         .allow_methods([Method::GET, Method::POST])
-        .allow_headers([header::CONTENT_TYPE]);
-    Router::new()
-        .route("/health", get(health))
+        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]);
+    let protected = Router::new()
         .route("/api/backtests", get(list_backtests).post(create_backtest))
         .route("/api/backtests/{id}", get(get_backtest))
         .route("/api/configs", get(list_configs).post(create_config))
+        .route_layer(axum::middleware::from_fn_with_state(state.clone(), auth::authenticate));
+    Router::new()
+        .route("/health", get(health))
+        .merge(protected)
         .with_state(state)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
@@ -86,13 +93,14 @@ async fn health(State(state): State<AppState>) -> Result<Json<serde_json::Value>
 }
 
 async fn create_backtest(
+    Extension(user_id): Extension<Uuid>,
     State(state): State<AppState>,
     Json(request): Json<BacktestRequest>,
 ) -> Result<Json<BacktestRecord>, ApiError> {
     request.validate().map_err(ApiError::BadRequest)?;
     let config = serde_json::to_value(&request)
         .map_err(|error| ApiError::Internal(error.to_string()))?;
-    let running = db::insert_backtest(&state.pool, request.name.trim(), config).await?;
+    let running = db::insert_backtest(&state.pool, user_id, request.name.trim(), config).await?;
 
     let response = state
         .client
@@ -110,7 +118,7 @@ async fn create_backtest(
     let response = match response {
         Ok(response) => response,
         Err(error) => {
-            db::fail_backtest(&state.pool, running.id, &error.to_string()).await;
+            db::fail_backtest(&state.pool, user_id, running.id, &error.to_string()).await;
             return Err(ApiError::MarketData(error.to_string()));
         }
     };
@@ -118,7 +126,7 @@ async fn create_backtest(
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         let message = format!("market service returned {status}: {body}");
-        db::fail_backtest(&state.pool, running.id, &message).await;
+        db::fail_backtest(&state.pool, user_id, running.id, &message).await;
         return Err(ApiError::MarketData(message));
     }
     let market: MarketSnapshot = response.json().await.map_err(|error| {
@@ -127,42 +135,46 @@ async fn create_backtest(
     let result = match engine::run(&request, &market) {
         Ok(result) => result,
         Err(error) => {
-            db::fail_backtest(&state.pool, running.id, &error.to_string()).await;
+            db::fail_backtest(&state.pool, user_id, running.id, &error.to_string()).await;
             return Err(error);
         }
     };
     let result = serde_json::to_value(result)
         .map_err(|error| ApiError::Internal(error.to_string()))?;
     Ok(Json(
-        db::complete_backtest(&state.pool, running.id, result).await?,
+        db::complete_backtest(&state.pool, user_id, running.id, result).await?,
     ))
 }
 
 async fn list_backtests(
+    Extension(user_id): Extension<Uuid>,
     State(state): State<AppState>,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<BacktestRecord>>, ApiError> {
     let limit = query.limit.unwrap_or(20).clamp(1, 100);
-    Ok(Json(db::list_backtests(&state.pool, limit).await?))
+    Ok(Json(db::list_backtests(&state.pool, user_id, limit).await?))
 }
 
 async fn get_backtest(
+    Extension(user_id): Extension<Uuid>,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<BacktestRecord>, ApiError> {
-    db::find_backtest(&state.pool, id)
+    db::find_backtest(&state.pool, user_id, id)
         .await?
         .map(Json)
         .ok_or_else(|| ApiError::NotFound(id.to_string()))
 }
 
 async fn list_configs(
+    Extension(user_id): Extension<Uuid>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<StrategyConfigRecord>>, ApiError> {
-    Ok(Json(db::list_configs(&state.pool).await?))
+    Ok(Json(db::list_configs(&state.pool, user_id).await?))
 }
 
 async fn create_config(
+    Extension(user_id): Extension<Uuid>,
     State(state): State<AppState>,
     Json(request): Json<StrategyConfigRequest>,
 ) -> Result<Json<StrategyConfigRecord>, ApiError> {
@@ -174,7 +186,7 @@ async fn create_config(
     let parameters = serde_json::to_value(request.parameters)
         .map_err(|error| ApiError::Internal(error.to_string()))?;
     Ok(Json(
-        db::create_config(&state.pool, request.name.trim(), parameters).await?,
+        db::create_config(&state.pool, user_id, request.name.trim(), parameters).await?,
     ))
 }
 

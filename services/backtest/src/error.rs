@@ -7,6 +7,8 @@ use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
+    #[error("authentication required")]
+    Unauthorized,
     #[error("invalid request: {0}")]
     BadRequest(String),
     #[error("backtest {0} was not found")]
@@ -28,6 +30,7 @@ struct ErrorBody {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code) = match &self {
+            Self::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
             Self::BadRequest(_) => (StatusCode::BAD_REQUEST, "invalid_request"),
             Self::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
             Self::MarketData(_) => (StatusCode::BAD_GATEWAY, "market_data_error"),
