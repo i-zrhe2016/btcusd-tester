@@ -157,8 +157,6 @@ async function startCheckout() {
   </div>
   <template v-else-if="inWorkspace">
     <template v-if="canUseWorkspace">
-    <a class="fixed bottom-[15px] left-[18px] z-[100] inline-flex min-h-[44px] items-center rounded-[8px] bg-[#fffdf9] px-3 text-[length:12px] text-[#342b25] no-underline [border:1px_solid_#e8e0d7]" href="#">{{ t('product.returnHome') }}
-    </a>
     <div class="fixed top-4 right-4 z-[200]"><UserButton /></div>
     <Workspace :user-id="userId ?? undefined" :initial-view="workspaceInitialView" />
     </template>

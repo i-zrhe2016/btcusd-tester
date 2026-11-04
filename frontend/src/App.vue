@@ -138,7 +138,6 @@ const replayError = ref('')
 const replayWindowLoading = ref(false)
 const replayWindowError = ref('')
 const replayNextFrom = ref<number | null>(null)
-const resumePlaybackAfterWindowRetry = ref(false)
 const secondaryPanes = ref<ReplayPaneState[]>([])
 let replayPaneRequestId = 0
 const notice = ref('')
@@ -683,7 +682,11 @@ function ensureReplaySnapshot(force = false) {
 
 function togglePlayback() {
   if (!activeProject.value || !replaySnapshot.value?.candles.length) return
-  playbackPlaying.value = !playbackPlaying.value
+  const playing = !playbackPlaying.value
+  // There is no load-more button any more: pressing play again is how a failed
+  // next-window load gets retried.
+  if (playing && replayWindowError.value) replayWindowError.value = ''
+  playbackPlaying.value = playing
 }
 
 function placeManualTrade(side: ManualTradeSide) {
@@ -932,7 +935,6 @@ async function loadReplaySnapshot(
   replayWindowLoading.value = false
   replayWindowError.value = ''
   replayNextFrom.value = null
-  resumePlaybackAfterWindowRetry.value = false
   replaySnapshot.value = null
   replayHistoryBefore.value = null
   replayHistoryLoading.value = false
@@ -982,10 +984,7 @@ async function loadReplaySnapshot(
   }
 }
 
-async function loadMoreReplay(options: { retry?: boolean } = {}) {
-  if (options.retry) {
-    replayWindowError.value = ''
-  }
+async function loadMoreReplay() {
   const project = activeProject.value
   const from = replayNextFrom.value
   if (
@@ -999,7 +998,6 @@ async function loadMoreReplay(options: { retry?: boolean } = {}) {
   const requestId = snapshotRequestId
   const projectId = project.id
   const requestedTo = replayWindowEnd(from, project.to, project.timeframe)
-  const shouldResumeAfterRetry = options.retry && resumePlaybackAfterWindowRetry.value
   replayWindowLoading.value = true
 
   try {
@@ -1026,22 +1024,16 @@ async function loadMoreReplay(options: { retry?: boolean } = {}) {
     const nextFrom = nextReplayRequestFrom(mergedSnapshot, project, requestedTo)
     if (!hasNewCandles || (nextFrom !== null && nextFrom <= from)) {
       replayWindowError.value = t('app.noNewCandles')
-      resumePlaybackAfterWindowRetry.value = Boolean(shouldResumeAfterRetry || playbackPlaying.value)
       if (playbackPlaying.value) pausePlayback()
       return
     }
     replaySnapshot.value = mergedSnapshot
     replayNextFrom.value = nextFrom
     replayWindowError.value = ''
-    resumePlaybackAfterWindowRetry.value = false
-    if (shouldResumeAfterRetry) playbackPlaying.value = true
     setNotice(t('app.moreLoaded', { count: snapshot.candles.length, timeframe: project.timeframe }))
   } catch (caught) {
     if (requestId === snapshotRequestId && activeProject.value?.id === projectId) {
       replayWindowError.value = caught instanceof Error ? caught.message : t('app.moreFailed')
-      resumePlaybackAfterWindowRetry.value = Boolean(
-        resumePlaybackAfterWindowRetry.value || playbackPlaying.value,
-      )
       if (playbackPlaying.value) pausePlayback()
     }
   } finally {
@@ -1049,10 +1041,6 @@ async function loadMoreReplay(options: { retry?: boolean } = {}) {
       replayWindowLoading.value = false
     }
   }
-}
-
-function retryLoadMoreReplay() {
-  void loadMoreReplay({ retry: true })
 }
 
 async function uploadLocalProjects(list: ReplayProject[]) {
@@ -1627,21 +1615,8 @@ onBeforeUnmount(() => {
 
               <button class="topbar-action console-help-button shrink-0 whitespace-nowrap" type="button" @click="workspaceSettings?.open('help')">{{ t('app.help') }}</button>
 
-              <div class="console-quick-stats flex-wrap gap-2 min-w-0" :aria-label="t('app.replayAux')">
+              <div class="console-quick-stats gap-2 min-w-0" :aria-label="t('app.replayAux')">
                 <span class="console-stat">{{ currentTimeLabel }}</span>
-                <div v-if="replayHasMore" class="console-load-control items-center gap-1.5 max-w-45 min-w-0" aria-live="polite">
-                  <span v-if="replayWindowLoading">{{ t('app.loadingMore') }}</span>
-                  <span v-else-if="replayWindowError" :title="replayWindowError">{{ t('app.loadFailed') }}</span>
-                  <button
-                    class="text-button console-load-button font-bold rounded-[var(--radius-sm)] whitespace-nowrap"
-                    type="button"
-                    data-testid="replay-load-more"
-                    :disabled="replayWindowLoading"
-                    @click="replayWindowError ? retryLoadMoreReplay() : loadMoreReplay()"
-                  >
-                    {{ replayWindowLoading ? t('app.loadingMore') : replayWindowError ? t('app.retryLoad') : t('app.loadMore') }}
-                  </button>
-                </div>
                 <button
                   class="topbar-icon-button console-fullscreen-button w-8 h-8 inline-grid place-items-center p-0 rounded-[var(--radius-sm)] flex-none"
                   type="button"
