@@ -2,7 +2,9 @@ use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::model::{BacktestRecord, StrategyConfigRecord};
+use crate::model::{
+    BacktestRecord, ReplayProjectRecord, ReplayProjectRequest, StrategyConfigRecord,
+};
 
 pub async fn insert_backtest(
     pool: &PgPool,
@@ -123,6 +125,87 @@ pub async fn create_config(
     .await
 }
 
+
+pub async fn list_replay_projects(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Vec<ReplayProjectRecord>, sqlx::Error> {
+    sqlx::query_as::<_, ReplayProjectRecord>(
+        r#"
+        SELECT id, name, symbol, timeframe, panes, range_from, range_to, speed,
+               cursor_index, cursor_timestamp, trades, drawings, created_at, updated_at
+        FROM replay_projects
+        WHERE user_id = $1
+        ORDER BY updated_at DESC
+        LIMIT 200
+        "#,
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn upsert_replay_project(
+    pool: &PgPool,
+    user_id: Uuid,
+    project: &ReplayProjectRequest,
+) -> Result<ReplayProjectRecord, sqlx::Error> {
+    let panes = Value::Array(project.panes.iter().cloned().map(Value::String).collect());
+    let trades = Value::Array(project.trades.clone());
+    let drawings = Value::Array(project.drawings.clone());
+    sqlx::query_as::<_, ReplayProjectRecord>(
+        r#"
+        INSERT INTO replay_projects (
+            user_id, id, name, symbol, timeframe, panes, range_from, range_to,
+            speed, cursor_index, cursor_timestamp, trades, drawings
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ON CONFLICT (user_id, id) DO UPDATE SET
+            name = EXCLUDED.name,
+            symbol = EXCLUDED.symbol,
+            timeframe = EXCLUDED.timeframe,
+            panes = EXCLUDED.panes,
+            range_from = EXCLUDED.range_from,
+            range_to = EXCLUDED.range_to,
+            speed = EXCLUDED.speed,
+            cursor_index = EXCLUDED.cursor_index,
+            cursor_timestamp = EXCLUDED.cursor_timestamp,
+            trades = EXCLUDED.trades,
+            drawings = EXCLUDED.drawings,
+            updated_at = now()
+        RETURNING id, name, symbol, timeframe, panes, range_from, range_to, speed,
+                  cursor_index, cursor_timestamp, trades, drawings, created_at, updated_at
+        "#,
+    )
+    .bind(user_id)
+    .bind(&project.id)
+    .bind(project.name.trim())
+    .bind(&project.symbol)
+    .bind(&project.timeframe)
+    .bind(panes)
+    .bind(project.from)
+    .bind(project.to)
+    .bind(project.speed)
+    .bind(project.cursor_index)
+    .bind(project.cursor_timestamp)
+    .bind(trades)
+    .bind(drawings)
+    .fetch_one(pool)
+    .await
+}
+
+pub async fn delete_replay_project(
+    pool: &PgPool,
+    user_id: Uuid,
+    id: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM replay_projects WHERE user_id = $1 AND id = $2")
+        .bind(user_id)
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
 
 pub async fn resolve_clerk_user(pool: &PgPool, clerk_user_id: &str) -> Result<Uuid, sqlx::Error> {
     sqlx::query_scalar(

@@ -1,6 +1,7 @@
 import type { Candle, MarketMetadata } from './types'
 import { fromUtcInput, toUtcInput, formatUtc } from './format'
 import { t } from './i18n'
+import { browserStorage, scopedStorageKey } from './userStorage'
 
 export interface ReplayProjectDraft {
   name: string
@@ -105,6 +106,7 @@ export interface ReplayProject {
 interface StorageLike {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
+  removeItem?(key: string): void
 }
 
 const PROJECTS_KEY = 'btcusd.replay.projects.v2'
@@ -169,8 +171,7 @@ function createId(): string {
 }
 
 function defaultStorage(): StorageLike | null {
-  if (typeof window === 'undefined') return null
-  return window.localStorage
+  return browserStorage()
 }
 
 export function normalizeSpeed(value: number): number {
@@ -900,9 +901,31 @@ export function sortReplayProjects(projects: ReplayProject[]): ReplayProject[] {
 
 export function loadReplayProjects(storage: StorageLike | null = defaultStorage()): ReplayProject[] {
   if (!storage) return []
+  const current = readStoredReplayProjects(storage, scopedStorageKey(PROJECTS_KEY), true)
+  if (current !== null) return current
+  return readStoredReplayProjects(storage, scopedStorageKey(LEGACY_PROJECTS_KEY), false) ?? []
+}
+
+// Pre-scoping keys belong to whoever used this browser before accounts were
+// separated. They are only read to offer an explicit import to the signed-in
+// user, never merged into a project list automatically.
+export function loadLegacyReplayProjects(storage: StorageLike | null = defaultStorage()): ReplayProject[] {
+  if (!storage) return []
   const current = readStoredReplayProjects(storage, PROJECTS_KEY, true)
   if (current !== null) return current
   return readStoredReplayProjects(storage, LEGACY_PROJECTS_KEY, false) ?? []
+}
+
+export function clearLegacyReplayProjects(storage: StorageLike | null = defaultStorage()): void {
+  storage?.removeItem?.(PROJECTS_KEY)
+  storage?.removeItem?.(LEGACY_PROJECTS_KEY)
+}
+
+export function normalizeReplayProjectList(value: unknown): ReplayProject[] {
+  if (!Array.isArray(value)) return []
+  return sortReplayProjects(value
+    .map((item) => normalizeReplayProject(item, true))
+    .filter((project): project is ReplayProject => Boolean(project)))
 }
 
 function readStoredReplayProjects(
@@ -924,15 +947,15 @@ function readStoredReplayProjects(
 }
 
 export function saveReplayProjects(projects: ReplayProject[], storage: StorageLike | null = defaultStorage()): void {
-  storage?.setItem(PROJECTS_KEY, JSON.stringify(sortReplayProjects(projects)))
+  storage?.setItem(scopedStorageKey(PROJECTS_KEY), JSON.stringify(sortReplayProjects(projects)))
 }
 
 export function loadActiveReplayProjectId(storage: StorageLike | null = defaultStorage()): string {
-  return storage?.getItem(ACTIVE_KEY) ?? ''
+  return storage?.getItem(scopedStorageKey(ACTIVE_KEY)) ?? ''
 }
 
 export function saveActiveReplayProjectId(id: string, storage: StorageLike | null = defaultStorage()): void {
-  storage?.setItem(ACTIVE_KEY, id)
+  storage?.setItem(scopedStorageKey(ACTIVE_KEY), id)
 }
 
 export function projectRangeLabel(project: ReplayProject): string {

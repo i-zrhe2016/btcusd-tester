@@ -56,6 +56,7 @@ import {
 import type { Candle, MarketSnapshot } from '../types'
 import { formatUtc } from '../format'
 import { t } from '../i18n'
+import { scopedStorageKey } from '../userStorage'
 import {
   calculateStoch,
   defaultStochSetting,
@@ -145,17 +146,17 @@ function toggleAutoScale() {
 }
 
 const stochVisible = ref(true)
-try { stochVisible.value = localStorage.getItem('btcusd.stoch.visible') !== 'false' } catch { /* Storage may be disabled. */ }
+try { stochVisible.value = localStorage.getItem(scopedStorageKey('btcusd.stoch.visible')) !== 'false' } catch { /* Storage may be disabled. */ }
 
 function toggleStoch() {
   stochVisible.value = !stochVisible.value
   syncStochSeries()
   updateStoch()
-  try { localStorage.setItem('btcusd.stoch.visible', String(stochVisible.value)) } catch { /* Storage may be disabled. */ }
+  try { localStorage.setItem(scopedStorageKey('btcusd.stoch.visible'), String(stochVisible.value)) } catch { /* Storage may be disabled. */ }
 }
 
 const stochSettings = ref<Record<string, StochSetting>>({})
-try { stochSettings.value = readStochSettings(localStorage.getItem(STOCH_STORAGE_KEY)) } catch { /* Storage may be disabled. */ }
+try { stochSettings.value = readStochSettings(localStorage.getItem(scopedStorageKey(STOCH_STORAGE_KEY))) } catch { /* Storage may be disabled. */ }
 const stochPeriod = computed(() => props.snapshot?.timeframe ?? '1m')
 const stochSetting = computed(() => stochSettings.value[stochPeriod.value] ?? defaultStochSetting(stochPeriod.value))
 const stochGroupCount = computed(() => stochSetting.value.groups)
@@ -207,7 +208,7 @@ function applyStoch(reset = false) {
   syncStochSeries()
   updateStoch()
   try {
-    localStorage.setItem(STOCH_STORAGE_KEY, JSON.stringify(stochSettings.value))
+    localStorage.setItem(scopedStorageKey(STOCH_STORAGE_KEY), JSON.stringify(stochSettings.value))
     void nextTick(() => { stochMessage.value = reset ? t('chart.stochDefaultsRestored') : t('chart.stochApplied') })
   } catch {
     void nextTick(() => { stochMessage.value = t('chart.stochAppliedUnsaved') })
