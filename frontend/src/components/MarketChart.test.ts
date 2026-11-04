@@ -3,7 +3,7 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import MarketChart from './MarketChart.vue'
 import ChartLoadState from './ChartLoadState.vue'
-import { calculateStoch, defaultStochSetting } from '../stoch'
+import { calculateStoch, defaultStochSetting, stochVisibilityKey } from '../stoch'
 import { DEFAULT_REPLAY_DRAWING_STYLE, type ReplayDrawing } from '../replay'
 import type { Candle, MarketSnapshot } from '../types'
 
@@ -293,6 +293,26 @@ describe('chart lifecycle and data contracts', () => {
     expect(controller.getBars().map((bar: any) => bar.ts)).toEqual(candles.slice(0, 2).map((row) => row.timestamp * 1000))
     expect(controller.getBars().at(-1).close).toBe(10.5)
     expect(controller.series.setData.mock.lastCall[0][2]).toEqual({ time: candles[2].timestamp })
+  })
+})
+
+describe('stochastic indicator visibility', () => {
+  it('keeps each project choice separate and starts hidden when the project hides indicators', async () => {
+    localStorage.setItem(stochVisibilityKey('hidden'), 'false')
+    localStorage.setItem(stochVisibilityKey('shown'), 'true')
+
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, projectId: 'hidden' } })
+    expect(wrapper.get('.stoch-visibility-toggle:not(.chart-auto-scale)').text()).toBe('显示指标')
+    expect(mocks.controllers[0].chart.addSeries).not.toHaveBeenCalled()
+
+    await wrapper.get('.stoch-visibility-toggle:not(.chart-auto-scale)').trigger('click')
+    expect(localStorage.getItem(stochVisibilityKey('hidden'))).toBe('true')
+    expect(localStorage.getItem(stochVisibilityKey('shown'))).toBe('true')
+
+    wrapper.unmount()
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, projectId: 'shown' } })
+    expect(wrapper.get('.stoch-visibility-toggle:not(.chart-auto-scale)').text()).toBe('隐藏指标')
+    expect(mocks.controllers[1].chart.addSeries).toHaveBeenCalled()
   })
 })
 

@@ -21,6 +21,7 @@ import WorkspaceSettings from './components/WorkspaceSettings.vue'
 import { t, timeframeLabel, TIMEFRAMES } from './i18n'
 import { loadShortcuts, shortcutActions, shortcutStorageKey, type ShortcutBindings } from './shortcuts'
 import { hasStorageUser, scopedStorageKey, setStorageUser } from './userStorage'
+import { stochVisibilityKey } from './stoch'
 
 const props = defineProps<{ userId?: string; initialView?: AppView }>()
 setStorageUser(props.userId)
@@ -777,11 +778,16 @@ function handleReplayShortcut(event: KeyboardEvent) {
   }
 }
 
+function hideProjectIndicators(projectId: string) {
+  try { localStorage.setItem(scopedStorageKey(stochVisibilityKey(projectId)), 'false') } catch { /* Storage may be disabled. */ }
+}
+
 function createProject() {
   projectError.value = ''
   try {
     const draftProject = createReplayProjectFromDraft(projectDraft)
     const { project, changed } = reconcileProjectWithMarket(draftProject)
+    hideProjectIndicators(project.id)
     projects.value = [project, ...projects.value.filter((item) => item.id !== project.id)]
     activeProjectId.value = project.id
     saveActiveReplayProjectId(project.id)
@@ -1083,6 +1089,7 @@ async function restoreServerProjects(requestId: number) {
 function seedProjectIfEmpty() {
   if (projects.value.length || legacyImportCandidates.value || !metadata.value) return
   const seed = createSeedReplayProject(metadata.value)
+  hideProjectIndicators(seed.id)
   projects.value = [seed]
   activeProjectId.value = seed.id
   persistProjectsState()
@@ -1530,6 +1537,7 @@ onBeforeUnmount(() => {
               :playback-index="chartPlaybackIndex"
               :playing="playbackPlaying"
               :project-name="currentProjectLabel"
+              :project-id="activeProjectId"
               :show-header="false"
               :manual-trades="activeProject?.trades ?? []"
               :drawings="activeProject?.drawings ?? []"
@@ -1572,6 +1580,7 @@ onBeforeUnmount(() => {
               :forming-candle="pane.forming"
               :playing="playbackPlaying"
               :project-name="currentProjectLabel"
+              :project-id="pane.projectId"
               :show-header="false"
               :show-tools="false"
             />
