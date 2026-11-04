@@ -68,9 +68,31 @@ import {
   type StochSetting,
 } from '../stoch'
 
+import ChartLoadState from './ChartLoadState.vue'
+
+const chartReady = ref(false)
+let revealFrame: number | null = null
+function cancelReveal() {
+  if (revealFrame !== null) window.cancelAnimationFrame(revealFrame)
+  revealFrame = null
+}
+function revealAfterPaint() {
+  if (chartReady.value || revealFrame !== null || !chartController || !visibleCandles.value.length) return
+  // Leave the opaque cover up through the renderer's scheduled frame and the next paint.
+  revealFrame = window.requestAnimationFrame(() => {
+    revealFrame = window.requestAnimationFrame(() => {
+      revealFrame = null
+      if (!disposed && chartController && priceContainer.value?.clientWidth && priceContainer.value?.clientHeight && visibleCandles.value.length) {
+        chartReady.value = true
+      }
+    })
+  })
+}
+
 const props = withDefaults(defineProps<{
   snapshot: MarketSnapshot | null
   loading: boolean
+  error?: string
   playbackIndex?: number
   playing?: boolean
   historyAvailable?: boolean
@@ -99,6 +121,26 @@ const emit = defineEmits<{
   (event: 'drawings-changed', drawings: ReplayDrawing[]): void
   (event: 'load-history'): void
 }>()
+
+const autoScale = ref(true)
+let scaleSyncFrame: number | null = null
+
+function syncAutoScale() {
+  if (scaleSyncFrame !== null) window.cancelAnimationFrame(scaleSyncFrame)
+  scaleSyncFrame = window.requestAnimationFrame(() => {
+    scaleSyncFrame = null
+    if (priceChart) autoScale.value = priceChart.priceScale('right', 0).options().autoScale
+  })
+}
+
+function setAutoScale(enabled: boolean) {
+  autoScale.value = enabled
+  priceChart?.priceScale('right', 0).applyOptions({ autoScale: enabled })
+}
+
+function toggleAutoScale() {
+  setAutoScale(!autoScale.value)
+}
 
 const stochVisible = ref(true)
 try { stochVisible.value = localStorage.getItem('btcusd.stoch.visible') !== 'false' } catch { /* Storage may be disabled. */ }
@@ -407,6 +449,7 @@ function chartOptions() {
       horzLines: { color: 'rgba(0, 0, 0, 0)', visible: false },
     },
     rightPriceScale: {
+      autoScale: autoScale.value,
       borderColor: chartTheme.axis,
       scaleMargins: {
         // Marker auto-scale only reserves room for one marker row, so keep extra
@@ -549,6 +592,10 @@ function syncDrawingsFromProps() {
 }
 
 function disposeCharts() {
+  cancelReveal()
+  chartReady.value = false
+  if (scaleSyncFrame !== null) window.cancelAnimationFrame(scaleSyncFrame)
+  scaleSyncFrame = null
   stochSeries = []
   resizeObserver?.disconnect()
   resizeObserver = null
@@ -683,12 +730,14 @@ function buildCharts() {
   if (typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(() => {
       resizeChart()
+      revealAfterPaint()
     })
     resizeObserver.observe(priceContainer.value)
   }
 
   resizeChart()
   setSeriesData()
+  revealAfterPaint()
 }
 
 function zoom(factor: number) {
@@ -702,6 +751,7 @@ function zoom(factor: number) {
 }
 
 function resetView() {
+  setAutoScale(true)
   resizeChart()
   setPlaybackRange()
   bumpToolbar()
@@ -830,6 +880,7 @@ function updateCharts() {
   } else {
     resizeChart()
     setSeriesData()
+    revealAfterPaint()
   }
 }
 
@@ -872,25 +923,25 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="chart-card" :class="{ 'chart-card-bare': !showHeader, 'chart-timeframe-enter': !loading }" aria-labelledby="market-chart-title">
+  <section class="chart-card grid min-h-0" :class="{ 'chart-card-bare': !showHeader }" aria-labelledby="market-chart-title">
     <div v-if="showHeader" class="card-heading chart-heading">
       <div>
-        <p class="eyebrow">PLAYBACK VIEW</p>
+        <p class="eyebrow text-[color:var(--info)] [font:700_10px/1.4_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] tracking-[0]">PLAYBACK VIEW</p>
         <h2 id="market-chart-title">BTCUSD 复盘图</h2>
-        <p class="chart-note">{{ summary }}</p>
+        <p class="chart-note mt-1.5 max-w-[68ch] text-[color:var(--text-muted)] text-[length:12px] leading-[1.45]">{{ summary }}</p>
       </div>
-      <div class="chart-status">
-        <span class="status-chip" :data-status="playing ? 'running' : 'paused'">{{ playing ? '播放中' : '已暂停' }}</span>
-        <span class="status-chip muted">{{ visibleCount }}/{{ totalCandles }}</span>
+      <div class="chart-status flex flex-wrap items-center gap-2">
+        <span class="status-chip inline-flex items-center rounded-full whitespace-nowrap" :data-status="playing ? 'running' : 'paused'">{{ playing ? '播放中' : '已暂停' }}</span>
+        <span class="status-chip muted inline-flex items-center rounded-full whitespace-nowrap">{{ visibleCount }}/{{ totalCandles }}</span>
       </div>
-      <div class="chart-actions" aria-label="图表缩放控制">
-        <button class="icon-button" type="button" aria-label="放大图表" title="放大" @click="zoom(0.75)">
+      <div class="chart-actions flex flex-wrap gap-2" aria-label="图表缩放控制">
+        <button class="icon-button w-11 h-11 grid place-items-center rounded-[var(--radius)] [background:var(--surface-2)]" type="button" aria-label="放大图表" title="放大" @click="zoom(0.75)">
           <ZoomIn :size="18" aria-hidden="true" />
         </button>
-        <button class="icon-button" type="button" aria-label="缩小图表" title="缩小" @click="zoom(1.3)">
+        <button class="icon-button w-11 h-11 grid place-items-center rounded-[var(--radius)] [background:var(--surface-2)]" type="button" aria-label="缩小图表" title="缩小" @click="zoom(1.3)">
           <ZoomOut :size="18" aria-hidden="true" />
         </button>
-        <button class="icon-button" type="button" aria-label="重置图表范围" title="重置" @click="resetView">
+        <button class="icon-button w-11 h-11 grid place-items-center rounded-[var(--radius)] [background:var(--surface-2)]" type="button" aria-label="重置图表范围" title="重置" @click="resetView">
           <RotateCcw :size="18" aria-hidden="true" />
         </button>
       </div>
@@ -898,22 +949,32 @@ onBeforeUnmount(() => {
 
     <p class="sr-only" role="status">{{ summary }}</p>
     <!-- Background refreshes must keep the container bound to the live chart instance. -->
-    <div v-if="loading && !snapshot?.candles.length" class="chart-skeleton" aria-label="正在加载行情" />
-    <div v-else-if="!snapshot?.candles.length" class="empty-state">
-      <p>当前时间范围没有行情数据。</p>
-      <span>请调整 UTC 时间范围后重新加载。</span>
+    <ChartLoadState v-if="loading && !snapshot?.candles.length" message="正在加载行情…" aria-label="正在加载行情" />
+    <div v-else-if="!snapshot?.candles.length" class="empty-state chart-feedback place-content-center text-center" :role="error ? 'alert' : 'status'">
+      <p>{{ error ? '行情加载失败' : '当前时间范围没有行情数据。' }}</p>
+      <span>{{ error || '请调整 UTC 时间范围后重新加载。' }}</span>
     </div>
-    <div v-else class="chart-stage" :class="{ 'chart-stage-with-controls': Boolean(stochLengths) }">
-      <div class="chart-control-strip">
-        <button class="stoch-visibility-toggle" type="button" :aria-pressed="stochVisible" @click="toggleStoch">
+    <div v-else class="chart-stage relative w-full overflow-hidden [background:var(--chart-bg)]" :class="{ 'chart-stage-with-controls': Boolean(stochLengths) }" :aria-busy="!chartReady">
+      <ChartLoadState v-if="!chartReady" class="chart-preparing-cover absolute inset-0 z-20" message="正在准备 K 线图表…" />
+      <div class="chart-control-strip absolute z-[7] top-0 left-0 right-0 flex items-center justify-end h-[var(--chart-control-strip-height)] [padding:0_76px_0_12px] [background:var(--chart-bg)]">
+        <button
+          class="stoch-visibility-toggle chart-auto-scale mr-2 [padding:5px_10px] rounded-[6px] text-[length:12px] whitespace-nowrap"
+          type="button"
+          data-testid="chart-auto-scale"
+          aria-label="自动缩放价格轴"
+          :aria-pressed="autoScale"
+          :title="autoScale ? '自动缩放已开启：价格轴随可见 K 线调整' : '开启自动缩放，适配可见 K 线'"
+          @click="toggleAutoScale"
+        >自动</button>
+        <button class="stoch-visibility-toggle mr-2 [padding:5px_10px] rounded-[6px] text-[length:12px] whitespace-nowrap" type="button" :aria-pressed="stochVisible" @click="toggleStoch">
           {{ stochVisible ? '隐藏指标' : '显示指标' }}
         </button>
-        <details v-if="stochLengths" class="stoch-settings">
+        <details v-if="stochLengths" class="stoch-settings z-[7]">
           <summary>Stoch · {{ stochPeriod }} · {{ stochLengths.join(' / ') }}</summary>
           <form @submit.prevent="applyStoch()">
             <strong>Stoch 参数 · {{ stochPeriod }}</strong>
             <p>按当前周期保存；平滑长度为参数 × 0.3 四舍五入，最小为 1。</p>
-            <fieldset class="stoch-groups">
+            <fieldset class="stoch-groups border-0">
               <legend>组数</legend>
               <label v-for="count in ([2, 3, 4, 5, 6] as const)" :key="count"><input v-model="stochGroupsDraft" :data-testid="`stoch-groups-${count}`" type="radio" :value="count" />{{ count }} 组</label>
             </fieldset>
@@ -926,13 +987,13 @@ onBeforeUnmount(() => {
         </details>
       </div>
 
-      <div ref="priceContainer" class="price-chart" aria-hidden="true" @contextmenu="openContextMenu" />
+      <div ref="priceContainer" class="price-chart absolute w-full min-h-0 [background:var(--chart-bg)]" aria-hidden="true" @pointerup="syncAutoScale" @pointercancel="syncAutoScale" @dblclick="syncAutoScale" @contextmenu="openContextMenu" />
 
       <div v-if="showTools" class="chart-toolbox-edge" aria-hidden="true" />
-      <div v-if="showTools" class="chart-toolbox" role="toolbar" aria-label="绘图工具栏">
-        <div class="chart-tool-group chart-tool-group-primary">
+      <div v-if="showTools" class="chart-toolbox absolute z-[4] flex flex-col items-stretch gap-0.5 w-10 p-1 overflow-y-auto [border:1px_solid_rgba(148,_163,_184,_0.42)] rounded-[7px] [background:rgba(15,_23,_42,_0.88)] [box-shadow:0_18px_36px_rgba(0,_0,_0,_0.32)] [backdrop-filter:blur(10px)] [scrollbar-width:thin]" role="toolbar" aria-label="绘图工具栏">
+        <div class="chart-tool-group chart-tool-group-primary grid gap-0.5">
           <button
-            class="chart-tool-button"
+            class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
             :class="{ active: !activeTool }"
             type="button"
             data-testid="drawing-tool-cursor"
@@ -944,12 +1005,12 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <div v-for="group in drawingToolGroups" :key="group.label" class="chart-tool-group" :aria-label="group.label">
-          <span class="chart-tool-group-label">{{ group.label }}</span>
+        <div v-for="group in drawingToolGroups" :key="group.label" class="chart-tool-group grid gap-0.5" :aria-label="group.label">
+          <span class="chart-tool-group-label hidden overflow-hidden text-[color:rgba(203,_213,_225,_0.68)] text-[length:8px] font-extrabold leading-[1] text-center text-ellipsis whitespace-nowrap">{{ group.label }}</span>
           <button
             v-for="tool in group.tools"
             :key="tool.id"
-            class="chart-tool-button"
+            class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
             :class="{ active: activeTool === tool.id }"
             type="button"
             :data-testid="'drawing-tool-' + tool.id"
@@ -959,13 +1020,13 @@ onBeforeUnmount(() => {
             @click="selectTool(tool.id)"
           >
             <component :is="tool.icon" :size="16" aria-hidden="true" />
-            <span class="chart-tool-tooltip">{{ tool.label }}</span>
+            <span class="chart-tool-tooltip absolute left-[calc(100%_+_8px)] top-[50%] z-[6] min-w-[max-content] [padding:5px_7px] [border:1px_solid_rgba(148,_163,_184,_0.34)] rounded-[4px] [background:#0f172a] text-[color:#f8fafc] text-[length:11px] font-bold leading-[1] pointer-events-none">{{ tool.label }}</span>
           </button>
         </div>
 
-        <div class="chart-tool-group chart-tool-group-actions" aria-label="绘图操作">
+        <div class="chart-tool-group chart-tool-group-actions grid gap-0.5" aria-label="绘图操作">
           <button
-            class="chart-tool-button"
+            class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
             type="button"
             data-testid="drawing-lock"
             :aria-pressed="isLocked"
@@ -977,7 +1038,7 @@ onBeforeUnmount(() => {
             <Lock v-else :size="16" aria-hidden="true" />
           </button>
           <button
-            class="chart-tool-button"
+            class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
             type="button"
             data-testid="drawing-delete"
             aria-label="删除选中图形"
@@ -988,7 +1049,7 @@ onBeforeUnmount(() => {
             <Trash2 :size="16" aria-hidden="true" />
           </button>
           <button
-            class="chart-tool-button chart-tool-clear"
+            class="chart-tool-button chart-tool-clear relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
             type="button"
             data-testid="drawing-clear"
             aria-label="清除全部绘图"
@@ -1004,7 +1065,7 @@ onBeforeUnmount(() => {
       <div
         v-if="showTools && contextMenuPosition"
         ref="contextMenuElement"
-        class="chart-context-menu"
+        class="chart-context-menu absolute z-[8] min-w-42 [box-shadow:0_18px_36px_rgba(0,_0,_0,_0.36)] [backdrop-filter:blur(10px)]"
         role="menu"
         data-testid="drawing-context-menu"
         :style="{ left: contextMenuPosition.left + 'px', top: contextMenuPosition.top + 'px' }"
@@ -1027,9 +1088,9 @@ onBeforeUnmount(() => {
       <p v-if="activeTool || toolFeedback" class="drawing-hint" role="status" aria-live="polite">
         {{ toolFeedback || drawingHint }}
       </p>
-      <p v-if="measurementSummary" class="measurement-readout" role="status" aria-live="polite">
+      <p v-if="measurementSummary" class="measurement-readout inline-flex items-center gap-2" role="status" aria-live="polite">
         {{ measurementSummary }}
-        <button type="button" class="measurement-clear" aria-label="清除测量" @click="clearMeasurement">
+        <button type="button" class="measurement-clear inline-flex items-center justify-center w-5.5 h-5.5 p-0 rounded-[4px] bg-transparent cursor-pointer" aria-label="清除测量" @click="clearMeasurement">
           <X :size="14" aria-hidden="true" />
         </button>
       </p>

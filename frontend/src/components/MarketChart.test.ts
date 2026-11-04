@@ -19,7 +19,13 @@ vi.mock('@getcandlekit/charts', () => {
       setVisibleLogicalRange: vi.fn((range) => { this.range = range }),
       subscribeVisibleLogicalRangeChange: vi.fn(), unsubscribeVisibleLogicalRangeChange: vi.fn(),
     }
+    priceScaleOptions = { autoScale: true }
+    priceScale = {
+      options: () => this.priceScaleOptions,
+      applyOptions: vi.fn((options) => { Object.assign(this.priceScaleOptions, options) }),
+    }
     chart = {
+      priceScale: () => this.priceScale,
       timeScale: () => this.scale, applyOptions: vi.fn(), removeSeries: vi.fn(),
       addSeries: vi.fn(() => {
         const line = { setData: vi.fn(), createPriceLine: vi.fn() }
@@ -81,6 +87,107 @@ beforeEach(() => {
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.unstubAllGlobals() })
 
 describe('chart lifecycle and data contracts', () => {
+  it('covers the first render until a sized chart has passed its paint frames and keeps it visible during refresh', async () => {
+    const frames = new Map<number, FrameRequestCallback>()
+    let frameId = 0
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.set(++frameId, callback); return frameId })
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(640)
+    const height = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(420)
+    const paint = async () => {
+      const pending = [...frames.values()]
+      frames.clear()
+      pending.forEach(callback => callback(0))
+      await nextTick()
+    }
+    try {
+      wrapper = mount(MarketChart, { props: { snapshot: null, loading: true } })
+      expect(wrapper.get('[aria-label="正在加载行情"]').text()).toContain('正在加载行情')
+      await wrapper.setProps({ snapshot: snapshot(), loading: false })
+      expect(wrapper.get('.chart-stage').attributes('aria-busy')).toBe('true')
+      expect(wrapper.get('.chart-preparing-cover').text()).toContain('正在准备 K 线图表')
+      await paint()
+      expect(wrapper.find('.chart-preparing-cover').exists()).toBe(true)
+      await paint()
+      expect(wrapper.find('.chart-preparing-cover').exists()).toBe(false)
+      expect(wrapper.get('.chart-stage').attributes('aria-busy')).toBe('false')
+      expect(wrapper.classes()).not.toContain('chart-timeframe-enter')
+      await wrapper.setProps({ loading: true })
+      expect(wrapper.find('.chart-preparing-cover').exists()).toBe(false)
+      expect(wrapper.find('.price-chart').exists()).toBe(true)
+    } finally {
+      width.mockRestore()
+      height.mockRestore()
+    }
+  })
+
+  it('keeps zero-size charts covered and cancels pending reveal work when unmounted', async () => {
+    const cancel = vi.fn()
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.push(callback); return frames.length })
+    vi.stubGlobal('cancelAnimationFrame', cancel)
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false } })
+    frames.shift()?.(0)
+    frames.shift()?.(0)
+    await nextTick()
+    expect(wrapper.get('.chart-stage').attributes('aria-busy')).toBe('true')
+    expect(wrapper.find('.chart-preparing-cover').exists()).toBe(true)
+    await wrapper.setProps({ snapshot: snapshot([...candles]) })
+    wrapper.unmount()
+    wrapper = undefined
+    expect(cancel).toHaveBeenCalled()
+    frames.forEach(callback => callback(0))
+    expect(mocks.controllers).toHaveLength(1)
+  })
+
+  it('shows a useful error panel instead of an empty chart after a failed initial load', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: null, loading: false, error: '连接行情服务失败，请重试。' } })
+    expect(wrapper.get('.chart-feedback').attributes('role')).toBe('alert')
+    expect(wrapper.get('.chart-feedback').text()).toContain('连接行情服务失败，请重试。')
+    expect(wrapper.find('.price-chart').exists()).toBe(false)
+    expect(wrapper.find('.chart-skeleton').exists()).toBe(false)
+  })
+
+  it('toggles price autoscaling in bare panes without changing the visible time range and restores it on reset', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, showHeader: false } })
+    const controller = mocks.controllers[0]
+    controller.range = { from: -10, to: 20 }
+    const toggle = wrapper.get('[data-testid="chart-auto-scale"]')
+    expect(toggle.attributes('aria-pressed')).toBe('true')
+    await toggle.trigger('click')
+    expect(controller.priceScaleOptions.autoScale).toBe(false)
+    expect(toggle.attributes('aria-pressed')).toBe('false')
+    await wrapper.setProps({ playbackIndex: 1 })
+    expect(controller.priceScaleOptions.autoScale).toBe(false)
+    const range = { ...controller.range }
+    await toggle.trigger('click')
+    expect(controller.priceScaleOptions.autoScale).toBe(true)
+    expect(controller.range).toEqual(range)
+    await toggle.trigger('click')
+    await wrapper.setProps({ showHeader: true })
+    await wrapper.get('[aria-label="重置图表范围"]').trigger('click')
+    expect(controller.priceScaleOptions.autoScale).toBe(true)
+    expect(toggle.attributes('aria-pressed')).toBe('true')
+  })
+
+  it('reflects native price-axis scaling and double-click reset in the automatic toggle', async () => {
+    let frame: FrameRequestCallback | undefined
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback) => { frame = callback; return 1 }))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false } })
+    const controller = mocks.controllers[0]
+    controller.priceScaleOptions.autoScale = false
+    await wrapper.get('.price-chart').trigger('pointerup')
+    frame?.(0)
+    await nextTick()
+    expect(wrapper.get('.chart-auto-scale').attributes('aria-pressed')).toBe('false')
+    controller.priceScaleOptions.autoScale = true
+    await wrapper.get('.price-chart').trigger('dblclick')
+    frame?.(0)
+    await nextTick()
+    expect(wrapper.get('.chart-auto-scale').attributes('aria-pressed')).toBe('true')
+  })
+
   it('keeps the live chart container attached across repeated background loading and failed refreshes', async () => {
     wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false } })
     await nextTick()

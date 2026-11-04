@@ -46,15 +46,15 @@ function choose(value: string) {
 </script>
 
 <template>
-  <div class="timeframe-switcher" role="group" :aria-label="label">
-    <div ref="shortcutsElement" class="timeframe-shortcuts">
-      <span class="timeframe-highlight" :style="highlight" aria-hidden="true"></span>
-      <button v-for="value in shortcuts" :key="value" type="button" class="timeframe-shortcut"
+  <div class="timeframe-switcher flex items-center min-w-0 gap-[3px] text-[color:#d1d4dc] [font-family:Arial,_'Microsoft_YaHei',_sans-serif]" role="group" :aria-label="label">
+    <div ref="shortcutsElement" class="timeframe-shortcuts relative items-center min-w-0 gap-0.5 overflow-x-auto [scrollbar-width:none]">
+      <span class="timeframe-highlight absolute top-0 left-0 h-8 rounded-[6px] [background:#303030] pointer-events-none" :style="highlight" aria-hidden="true"></span>
+      <button v-for="value in shortcuts" :key="value" type="button" class="timeframe-shortcut flex-none inline-flex items-center justify-center h-8 [padding:0_7px] rounded-[6px] [font:500_14px/1_Arial,_'Microsoft_YaHei',_sans-serif] whitespace-nowrap cursor-pointer relative"
         :class="{ active: modelValue === value }" :aria-pressed="modelValue === value"
         @click="choose(value)">{{ compactLabels[value] }}</button>
-      <span v-if="!shortcuts.includes(modelValue)" class="timeframe-shortcut active">{{ labels[modelValue] ?? modelValue }}</span>
+      <span v-if="!shortcuts.includes(modelValue)" class="timeframe-shortcut active flex-none inline-flex items-center justify-center h-8 [padding:0_7px] rounded-[6px] [font:500_14px/1_Arial,_'Microsoft_YaHei',_sans-serif] whitespace-nowrap cursor-pointer relative">{{ labels[modelValue] ?? modelValue }}</span>
     </div>
-    <div class="timeframe-more">
+    <div class="timeframe-more [flex:0_0_28px] grid place-items-center rounded-[6px]">
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m4 6 4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
       <select :id="id" data-testid="replay-pane-timeframe" :aria-label="label" :value="modelValue" @change="emit('change', $event)">
         <option v-for="value in options" :key="value" :value="value">{{ labels[value] ?? value }}</option>
