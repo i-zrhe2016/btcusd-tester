@@ -782,28 +782,36 @@ export function summarizeManualTrades(
 export interface ManualTradeMarkerStyle {
   text: string
   position: 'aboveBar' | 'belowBar'
-  shape: 'arrowUp' | 'arrowDown'
+  shape: 'arrowUp' | 'arrowDown' | 'circle'
   color: string
+  size: number
 }
 
-export const MANUAL_TRADE_MARKER_ENTRY_COLOR = '#ffffff'
-export const MANUAL_TRADE_MARKER_EXIT_COLOR = '#f5b544'
+export const MANUAL_TRADE_MARKER_BUY_COLOR = '#f3eadd'
+export const MANUAL_TRADE_MARKER_SELL_COLOR = '#c46f50'
+export const MANUAL_TRADE_MARKER_EXIT_COLOR = '#94877b'
 
-// Markers separate opening trades from closing ones and carry the 1-based trade
-// sequence so every recorded trade stays identifiable on the chart.
+// Chart annotations stay in English, like the rest of the instrument chrome.
+const MANUAL_TRADE_MARKER_LABELS = { buy: 'BUY', sell: 'SELL', close: 'CLOSE' } as const
+
+// Buys sit under the bar in warm cream, sells above it in terracotta, and closes
+// collapse into a muted dot so open positions stay dominant on the chart. The
+// compact sequence keeps every trade identifiable without crowding the candles.
 export function manualTradeMarker(trade: ManualTrade, ordinal: number): ManualTradeMarkerStyle {
+  const buy = trade.side === 'buy'
   const closing = trade.action === 'close-long' || trade.action === 'close-short'
-  const label = trade.action === 'open-long'
-    ? 'BUY'
-    : trade.action === 'open-short'
-      ? 'SELL'
-      : trade.action === 'close-long' ? t('trade.markerCloseLong') : t('trade.markerCloseShort')
-  const sequence = Number.isFinite(ordinal) && ordinal > 0 ? ` #${Math.floor(ordinal)}` : ''
+  const label = closing
+    ? MANUAL_TRADE_MARKER_LABELS.close
+    : buy ? MANUAL_TRADE_MARKER_LABELS.buy : MANUAL_TRADE_MARKER_LABELS.sell
+  const sequence = Number.isFinite(ordinal) && ordinal > 0 ? `·${Math.floor(ordinal)}` : ''
   return {
     text: `${label}${sequence}`,
-    position: trade.side === 'buy' ? 'belowBar' : 'aboveBar',
-    shape: trade.side === 'buy' ? 'arrowUp' : 'arrowDown',
-    color: closing ? MANUAL_TRADE_MARKER_EXIT_COLOR : MANUAL_TRADE_MARKER_ENTRY_COLOR,
+    position: buy ? 'belowBar' : 'aboveBar',
+    shape: closing ? 'circle' : buy ? 'arrowUp' : 'arrowDown',
+    color: closing
+      ? MANUAL_TRADE_MARKER_EXIT_COLOR
+      : buy ? MANUAL_TRADE_MARKER_BUY_COLOR : MANUAL_TRADE_MARKER_SELL_COLOR,
+    size: closing ? 0.85 : 1,
   }
 }
 

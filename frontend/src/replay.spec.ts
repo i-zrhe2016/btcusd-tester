@@ -33,7 +33,8 @@ import {
   timeframeStepSeconds,
   REPLAY_FORWARD_CANDLES,
   REPLAY_HISTORY_CANDLES,
-  MANUAL_TRADE_MARKER_ENTRY_COLOR,
+  MANUAL_TRADE_MARKER_BUY_COLOR,
+  MANUAL_TRADE_MARKER_SELL_COLOR,
   MANUAL_TRADE_MARKER_EXIT_COLOR,
   REPLAY_PAGE_SIZE,
   REPLAY_PANE_FORWARD_CANDLES,
@@ -408,22 +409,25 @@ describe('replay helpers', () => {
 
     expect(markers).toEqual([
       {
-        text: 'BUY #1',
+        text: 'BUY·1',
         position: 'belowBar',
         shape: 'arrowUp',
-        color: MANUAL_TRADE_MARKER_ENTRY_COLOR,
+        color: MANUAL_TRADE_MARKER_BUY_COLOR,
+        size: 1,
       },
       {
-        text: '平多 #2',
+        text: 'CLOSE·2',
         position: 'aboveBar',
-        shape: 'arrowDown',
+        shape: 'circle',
         color: MANUAL_TRADE_MARKER_EXIT_COLOR,
+        size: 0.85,
       },
       {
-        text: 'SELL #3',
+        text: 'SELL·3',
         position: 'aboveBar',
         shape: 'arrowDown',
-        color: MANUAL_TRADE_MARKER_ENTRY_COLOR,
+        color: MANUAL_TRADE_MARKER_SELL_COLOR,
+        size: 1,
       },
     ])
   })

@@ -239,8 +239,6 @@ const zh = {
   'trade.openShort': '开空',
   'trade.closeShort': '平空',
   'trade.recorded': '已记录',
-  'trade.markerCloseLong': '平多',
-  'trade.markerCloseShort': '平空',
 
   // Settings dialog
   'settings.title': '工作台设置',
@@ -591,8 +589,6 @@ const en: Record<MessageKey, Message> = {
   'trade.openShort': 'Open short',
   'trade.closeShort': 'Close short',
   'trade.recorded': 'Recorded',
-  'trade.markerCloseLong': 'CLOSE',
-  'trade.markerCloseShort': 'CLOSE',
 
   'settings.title': 'Workspace settings',
   'settings.close': 'Close dialog',
