@@ -6,9 +6,9 @@
 
 ## UI 样式
 
-UI 统一使用 Tailwind CSS v4，由 `@tailwindcss/vite` 编译。`frontend/src/styles.css` 是唯一的样式入口，依次加载 Tailwind 主题、工具类、工作台和产品页组件样式。
+UI 统一使用 Tailwind CSS v4，由 `@tailwindcss/vite` 编译。`frontend/src/styles.css` 是唯一的样式入口，显式声明 `theme → base → components → utilities` 层序，确保模板工具类优先于基础与组件规则。
 
-新增界面优先使用 Tailwind 工具类；重复的组件样式通过 `@apply` 组合，沿用现有语义类和状态选择器。主题色、图表颜色和圆角保留为 CSS 变量，动态坐标、尺寸和指标颜色继续由 Vue 绑定。为保持现有界面的原生元素行为，入口不加载 Preflight，基础样式由工作台样式文件统一定义。
+页面和组件的普通布局、颜色、排版及交互样式使用模板中的 Tailwind 工具类。语义 class 保留作测试与交互定位钩子；复杂跨组件状态和响应式覆盖在 `workspace.css` 的 `components` 层通过 `@apply` 集中维护，避免工具类与状态规则竞争。主题色、图表颜色和圆角保留为 CSS 变量，动态坐标、测量尺寸和 Canvas 图表配置继续由运行时设置。为保持现有界面的原生元素行为，入口不加载 Preflight，基础样式放在 `base` 层。
 
 ## 页面结构
 

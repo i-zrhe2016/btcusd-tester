@@ -1096,9 +1096,9 @@ onBeforeUnmount(() => {
     class="app-shell"
     :class="{ 'replay-active': activeView === 'replay', 'replay-immersive': isReplayFullscreen }"
   >
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="BTCUSD 复盘平台首页">
-        <span class="brand-mark" aria-hidden="true"><ChartCandlestick :size="20" /></span>
+    <header class="topbar top-0 z-[30] items-center justify-between [border-bottom:1px_solid_var(--border)] [background:rgba(255,_255,_255,_0.92)] [backdrop-filter:blur(12px)]">
+      <a class="brand items-center no-underline" href="/" aria-label="BTCUSD 复盘平台首页">
+        <span class="brand-mark grid place-items-center [border:1px_solid_var(--border-strong)] [background:var(--text)] text-[color:var(--surface)]" aria-hidden="true"><ChartCandlestick :size="20" /></span>
         <span>
           <strong>BTCUSD</strong>
           <small v-if="activeView === 'replay'">{{ currentTimeframeValue }} REPLAY</small>
@@ -1106,10 +1106,10 @@ onBeforeUnmount(() => {
         </span>
       </a>
 
-      <div v-if="activeView === 'projects'" class="mode-switch" role="tablist" aria-label="工作区模式">
+      <div v-if="activeView === 'projects'" class="mode-switch inline-flex items-center gap-1.5 p-1 [border:1px_solid_var(--border)] rounded-full [background:var(--surface)]" role="tablist" aria-label="工作区模式">
         <button
           type="button"
-          class="mode-chip"
+          class="mode-chip min-h-8.5 [padding:0_14px] rounded-full"
           :class="{ active: activeView === 'projects' }"
           :aria-pressed="activeView === 'projects'"
           @click="openProjects"
@@ -1118,7 +1118,7 @@ onBeforeUnmount(() => {
         </button>
         <button
           type="button"
-          class="mode-chip"
+          class="mode-chip min-h-8.5 [padding:0_14px] rounded-full"
           :aria-pressed="false"
           :disabled="!activeProject"
           @click="openReplay"
@@ -1127,30 +1127,30 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div v-if="activeView === 'replay'" class="replay-topbar-meta" aria-label="当前复盘项目">
+      <div v-if="activeView === 'replay'" class="replay-topbar-meta [flex:1_1_auto] gap-[1px] min-w-0" aria-label="当前复盘项目">
         <strong>{{ currentProjectLabel }}</strong>
         <span>{{ currentRangeLabel }}</span>
       </div>
 
-      <div v-if="activeView === 'replay'" class="replay-topbar-status" aria-label="当前复盘状态">
-        <span class="status-chip" :data-status="playbackPlaying ? 'running' : 'paused'">{{ replayStatusLabel }}</span>
-        <span class="status-chip muted">{{ currentProgressLabel }}</span>
-        <span class="status-chip muted">{{ positionLabel }}</span>
+      <div v-if="activeView === 'replay'" class="replay-topbar-status flex flex-none items-center" aria-label="当前复盘状态">
+        <span class="status-chip inline-flex items-center rounded-full whitespace-nowrap" :data-status="playbackPlaying ? 'running' : 'paused'">{{ replayStatusLabel }}</span>
+        <span class="status-chip muted inline-flex items-center rounded-full whitespace-nowrap">{{ currentProgressLabel }}</span>
+        <span class="status-chip muted inline-flex items-center rounded-full whitespace-nowrap">{{ positionLabel }}</span>
       </div>
 
-      <div class="topbar-actions">
-        <div v-if="activeView === 'projects'" class="service-state">
-          <span class="status-dot" aria-hidden="true" />
+      <div class="topbar-actions flex items-center">
+        <div v-if="activeView === 'projects'" class="service-state flex items-center gap-2 text-[color:var(--text-muted)] text-[length:13px] whitespace-nowrap">
+          <span class="status-dot w-2 h-2 rounded-full [background:var(--profit)] [box-shadow:0_0_0_4px_rgba(22,_101,_52,_0.14)]" aria-hidden="true" />
           <span>{{ appStatusLabel }}</span>
         </div>
 
         <template v-else>
-          <button class="topbar-action" type="button" @click="openProjects">
+          <button class="topbar-action min-h-8 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[length:12px] font-extrabold whitespace-nowrap" type="button" @click="openProjects">
             <FolderOpen :size="15" aria-hidden="true" />
             项目库
           </button>
           <button
-            class="topbar-icon-button"
+            class="topbar-icon-button w-8 h-8 inline-grid place-items-center p-0 rounded-[var(--radius-sm)]"
             type="button"
             data-testid="replay-fullscreen"
             :aria-label="isReplayFullscreen ? '退出全屏' : '进入全屏'"
@@ -1165,17 +1165,17 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <main id="main-content" class="workspace" :class="`workspace-${activeView}`" tabindex="-1">
+    <main id="main-content" class="workspace [margin:0_auto] gap-4" :class="`workspace-${activeView}`" tabindex="-1">
       <p class="sr-only" aria-live="polite">{{ notice }}</p>
 
       <template v-if="activeView === 'projects'">
-        <section class="workspace-head" aria-labelledby="page-title">
+        <section class="workspace-head flex justify-between gap-5" aria-labelledby="page-title">
           <div class="workspace-copy">
-            <p class="eyebrow">PROJECT LIBRARY / UTC</p>
+            <p class="eyebrow text-[color:var(--info)] [font:700_10px/1.4_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] tracking-[0]">PROJECT LIBRARY / UTC</p>
             <h1 id="page-title">复盘项目库</h1>
             <p>先创建或打开项目，随后进入独立的全屏 K 线复盘窗口。</p>
           </div>
-          <dl class="workspace-stats">
+          <dl class="workspace-stats grid gap-[1px] [border:1px_solid_var(--border)] rounded-[var(--radius)] overflow-hidden">
             <div>
               <dt>当前项目</dt>
               <dd>{{ currentProjectLabel }}</dd>
@@ -1195,28 +1195,28 @@ onBeforeUnmount(() => {
           </dl>
         </section>
 
-        <div v-if="activeError" class="alert error-alert" role="alert">
+        <div v-if="activeError" class="alert error-alert flex items-center gap-2.5 [padding:12px_14px] [border:1px_solid_rgba(153,_27,_27,_0.32)] rounded-[var(--radius)] [background:#fff1f2] text-[color:var(--danger)]" role="alert">
           <ServerCog :size="20" aria-hidden="true" />
           <span>{{ activeError }}</span>
-          <button type="button" class="text-button" @click="initialize">重试</button>
+          <button type="button" class="text-button font-bold" @click="initialize">重试</button>
         </div>
 
-        <div class="project-layout">
+        <div class="project-layout grid gap-4 items-start">
           <section class="panel project-form-panel" aria-labelledby="project-form-title">
-            <div class="panel-head">
+            <div class="panel-head [padding:16px_16px_0]">
               <div>
-                <p class="eyebrow">SETUP</p>
+                <p class="eyebrow text-[color:var(--info)] [font:700_10px/1.4_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] tracking-[0]">SETUP</p>
                 <h2 id="project-form-title">新建项目</h2>
               </div>
-              <FolderPlus :size="22" class="heading-icon" aria-hidden="true" />
+              <FolderPlus :size="22" class="heading-icon text-[color:var(--text-dim)]" aria-hidden="true" />
             </div>
 
-            <form class="project-form" @submit.prevent="saveActiveProject">
+            <form class="project-form grid gap-3 [border-top:1px_solid_var(--border)] [border-bottom:1px_solid_var(--border)]" @submit.prevent="saveActiveProject">
               <label>
                 项目名称
                 <input v-model="projectDraft.name" type="text" maxlength="120" autocomplete="off" />
               </label>
-              <div class="field-grid two">
+              <div class="field-grid two grid gap-2.5">
                 <label>
                   品种
                   <input v-model="projectDraft.symbol" type="text" autocomplete="off" />
@@ -1230,7 +1230,7 @@ onBeforeUnmount(() => {
                   </select>
                 </label>
               </div>
-              <div class="field-grid two">
+              <div class="field-grid two grid gap-2.5">
                 <label>
                   开始时间（UTC）
                   <input v-model="projectDraft.fromInput" type="datetime-local" />
@@ -1240,25 +1240,25 @@ onBeforeUnmount(() => {
                   <input v-model="projectDraft.toInput" type="datetime-local" />
                 </label>
               </div>
-              <div class="field-grid two speed-field">
+              <div class="field-grid two speed-field grid gap-2.5 items-end">
                 <label>
                   播放速度
                   <input v-model.number="projectDraft.speed" type="number" min="0.25" max="8" step="0.25" />
                 </label>
-                <div class="speed-hint">
-                  <span class="speed-icon"><SlidersHorizontal :size="18" aria-hidden="true" /></span>
+                <div class="speed-hint min-h-10.5 inline-flex items-center gap-2.5 [padding:0_12px] [border:1px_solid_var(--border)] rounded-[var(--radius)] [background:var(--surface-2)] text-[color:var(--text-muted)] text-[length:12px]">
+                  <span class="speed-icon w-7 h-7 grid place-items-center rounded-[var(--radius-sm)] [background:#ecfeff] text-[color:var(--info)] flex-none"><SlidersHorizontal :size="18" aria-hidden="true" /></span>
                   <span>{{ speedToText(projectDraft.speed) }}</span>
                 </div>
               </div>
-              <p class="form-error" :class="{ invisible: !projectFormError }" role="alert">{{ projectFormError || ' ' }}</p>
-              <p v-if="projectError" class="form-error" role="alert">{{ projectError }}</p>
-              <div class="form-actions">
-                <button class="primary-button" type="submit" :disabled="Boolean(projectFormError)">
+              <p class="form-error min-h-4.5 m-0 text-[color:#fecdd3] text-[length:12px] leading-[1.4]" :class="{ invisible: !projectFormError }" role="alert">{{ projectFormError || ' ' }}</p>
+              <p v-if="projectError" class="form-error min-h-4.5 m-0 text-[color:#fecdd3] text-[length:12px] leading-[1.4]" role="alert">{{ projectError }}</p>
+              <div class="form-actions flex flex-wrap gap-2">
+                <button class="primary-button inline-flex items-center justify-center gap-2 [border:1px_solid_transparent] rounded-[var(--radius)] text-[color:var(--accent-ink)] font-extrabold" type="submit" :disabled="Boolean(projectFormError)">
                   <RefreshCw v-if="activeProject" :size="18" aria-hidden="true" />
                   <FolderPlus v-else :size="18" aria-hidden="true" />
                   {{ projectActionLabel }}
                 </button>
-                <button class="secondary-button" type="button" :disabled="Boolean(projectFormError)" @click="createProject">
+                <button class="secondary-button inline-flex items-center justify-center gap-2 [padding:0_14px] rounded-[var(--radius)] [background:var(--surface-2)]" type="button" :disabled="Boolean(projectFormError)" @click="createProject">
                   新建并打开
                 </button>
               </div>
@@ -1266,26 +1266,26 @@ onBeforeUnmount(() => {
           </section>
 
           <section class="panel project-list-panel" aria-labelledby="project-list-title">
-            <div class="panel-head">
+            <div class="panel-head [padding:16px_16px_0]">
               <div>
-                <p class="eyebrow">PROJECTS</p>
+                <p class="eyebrow text-[color:var(--info)] [font:700_10px/1.4_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] tracking-[0]">PROJECTS</p>
                 <h2 id="project-list-title">已保存项目</h2>
               </div>
-              <FolderOpen :size="22" class="heading-icon" aria-hidden="true" />
+              <FolderOpen :size="22" class="heading-icon text-[color:var(--text-dim)]" aria-hidden="true" />
             </div>
 
-            <div v-if="projects.length" class="project-list">
+            <div v-if="projects.length" class="project-list grid">
               <button
                 v-for="project in projects"
                 :key="project.id"
                 type="button"
-                class="project-item"
+                class="project-item grid gap-1 w-full rounded-[var(--radius)] cursor-pointer"
                 :class="{ active: project.id === activeProjectId }"
                 @click="selectProject(project.id)"
               >
-                <div class="project-item-head">
+                <div class="project-item-head flex items-center justify-between gap-2.5">
                   <strong>{{ project.name }}</strong>
-                  <span class="status-pill" :data-status="project.id === activeProjectId ? 'running' : 'idle'">
+                  <span class="status-pill inline-flex items-center justify-center min-h-6 [padding:0_8px] rounded-full text-[length:11px] whitespace-nowrap" :data-status="project.id === activeProjectId ? 'running' : 'idle'">
                     {{ project.id === activeProjectId ? '当前' : '已保存' }}
                   </span>
                 </div>
@@ -1298,12 +1298,12 @@ onBeforeUnmount(() => {
         </div>
       </template>
 
-      <section v-else-if="activeView === 'replay'" class="replay-screen" aria-labelledby="replay-title">
+      <section v-else-if="activeView === 'replay'" class="replay-screen relative grid grid-rows-[minmax(0,_1fr)_auto] h-full min-h-0 overflow-hidden [background:var(--chart-bg)]" aria-labelledby="replay-title">
         <h1 id="replay-title" class="sr-only">{{ currentProjectLabel }} 复盘</h1>
-        <div class="replay-panes" :data-panes="replayPaneCount">
-          <div class="replay-pane">
-            <div class="replay-pane-header">
-              <span class="replay-pane-label">主屏</span>
+        <div class="replay-panes grid gap-0.5 min-w-0 min-h-0 overflow-hidden [background:var(--chart-bg)]" :data-panes="replayPaneCount">
+          <div class="replay-pane relative grid grid-rows-[auto_minmax(0,_1fr)] min-w-0 min-h-0 overflow-hidden">
+            <div class="replay-pane-header flex items-center gap-1.5 [border-bottom:1px_solid_rgba(185,_180,_168,_0.25)] [background:var(--chart-bg)]">
+              <span class="replay-pane-label flex-none text-[color:rgba(255,_255,_255,_0.72)] [font:700_11px/16px_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace]">主屏</span>
               <TimeframeSwitcher
                 id="replay-pane-timeframe-0"
                 label="主屏周期"
@@ -1321,6 +1321,7 @@ onBeforeUnmount(() => {
               @load-history="loadReplayHistory"
               :snapshot="replaySnapshot"
               :loading="replayLoading"
+              :error="activeError"
               :playback-index="chartPlaybackIndex"
               :playing="playbackPlaying"
               :project-name="currentProjectLabel"
@@ -1330,9 +1331,9 @@ onBeforeUnmount(() => {
               @drawings-changed="updateProjectDrawings"
             />
           </div>
-          <div v-for="(pane, index) in secondaryPanes" :key="`${pane.projectId}-${index}-${pane.timeframe}`" class="replay-pane">
-            <div class="replay-pane-header">
-              <span class="replay-pane-label">第 {{ index + 2 }} 屏</span>
+          <div v-for="(pane, index) in secondaryPanes" :key="`${pane.projectId}-${index}-${pane.timeframe}`" class="replay-pane relative grid grid-rows-[auto_minmax(0,_1fr)] min-w-0 min-h-0 overflow-hidden">
+            <div class="replay-pane-header flex items-center gap-1.5 [border-bottom:1px_solid_rgba(185,_180,_168,_0.25)] [background:var(--chart-bg)]">
+              <span class="replay-pane-label flex-none text-[color:rgba(255,_255,_255,_0.72)] [font:700_11px/16px_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace]">第 {{ index + 2 }} 屏</span>
               <TimeframeSwitcher
                 :id="`replay-pane-timeframe-${index + 1}`"
                 :label="`第 ${index + 2} 屏周期`"
@@ -1342,7 +1343,7 @@ onBeforeUnmount(() => {
                 @change="changeReplayPaneTimeframe(index + 1, $event)"
               />
               <button
-                class="replay-pane-remove"
+                class="replay-pane-remove ml-auto shrink-0 h-6.5 rounded-[var(--radius-sm)] [background:rgba(0,_0,_0,_0.75)] text-[color:#ffffff] [font:700_12px/1_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] flex items-center justify-center w-6.5 cursor-pointer"
                 type="button"
                 :aria-label="`移除第 ${index + 2} 屏`"
                 :title="`移除第 ${index + 2} 屏`"
@@ -1351,14 +1352,15 @@ onBeforeUnmount(() => {
                 ×
               </button>
             </div>
-            <p v-if="pane.error" class="replay-pane-error" role="alert">
+            <p v-if="pane.error" class="replay-pane-error absolute z-[5] top-10.5 left-2 right-2 flex items-center gap-2 m-0 [padding:6px_10px] [border:1px_solid_rgba(255,_255,_255,_0.4)] rounded-[var(--radius-sm)] [background:rgba(0,_0,_0,_0.8)] text-[color:#ffffff] text-[length:12px]" role="alert">
               <span>{{ pane.error }}</span>
-              <button class="text-button" type="button" @click="retryReplayPane(pane)">重试</button>
+              <button class="text-button font-bold" type="button" @click="retryReplayPane(pane)">重试</button>
             </p>
             <MarketChart
               class="fullscreen-chart"
               :snapshot="pane.snapshot"
-              :loading="pane.loading"
+              :loading="pane.loading || (!pane.snapshot && !pane.error && !activeError)"
+              :error="pane.error || activeError"
               :clock-limited="true"
               :forming-bucket="pane.formingBucket"
               :forming-candle="pane.forming"
@@ -1370,15 +1372,15 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div v-if="activeError" class="alert replay-alert" role="alert">
+        <div v-if="activeError" class="alert replay-alert flex items-center gap-2.5 [padding:12px_14px] [border:1px_solid_rgba(153,_27,_27,_0.32)] rounded-[var(--radius)] [background:#fff1f2] text-[color:var(--danger)] absolute z-[6] top-3 left-3 right-3" role="alert">
           <ServerCog :size="20" aria-hidden="true" />
           <span>{{ activeError }}</span>
-          <button type="button" class="text-button" @click="initialize">重试</button>
+          <button type="button" class="text-button font-bold" @click="initialize">重试</button>
         </div>
 
-        <div class="replay-console" aria-label="复盘状态栏">
-          <div class="console-strip">
-            <label class="timeframe-control pane-count-control">
+        <div class="replay-console [background:rgba(255,_255,_255,_0.9)] [backdrop-filter:blur(10px)] relative z-[5] flex items-center overflow-hidden" aria-label="复盘状态栏">
+          <div class="console-strip flex w-full min-w-0 items-center">
+            <label class="timeframe-control pane-count-control flex-none flex items-center gap-1.5 min-h-9">
               <span>分屏</span>
               <select
                 data-testid="replay-pane-count"
@@ -1392,18 +1394,18 @@ onBeforeUnmount(() => {
               </select>
             </label>
 
-            <button v-if="replayHistoryBefore !== null" class="text-button" type="button" :disabled="replayHistoryLoading || replayLoading" data-testid="load-replay-history" @click="loadReplayHistory">
+            <button v-if="replayHistoryBefore !== null" class="text-button font-bold" type="button" :disabled="replayHistoryLoading || replayLoading" data-testid="load-replay-history" @click="loadReplayHistory">
               {{ replayHistoryLoading ? '加载历史中…' : replayHistoryError ? '重试加载历史' : '加载更早行情' }}
             </button>
             <span v-if="replayHistoryError" role="alert">{{ replayHistoryError }}</span>
-            <form class="timeframe-control" @submit.prevent="jumpToCandle">
+            <form class="timeframe-control flex-none flex items-center gap-1.5 min-h-9" @submit.prevent="jumpToCandle">
               <label for="replay-jump-time">跳转时间（UTC）</label>
               <input id="replay-jump-time" v-model="jumpTimeInput" type="datetime-local" :disabled="replayLoading" required />
-              <button class="text-button" type="submit" :disabled="!activeProject || replayLoading">跳转</button>
+              <button class="text-button font-bold" type="submit" :disabled="!activeProject || replayLoading">跳转</button>
               <span v-if="jumpError" role="alert">{{ jumpError }}</span>
             </form>
 
-            <label class="replay-speed-control">
+            <label class="replay-speed-control grid grid-cols-[auto_minmax(76px,_1fr)_auto] gap-1.5 items-center min-w-0">
               <span>速度</span>
               <input
                 v-if="activeProject"
@@ -1420,23 +1422,23 @@ onBeforeUnmount(() => {
               <output>{{ speedToText(activeProject?.speed ?? 1) }}</output>
             </label>
 
-            <button class="primary-button console-play" type="button" :disabled="!totalReplayCandles" @click="togglePlayback">
+            <button class="primary-button console-play inline-flex items-center justify-center gap-2 [border:1px_solid_transparent] rounded-[var(--radius)] text-[color:var(--accent-ink)] font-extrabold flex-none whitespace-nowrap" type="button" :disabled="!totalReplayCandles" @click="togglePlayback">
               <Pause v-if="playbackPlaying" :size="18" aria-hidden="true" />
               <Play v-else :size="18" aria-hidden="true" />
               {{ playbackPlaying ? '暂停' : '播放' }}
             </button>
 
-            <div class="console-trade-actions" aria-label="手动交易">
-              <button class="trade-button buy" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('buy')">
+            <div class="console-trade-actions flex-none grid-cols-[repeat(3,_minmax(68px,_1fr))]" aria-label="手动交易">
+              <button class="trade-button buy min-h-11 items-center justify-center font-black" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('buy')">
                 <TrendingUp :size="16" aria-hidden="true" />
                 Buy
               </button>
-              <button class="trade-button sell" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('sell')">
+              <button class="trade-button sell min-h-11 items-center justify-center font-black" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('sell')">
                 <TrendingDown :size="16" aria-hidden="true" />
                 Sell
               </button>
               <button
-                class="trade-button close"
+                class="trade-button close min-h-11 items-center justify-center font-black"
                 type="button"
                 data-testid="replay-close-position"
                 :disabled="!canCloseManualTrade"
@@ -1447,15 +1449,15 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <span class="console-shortcuts" aria-label="复盘快捷键">空格 前进 1 根 · Backspace 回退 1 根 · A 播放/暂停 · B Buy · S Sell · C 趋势线</span>
+            <span class="console-shortcuts [flex:0_1_auto] min-w-0 text-[color:var(--text-dim)] [font:700_10px/1.2_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] whitespace-nowrap" aria-label="复盘快捷键">空格 前进 1 根 · Backspace 回退 1 根 · A 播放/暂停 · B Buy · S Sell · C 趋势线</span>
 
-            <div class="console-quick-stats" aria-label="复盘辅助信息">
+            <div class="console-quick-stats flex-wrap gap-2 min-w-0" aria-label="复盘辅助信息">
               <span class="console-stat">{{ currentTimeLabel }}</span>
-              <div v-if="replayHasMore" class="console-load-control" aria-live="polite">
+              <div v-if="replayHasMore" class="console-load-control items-center gap-1.5 max-w-45 min-w-0" aria-live="polite">
                 <span v-if="replayWindowLoading">加载中…</span>
                 <span v-else-if="replayWindowError" :title="replayWindowError">加载失败</span>
                 <button
-                  class="text-button console-load-button"
+                  class="text-button console-load-button font-bold rounded-[var(--radius-sm)] whitespace-nowrap"
                   type="button"
                   data-testid="replay-load-more"
                   :disabled="replayWindowLoading"
@@ -1465,7 +1467,7 @@ onBeforeUnmount(() => {
                 </button>
               </div>
               <button
-                class="topbar-icon-button console-fullscreen-button"
+                class="topbar-icon-button console-fullscreen-button w-8 h-8 inline-grid place-items-center p-0 rounded-[var(--radius-sm)] flex-none"
                 type="button"
                 data-testid="replay-fullscreen-console"
                 :aria-label="isReplayFullscreen ? '退出全屏' : '进入全屏'"
