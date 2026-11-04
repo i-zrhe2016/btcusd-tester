@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, ref } from 'vue'
-import { Show, UserButton, useClerk } from '@clerk/vue'
+import { Show, UserButton, useAuth, useClerk } from '@clerk/vue'
 import { ArrowRight, Play, Zap, ChartNoAxesColumnIncreasing, Check, ArrowUpRight } from '@lucide/vue'
 const productButtonClass = 'inline-flex justify-center items-center gap-[23px] font-semibold leading-[1.3] cursor-pointer transition-colors duration-150'
 const Workspace = defineAsyncComponent(() => import('./App.vue'))
 const clerk = useClerk()
+const { isLoaded, isSignedIn } = useAuth()
 const route = ref(window.location.hash)
 const updateRoute = () => { route.value = window.location.hash }
 window.addEventListener('hashchange', updateRoute)
 onBeforeUnmount(() => window.removeEventListener('hashchange', updateRoute))
 const inWorkspace = computed(() => route.value === '#workspace')
+const canUseWorkspace = computed(() => isLoaded.value === true && isSignedIn.value === true)
 function openAuth(mode: 'login' | 'register') {
   const options = { forceRedirectUrl: window.location.origin + '/?auth=1#workspace' }
   if (mode === 'login') clerk.value?.openSignIn(options)
@@ -20,10 +22,24 @@ function openAuth(mode: 'login' | 'register') {
 <template>
   <AuthBridge />
   <template v-if="inWorkspace">
+    <template v-if="canUseWorkspace">
     <a class="product-return fixed bottom-[15px] left-[18px] z-[100] bg-white text-[color:#111] [border:1px_solid_#ddd] rounded-[6px] [padding:8px_12px] text-[length:12px] no-underline" href="#">← 返回产品首页
     </a>
-    <div class="fixed top-4 right-4 z-[200]"><Show when="signed-in"><UserButton /></Show><Show when="signed-out"><button class="rounded bg-white px-4 py-2 text-black border" @click="openAuth('login')">登录账户</button></Show></div>
+    <div class="fixed top-4 right-4 z-[200]"><UserButton /></div>
     <Workspace />
+    </template>
+    <div v-else class="gate fixed inset-0 bg-white flex items-center justify-center [padding:24px] [font-family:Arial,'Microsoft_YaHei','PingFang_SC',sans-serif]">
+      <section class="gate-card text-center w-[420px] max-w-full">
+        <span class="product-mark inline-block w-[31px] h-[30px] bg-black [clip-path:polygon(50%_0,100%_100%,0_100%)]"></span>
+        <h1 class="text-[length:26px] font-[750] tracking-[-.6px] [margin:22px_0_10px]">登录后使用训练工作台</h1>
+        <p class="text-[color:#777] text-[length:14px] leading-[1.8] [margin:0_0_26px]">{{ isLoaded ? '复盘工作台仅对已登录账户开放。请登录或注册后继续。' : '正在验证登录状态…' }}</p>
+        <div v-if="isLoaded" class="flex justify-center gap-[12px]">
+          <button class="gate-button gate-button-secondary bg-white text-[color:#111] [border:1px_solid_#111] rounded-[8px] [padding:12px_26px] text-[length:15px] min-h-[46px] cursor-pointer [font-family:inherit]" @click="openAuth('login')">登录</button>
+          <button class="gate-button bg-black text-[color:#fff] [border:1px_solid_#000] rounded-[8px] [padding:12px_26px] text-[length:15px] min-h-[46px] cursor-pointer [font-family:inherit]" @click="openAuth('register')">注册账户</button>
+        </div>
+        <a class="inline-block mt-[24px] text-[length:13px] text-[color:#777]" href="#">返回产品首页</a>
+      </section>
+    </div>
   </template>
   <div v-else class="product-page box-border [&_*]:box-border bg-white text-[color:#080808] min-h-[100vh] [font-family:Arial,'Microsoft_YaHei','PingFang_SC',sans-serif] [-webkit-font-smoothing:antialiased] [&_:focus-visible]:[outline:2px_solid_#111] [&_:focus-visible]:outline-offset-[5px] motion-reduce:[&_*]:scroll-auto motion-reduce:[&_*]:transition-none">
     <header class="product-header max-w-[1440px] m-auto [padding:28px_48px] flex items-center gap-[45px] [@media(max-width:1000px)]:[padding:24px] [@media(max-width:1000px)]:gap-[25px] [@media(max-width:700px)]:[padding:21px_20px] [@media(max-width:700px)]:flex-wrap [@media(max-width:700px)]:gap-[24px_10px]">
@@ -219,13 +235,8 @@ function openAuth(mode: 'login' | 'register') {
     gap: 16px;
   }
   .product-login,
-  .product-account .product-button,
-  .product-auth-close,
-  .product-auth-switch button {
+  .product-account .product-button {
     min-height: 44px;
-  }
-  .product-auth-close {
-    min-width: 44px;
   }
   .product-hero-note {
     font-size: 12px;
