@@ -87,8 +87,9 @@ async function submitAuth() {
     </header>
     <main id="main-content">
       <section class="product-hero text-center [padding:133px_24px_0] [@media(min-width:1600px)]:pt-[145px] [@media(max-width:1000px)]:pt-[100px] [@media(max-width:700px)]:[padding:73px_22px_0]">
-        <h1 class="text-[length:clamp(30px,4.1vw,61px)] leading-[1.3] tracking-[-2px] m-0 font-[750] [@media(max-width:700px)]:text-[length:34px] [@media(max-width:700px)]:tracking-[-1.3px] [@media(max-width:700px)]:leading-[1.55] [@media(max-width:700px)]:max-w-[500px] [@media(max-width:700px)]:m-auto">BTCUSD 历史行情回放与交易训练</h1>
+        <h1 class="text-[length:clamp(30px,4.1vw,61px)] leading-[1.3] tracking-[-2px] m-0 font-[750] [@media(max-width:700px)]:text-[length:34px] [@media(max-width:700px)]:tracking-[-1.3px] [@media(max-width:700px)]:leading-[1.55] [@media(max-width:700px)]:max-w-[500px] [@media(max-width:700px)]:m-auto">历史行情回放与交易训练</h1>
         <p class="text-[color:#626262] text-[length:clamp(17px,1.9vw,26px)] leading-[1.8] [margin:24px_auto_0] max-w-[1000px] [@media(max-width:700px)]:text-[length:16px] [@media(max-width:700px)]:max-w-[350px] [@media(max-width:700px)]:mt-[19px]">回放真实历史行情，进行模拟交易，复盘交易表现，提升交易能力。</p>
+        <p class="product-markets text-[color:#111] text-[length:18px] font-semibold leading-[1.8] [margin:18px_auto_0] [@media(max-width:700px)]:text-[length:16px]">支持外汇、期货、比特币等加密货币</p>
         <div class="product-actions flex justify-center gap-[30px] mt-[43px] [@media(max-width:700px)]:gap-[13px] [@media(max-width:700px)]:mt-[30px]">
           <a class="product-button text-[color:#fff] no-underline bg-black [border:1px_solid_#000] rounded-[9px] [padding:19px_34px] text-[length:20px] min-h-[62px] hover:bg-[#292929] [@media(max-width:700px)]:text-[length:15px] [@media(max-width:700px)]:[padding:15px_19px] [@media(max-width:700px)]:min-h-[51px] [@media(max-width:700px)]:gap-[12px]" :class="productButtonClass" href="#workspace">开始练习 <ArrowRight :size="25" />
           </a>
@@ -101,7 +102,7 @@ async function submitAuth() {
         <article class="[@media(max-width:700px)]:relative [@media(max-width:700px)]:pl-[58px]">
           <Play class="mb-[19px] [@media(max-width:700px)]:absolute [@media(max-width:700px)]:left-0 [@media(max-width:700px)]:top-[4px] [@media(max-width:700px)]:w-[27px]" :size="33" :stroke-width="1.8" />
           <h2 class="text-[length:27px] tracking-[-.5px] [margin:0_0_13px] [@media(max-width:1000px)]:text-[length:23px] [@media(max-width:700px)]:text-[length:22px] [@media(max-width:700px)]:mb-[7px] font-bold">历史回放</h2>
-          <p class="text-[length:17px] text-[color:#696969] leading-[1.9] m-0 [@media(max-width:1000px)]:text-[length:15px] [@media(max-width:700px)]:text-[length:15px]">重现 BTCUSD 真实行情。<br class="[@media(max-width:700px)]:hidden" />按自己的节奏，练习每一次判断。</p>
+          <p class="text-[length:17px] text-[color:#696969] leading-[1.9] m-0 [@media(max-width:1000px)]:text-[length:15px] [@media(max-width:700px)]:text-[length:15px]">重现真实历史行情。<br class="[@media(max-width:700px)]:hidden" />按自己的节奏，练习每一次判断。</p>
         </article>
         <article class="[@media(max-width:700px)]:relative [@media(max-width:700px)]:pl-[58px]">
           <Zap class="mb-[19px] [@media(max-width:700px)]:absolute [@media(max-width:700px)]:left-0 [@media(max-width:700px)]:top-[4px] [@media(max-width:700px)]:w-[27px]" :size="34" :stroke-width="1.8" />
@@ -239,3 +240,68 @@ async function submitAuth() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.product-page ::selection {
+  background: #111;
+  color: #fff;
+}
+.product-hero h1 {
+  text-wrap: balance;
+  letter-spacing: -.03em;
+}
+.product-nav a {
+  min-height: 44px;
+  text-underline-offset: 6px;
+}
+.product-nav a:hover,
+.product-inline-link:hover {
+  text-decoration: underline;
+}
+.product-hero-note,
+.product-footer > p {
+  color: #737373;
+}
+.product-traders-intro,
+.product-traders-details {
+  min-width: 0;
+}
+#features,
+#guide,
+#plans {
+  scroll-margin-top: 32px;
+}
+.product-plan li > svg {
+  flex-shrink: 0;
+}
+@media (max-width: 1000px) {
+  .product-traders {
+    gap: 40px;
+  }
+}
+@media (max-width: 700px) {
+  .product-header {
+    row-gap: 12px;
+  }
+  .product-nav {
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .product-login,
+  .product-account .product-button,
+  .product-auth-close,
+  .product-auth-switch button {
+    min-height: 44px;
+  }
+  .product-auth-close {
+    min-width: 44px;
+  }
+  .product-hero-note {
+    font-size: 12px;
+    line-height: 1.8;
+  }
+  .product-traders {
+    gap: 28px;
+  }
+}
+</style>
