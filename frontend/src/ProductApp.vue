@@ -17,9 +17,12 @@ const inWorkspace = computed(() => route.value === '#workspace')
 const canUseWorkspace = computed(() => isLoaded.value === true && isSignedIn.value === true)
 const isPaymentReturn = window.location.pathname === '/payment-return'
 const paymentOrder = new URLSearchParams(window.location.search).get('order') || ''
+const workspaceUrl = window.location.origin + '/?auth=1#workspace'
+const authPendingKey = 'grailab.auth.pending'
 const paymentStatus = ref<'pending' | 'paid' | 'error'>('pending')
 const checkingPayment = ref(false)
 let paymentTimer: ReturnType<typeof setTimeout> | undefined
+let paymentRedirectTimer: ReturnType<typeof setTimeout> | undefined
 let paymentAttempts = 0
 let paymentStopped = false
 async function checkPayment() {
@@ -30,7 +33,13 @@ async function checkPayment() {
     const result = await getPaymentStatus(paymentOrder)
     if (paymentStopped) return
     paymentStatus.value = result.status
-    if (result.status === 'pending' && ++paymentAttempts < 12) {
+    if (result.status === 'paid') {
+      if (!paymentRedirectTimer) {
+        paymentRedirectTimer = setTimeout(() => {
+          if (!paymentStopped) window.location.assign(workspaceUrl)
+        }, 1200)
+      }
+    } else if (result.status === 'pending' && ++paymentAttempts < 12) {
       paymentTimer = setTimeout(checkPayment, 5000)
     }
   } catch {
@@ -44,9 +53,19 @@ onMounted(() => {
     if (loaded && signedIn) void checkPayment()
   }, { immediate: true })
 })
-onBeforeUnmount(() => { paymentStopped = true; clearTimeout(paymentTimer) })
+onBeforeUnmount(() => {
+  paymentStopped = true
+  clearTimeout(paymentTimer)
+  clearTimeout(paymentRedirectTimer)
+})
 function paymentSignIn() {
-  clerk.value?.openSignIn({ forceRedirectUrl: window.location.href })
+  clerk.value?.openSignIn({
+    forceRedirectUrl: window.location.href,
+    fallbackRedirectUrl: window.location.href,
+    signUpForceRedirectUrl: window.location.href,
+    signUpFallbackRedirectUrl: window.location.href,
+    oauthFlow: 'redirect' as const,
+  })
 }
 function retryPayment() {
   clearTimeout(paymentTimer)
@@ -54,8 +73,6 @@ function retryPayment() {
   paymentStatus.value = 'pending'
   void checkPayment()
 }
-const workspaceUrl = window.location.origin + '/?auth=1#workspace'
-const authPendingKey = 'grailab.auth.pending'
 function openAuth(mode: 'login' | 'register') {
   sessionStorage.setItem(authPendingKey, '1')
   const options = {
