@@ -6,15 +6,16 @@ mod error;
 mod model;
 
 use axum::{
-    extract::{Path, Query, State},
-    http::{header, HeaderValue, Method},
-    routing::get,
+    extract::{DefaultBodyLimit, Path, Query, State},
+    http::{header, HeaderValue, Method, StatusCode},
+    routing::{get, put},
     Extension, Json, Router,
 };
 use config::Config;
 use error::ApiError;
 use model::{
-    BacktestRecord, BacktestRequest, MarketSnapshot, StrategyConfigRecord, StrategyConfigRequest,
+    BacktestRecord, BacktestRequest, MarketSnapshot, ReplayProjectRecord, ReplayProjectRequest,
+    StrategyConfigRecord, StrategyConfigRequest,
 };
 use serde::Deserialize;
 use sqlx::{postgres::PgPoolOptions, PgPool};
@@ -72,12 +73,15 @@ async fn main() -> anyhow::Result<()> {
 fn router(state: AppState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(HeaderValue::from_static("http://localhost:5173"))
-        .allow_methods([Method::GET, Method::POST])
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION]);
     let protected = Router::new()
         .route("/api/backtests", get(list_backtests).post(create_backtest))
         .route("/api/backtests/{id}", get(get_backtest))
         .route("/api/configs", get(list_configs).post(create_config))
+        .route("/api/projects", get(list_projects))
+        .route("/api/projects/{id}", put(upsert_project).delete(delete_project))
+        .layer(DefaultBodyLimit::max(1024 * 1024))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), auth::authenticate));
     Router::new()
         .route("/health", get(health))
@@ -188,6 +192,44 @@ async fn create_config(
     Ok(Json(
         db::create_config(&state.pool, user_id, request.name.trim(), parameters).await?,
     ))
+}
+
+async fn list_projects(
+    Extension(user_id): Extension<Uuid>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<ReplayProjectRecord>>, ApiError> {
+    Ok(Json(db::list_replay_projects(&state.pool, user_id).await?))
+}
+
+async fn upsert_project(
+    Extension(user_id): Extension<Uuid>,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(mut request): Json<ReplayProjectRequest>,
+) -> Result<Json<ReplayProjectRecord>, ApiError> {
+    // The path identifies the project; never trust a different id from the body.
+    request.id = id;
+    request.validate().map_err(ApiError::BadRequest)?;
+    Ok(Json(
+        db::upsert_replay_project(&state.pool, user_id, &request).await?,
+    ))
+}
+
+async fn delete_project(
+    Extension(user_id): Extension<Uuid>,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    if id.is_empty()
+        || id.len() > 128
+        || !id
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+    {
+        return Err(ApiError::BadRequest("invalid project id".to_owned()));
+    }
+    db::delete_replay_project(&state.pool, user_id, &id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn shutdown_signal() {

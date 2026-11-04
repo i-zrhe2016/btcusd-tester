@@ -1,4 +1,5 @@
 import { t } from './i18n'
+import { scopedStorageKey } from './userStorage'
 
 export const shortcutActions = [
   { id: 'forward', labelKey: 'shortcut.forward', key: ' ' },
@@ -21,7 +22,7 @@ export function validShortcut(key: string) {
 }
 export function loadShortcuts(): ShortcutBindings {
   try {
-    const saved = JSON.parse(localStorage.getItem(shortcutStorageKey) ?? 'null')
+    const saved = JSON.parse(localStorage.getItem(scopedStorageKey(shortcutStorageKey)) ?? 'null')
     if (saved && shortcutActions.every(action => typeof saved[action.id] === 'string' && validShortcut(saved[action.id])) && new Set(shortcutActions.map(action => saved[action.id])).size === shortcutActions.length) return saved
   } catch { /* Use defaults when browser storage is unavailable. */ }
   return { ...defaultShortcuts }

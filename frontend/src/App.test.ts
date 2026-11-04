@@ -2,12 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, nextTick, onMounted, onUnmounted } from 'vue'
 import App from './App.vue'
-import { getMarketMetadata, getMarketSnapshot } from './api'
+import { getMarketMetadata, getMarketSnapshot, listProjects, saveProject } from './api'
 import { createSeedReplayProject, loadReplayProjects, replayWindowRange, saveActiveReplayProjectId, saveReplayProjects, timeframeStepSeconds } from './replay'
 import type { MarketMetadata, MarketSnapshot } from './types'
 
 const chartLife = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }))
-vi.mock('./api', () => ({ getMarketMetadata: vi.fn(), getMarketSnapshot: vi.fn() }))
+vi.mock('./api', () => ({
+  getMarketMetadata: vi.fn(),
+  getMarketSnapshot: vi.fn(),
+  listProjects: vi.fn(),
+  saveProject: vi.fn(),
+  deleteProject: vi.fn(),
+}))
 vi.mock('./components/MarketChart.vue', () => ({
   __esModule: true,
   default: defineComponent({
@@ -57,6 +63,8 @@ beforeEach(() => {
   chartLife.mounts = chartLife.unmounts = 0
   vi.mocked(getMarketMetadata).mockResolvedValue(market)
   vi.mocked(getMarketSnapshot).mockImplementation(async (query) => snapshot(query.timeframe))
+  vi.mocked(listProjects).mockResolvedValue([])
+  vi.mocked(saveProject).mockImplementation(async (project) => project)
 })
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
 
@@ -430,3 +438,52 @@ describe('workspace loading', () => {
     expect(wrapper.find('[data-testid="chart-mock"]').text()).toContain('"timeframe":"1h"')
   })
 })
+
+describe('per-user project data', () => {
+  it("restores the signed-in user's server projects instead of another account's cache", async () => {
+    const alice = { ...createSeedReplayProject(market), id: 'alice-project', name: 'Alice 项目' }
+    const bob = { ...createSeedReplayProject(market), id: 'bob-project', name: 'Bob 项目' }
+    localStorage.setItem('btcusd.replay.projects.v2.u.user_bob', JSON.stringify([bob]))
+    vi.mocked(listProjects).mockResolvedValue([alice])
+    wrapper = mount(App, { props: { userId: 'user_alice' } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Alice 项目')
+    expect(wrapper.text()).not.toContain('Bob 项目')
+    expect(listProjects).toHaveBeenCalled()
+  })
+
+  it('asks before adopting unscoped legacy projects and imports them on confirm', async () => {
+    const legacy = { ...createSeedReplayProject(market), id: 'legacy-project', name: '旧版项目' }
+    localStorage.setItem('btcusd.replay.projects.v2', JSON.stringify([legacy]))
+    vi.mocked(listProjects).mockResolvedValue([])
+    wrapper = mount(App, { props: { userId: 'user_alice' } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('发现旧版本机项目')
+    const importButton = wrapper.findAll('button').find((button) => button.text() === '导入到我的账户')
+    expect(importButton).toBeDefined()
+    await importButton!.trigger('click')
+    await flushPromises()
+    expect(saveProject).toHaveBeenCalledWith(expect.objectContaining({ id: 'legacy-project' }))
+    expect(localStorage.getItem('btcusd.replay.projects.v2')).toBeNull()
+    expect(localStorage.getItem('btcusd.replay.projects.v2.u.user_alice')).toContain('legacy-project')
+  })
+
+  it('deletes legacy projects without importing them when the user declines', async () => {
+    localStorage.setItem('btcusd.replay.projects.v2', JSON.stringify([
+      { ...createSeedReplayProject(market), id: 'legacy-project' },
+    ]))
+    vi.mocked(listProjects).mockResolvedValue([])
+    wrapper = mount(App, { props: { userId: 'user_alice' } })
+    await flushPromises()
+    const discard = wrapper.findAll('button').find((button) => button.text() === '删除旧数据')
+    await discard!.trigger('click')
+    await flushPromises()
+    expect(savedProjects()).not.toContain('legacy-project')
+    expect(localStorage.getItem('btcusd.replay.projects.v2')).toBeNull()
+  })
+
+  function savedProjects() {
+    return localStorage.getItem('btcusd.replay.projects.v2.u.user_alice') ?? ''
+  }
+})
+

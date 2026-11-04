@@ -44,11 +44,33 @@ M1 迁移写入固定本地访客。邮箱 `guest@local.invalid` 不用于登录
 
 索引 `(user_id, created_at DESC)` 支持历史列表。回测配置一经创建不修改，以保证结果可复现。
 
+## `replay_projects`
+
+复盘项目库按 Clerk 用户隔离（迁移 `0003_replay_projects.sql`）：
+
+| 字段 | 类型 | 约束 |
+| --- | --- | --- |
+| `user_id` | UUID | 外键到 `users`，级联删除；与 `id` 组成联合主键 |
+| `id` | TEXT | 客户端生成的项目 ID，`1..128` 位字母、数字、`-`、`_` |
+| `name` | TEXT | 非空，`1..120` 字符 |
+| `symbol` | TEXT | 非空，当前只接受 `BTCUSD` |
+| `timeframe` | TEXT | 非空，复盘支持的 11 个周期之一 |
+| `panes` | JSONB | 非空，`1..4` 个受支持周期 |
+| `range_from` / `range_to` | BIGINT | UTC 秒；`range_from < range_to` |
+| `speed` | DOUBLE PRECISION | `0.25..8` |
+| `cursor_index` | BIGINT | `>= 0` |
+| `cursor_timestamp` | BIGINT | 可空；存在时必须落在 `[range_from, range_to]` |
+| `trades` | JSONB | 非空数组，最多 10,000 条 |
+| `drawings` | JSONB | 非空数组，最多 5,000 条 |
+| `created_at` / `updated_at` | TIMESTAMPTZ | 非空；更新时只刷新 `updated_at` |
+
+索引 `(user_id, updated_at DESC)` 支持项目库列表。所有读写都以认证中间件解析出的 `user_id` 过滤；联合主键允许不同用户的客户端 ID 相同而互不影响。单项目请求体上限为 1 MB（Nginx）并在应用层再次限制为 768 KB。
+
 ## 所有权与迁移
 
 - 只有回测服务运行 SQL 迁移并访问这些表。
 - 迁移文件只向前追加，不修改已部署的迁移。
 - 应用启动时执行迁移；失败则不开始监听端口。
 - 数据库备份必须与应用镜像版本、Parquet 文件校验和一起记录。
-- M2 的回放状态由未来 `replay` 服务拥有，不能直接追加到回测服务表中。
+- 复盘状态由回测服务的 `replay_projects` 表持有，写入受 Clerk 身份约束；浏览器 `localStorage` 只作为**按用户命名空间隔离**的缓存，不再是唯一来源。
 

@@ -8,7 +8,7 @@ import { createCheckout, getPaymentStatus } from './api'
 const productButtonClass = 'inline-flex justify-center items-center gap-[23px] font-semibold leading-[1.3] cursor-pointer transition-colors duration-150'
 const Workspace = defineAsyncComponent(() => import('./App.vue'))
 const clerk = useClerk()
-const { isLoaded, isSignedIn } = useAuth()
+const { isLoaded, isSignedIn, userId } = useAuth()
 const route = ref(window.location.hash)
 const updateRoute = () => { route.value = window.location.hash }
 window.addEventListener('hashchange', updateRoute)
@@ -141,7 +141,7 @@ async function startCheckout() {
     <a class="product-return fixed bottom-[15px] left-[18px] z-[100] bg-white text-[color:#111] [border:1px_solid_#ddd] rounded-[6px] [padding:8px_12px] text-[length:12px] no-underline" href="#">{{ t('product.returnHome') }}
     </a>
     <div class="fixed top-4 right-4 z-[200]"><UserButton /></div>
-    <Workspace />
+    <Workspace :user-id="userId ?? undefined" />
     </template>
     <div v-else class="gate fixed inset-0 bg-white flex items-center justify-center [padding:24px] [font-family:Arial,'Microsoft_YaHei','PingFang_SC',sans-serif]">
       <section class="gate-card text-center w-[420px] max-w-full">

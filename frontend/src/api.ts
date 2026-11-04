@@ -1,6 +1,7 @@
 import { markRaw } from 'vue'
 import { getAuthToken } from './auth'
 import { t } from './i18n'
+import type { ReplayProject } from './replay'
 import type {
   MarketMetadata,
   MarketSnapshot,
@@ -31,7 +32,24 @@ async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Pro
     }
     throw new Error(body.message || t('api.requestFailed', { status: response.status }))
   }
+  if (response.status === 204) return undefined as T
   return (await response.json()) as T
+}
+
+export function listProjects(): Promise<ReplayProject[]> {
+  return requestJson<ReplayProject[]>('/api/projects')
+}
+
+export function saveProject(project: ReplayProject, options: { keepalive?: boolean } = {}): Promise<ReplayProject> {
+  return requestJson<ReplayProject>(`/api/projects/${encodeURIComponent(project.id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(project),
+    keepalive: options.keepalive,
+  })
+}
+
+export function deleteProject(id: string): Promise<void> {
+  return requestJson<void>(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 export function getPaymentStatus(order: string): Promise<{ status: 'paid' | 'pending' }> {

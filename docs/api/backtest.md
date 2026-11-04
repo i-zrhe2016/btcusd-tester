@@ -88,6 +88,41 @@ M1 只提供 `stoch-cross-long`：
 
 名称和参数使用与回测请求相同的校验规则。M1 配置创建后不可原地覆盖；后续更新接口必须使用显式 `PUT /api/configs/{id}`。
 
+## 复盘项目
+
+以下接口都要求 Clerk Bearer JWT，并按认证得到的 `user_id` 隔离；不同用户可以持有相同的客户端项目 ID。
+
+### GET `/api/projects`
+
+按 `updated_at` 倒序返回当前用户的项目（最多 200 条），字段与前端 `ReplayProject` 对齐：
+
+```json
+[{
+  "id": "3f0a…",
+  "name": "BTCUSD 1h Replay",
+  "symbol": "BTCUSD",
+  "timeframe": "1h",
+  "panes": ["1h", "15m"],
+  "from": 1700000000,
+  "to": 1700100000,
+  "speed": 1,
+  "cursorIndex": 42,
+  "cursorTimestamp": 1700025200,
+  "trades": [],
+  "drawings": [],
+  "createdAt": "2026-11-04T10:00:00Z",
+  "updatedAt": "2026-11-04T10:05:00Z"
+}]
+```
+
+### PUT `/api/projects/{id}`
+
+以路径 ID 为准执行用户内的插入或更新（`ON CONFLICT (user_id, id)`），返回同结构记录；`created_at` 保留，`updated_at` 刷新为服务端时间。校验规则：ID 为 `1..128` 位字母、数字、`-`、`_`；名称 `1..120` 字符；仅 `BTCUSD`；周期属于复盘支持的 11 个周期；`panes` 为 `1..4` 个受支持周期；`from < to`；速度 `0.25..8`；游标时间必须落在项目范围内；交易最多 10,000 条、绘图最多 5,000 条；单个项目请求体上限 768 KB（Nginx 总上限 1 MB）。
+
+### DELETE `/api/projects/{id}`
+
+删除当前用户的项目并返回 `204`；不存在或属于其他用户时同样返回 `204`，避免泄露项目是否存在。
+
 ## 失败语义
 
 - 写入初始记录后，状态立即为 `running`。

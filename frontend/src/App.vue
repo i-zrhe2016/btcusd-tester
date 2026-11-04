@@ -20,26 +20,31 @@ import TimeframeSwitcher from './components/TimeframeSwitcher.vue'
 import WorkspaceSettings from './components/WorkspaceSettings.vue'
 import { t, timeframeLabel, TIMEFRAMES } from './i18n'
 import { loadShortcuts, shortcutActions, shortcutStorageKey, type ShortcutBindings } from './shortcuts'
+import { hasStorageUser, scopedStorageKey, setStorageUser } from './userStorage'
+
+const props = defineProps<{ userId?: string }>()
+setStorageUser(props.userId)
 
 const workspaceSettings = ref<InstanceType<typeof WorkspaceSettings> | null>(null)
 const settingsOpen = ref(false)
 const mobileConsoleOpen = ref(false)
 const shortcutBindings = ref(loadShortcuts())
 const candleColors = ref(loadCandleColors())
+const CANDLE_COLORS_KEY = 'btcusd.candle-colors.v1'
 function loadCandleColors() {
   try {
-    const value = JSON.parse(localStorage.getItem('btcusd.candle-colors.v1') ?? 'null')
+    const value = JSON.parse(localStorage.getItem(scopedStorageKey(CANDLE_COLORS_KEY)) ?? 'null')
     if (value && /^#[0-9a-f]{6}$/i.test(value.up) && /^#[0-9a-f]{6}$/i.test(value.down) && typeof value.hollow === 'boolean') return { up: value.up as string, down: value.down as string, hollow: value.hollow as boolean }
   } catch { /* Use default colors when browser storage is unavailable. */ }
   return { up: '#ffffff', down: '#ffffff', hollow: true }
 }
 function updateShortcuts(value: ShortcutBindings) {
-  try { localStorage.setItem(shortcutStorageKey, JSON.stringify(value)) }
+  try { localStorage.setItem(scopedStorageKey(shortcutStorageKey), JSON.stringify(value)) }
   catch { setNotice(t('app.storageUnavailable')) }
   shortcutBindings.value = value
 }
 function updateCandleColors(value: { up: string; down: string; hollow: boolean }) {
-  try { localStorage.setItem('btcusd.candle-colors.v1', JSON.stringify(value)) }
+  try { localStorage.setItem(scopedStorageKey(CANDLE_COLORS_KEY), JSON.stringify(value)) }
   catch { setNotice(t('app.storageUnavailable')) }
   candleColors.value = value
 }
@@ -51,7 +56,7 @@ const MarketChart = defineAsyncComponent({
   delay: 0,
   timeout: 30_000,
 })
-import { getMarketMetadata, getMarketSnapshot } from './api'
+import { getMarketMetadata, getMarketSnapshot, listProjects, saveProject } from './api'
 import { fromUtcInput, formatNumber, formatUtc } from './format'
 import {
   applyManualTrade,
@@ -60,8 +65,11 @@ import {
   createReplayDraft,
   createReplayProjectFromDraft,
   createSeedReplayProject,
+  clearLegacyReplayProjects,
   draftFromProject,
   loadActiveReplayProjectId,
+  loadLegacyReplayProjects,
+  normalizeReplayProjectList,
   assignReplayPaneTimeframe,
   loadReplayProjects,
   nextReplayPaneTimeframe,
@@ -114,7 +122,7 @@ interface ReplayPaneState {
   formingClock: number | null
 }
 
-const viewKey = 'btcusd.workspace.view.v2'
+const VIEW_KEY = 'btcusd.workspace.view.v2'
 const replayLengths: [number, number, number] = [30, 120, 840]
 
 const timeframeLabels = computed<Record<string, string>>(() =>
@@ -136,6 +144,9 @@ let replayPaneRequestId = 0
 const notice = ref('')
 const pageError = ref('')
 const projectError = ref('')
+const syncError = ref('')
+const legacyImportCandidates = ref<ReplayProject[] | null>(null)
+const importBusy = ref(false)
 const activeView = ref<AppView>('projects')
 const playbackPlaying = ref(false)
 const isReplayFullscreen = ref(false)
@@ -226,13 +237,13 @@ const projectActionLabel = computed(() => activeProject.value ? t('app.saveAndOp
 
 function loadAppView(): AppView {
   if (typeof window === 'undefined') return 'projects'
-  const value = window.localStorage.getItem(viewKey)
+  const value = window.localStorage.getItem(scopedStorageKey(VIEW_KEY))
   return value === 'replay' || value === 'projects' ? value : 'projects'
 }
 
 function saveAppView(value: AppView) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(viewKey, value)
+  window.localStorage.setItem(scopedStorageKey(VIEW_KEY), value)
 }
 
 function setNotice(message: string) {
@@ -259,9 +270,58 @@ function persistProjectsState() {
   saveActiveReplayProjectId(activeProjectId.value)
 }
 
+// Local storage is a per-user cache; the server copy is what follows the user
+// across devices. Playback moves the cursor every tick, so sync is coalesced.
+const PROJECT_SYNC_DELAY = 1200
+const PROJECT_SYNC_MAX_WAIT = 10_000
+const pendingProjectSaves = new Map<string, ReplayProject>()
+const projectSyncTimers = new Map<string, number>()
+const projectSyncQueuedAt = new Map<string, number>()
+
+// Keep a stale cached cursor inside the project range so the server accepts it.
+function serverProject(project: ReplayProject): ReplayProject {
+  if (project.cursorTimestamp === undefined) return project
+  const cursorTimestamp = Math.min(Math.max(project.cursorTimestamp, project.from), project.to)
+  return cursorTimestamp === project.cursorTimestamp ? project : { ...project, cursorTimestamp }
+}
+
+function queueProjectSync(project: ReplayProject, immediate = false) {
+  if (!hasStorageUser()) return
+  pendingProjectSaves.set(project.id, serverProject(project))
+  if (!projectSyncQueuedAt.has(project.id)) projectSyncQueuedAt.set(project.id, Date.now())
+  const pendingTimer = projectSyncTimers.get(project.id)
+  if (pendingTimer !== undefined) window.clearTimeout(pendingTimer)
+  const overdue = Date.now() - (projectSyncQueuedAt.get(project.id) ?? Date.now()) >= PROJECT_SYNC_MAX_WAIT
+  projectSyncTimers.set(project.id, window.setTimeout(
+    () => { void flushProjectSync(project.id) },
+    immediate || overdue ? 0 : PROJECT_SYNC_DELAY,
+  ))
+}
+
+async function flushProjectSync(id: string, keepalive = false) {
+  const timer = projectSyncTimers.get(id)
+  if (timer !== undefined) window.clearTimeout(timer)
+  projectSyncTimers.delete(id)
+  projectSyncQueuedAt.delete(id)
+  const project = pendingProjectSaves.get(id)
+  pendingProjectSaves.delete(id)
+  if (!project) return
+  try {
+    await saveProject(project, { keepalive })
+    syncError.value = ''
+  } catch {
+    syncError.value = t('app.syncPending')
+  }
+}
+
+function flushPendingProjectSync(keepalive = false) {
+  for (const id of [...pendingProjectSaves.keys()]) void flushProjectSync(id, keepalive)
+}
+
 function updateProject(project: ReplayProject) {
   projects.value = projects.value.map((current) => (current.id === project.id ? project : current))
   persistProjectsState()
+  queueProjectSync(project)
 }
 
 function reconcileProjectWithMarket(project: ReplayProject): { project: ReplayProject; changed: boolean } {
@@ -279,6 +339,7 @@ function alignProjectToMarket(project: ReplayProject): { project: ReplayProject;
   if (!changed) return { project, changed: false }
   projects.value = projects.value.map((current) => (current.id === project.id ? aligned : current))
   saveReplayProjects(projects.value)
+  queueProjectSync(aligned)
   return { project: aligned, changed: true }
 }
 
@@ -327,6 +388,7 @@ function clearPlaybackTimer() {
 }
 
 function pausePlayback() {
+  if (playbackPlaying.value) flushPendingProjectSync()
   playbackPlaying.value = false
 }
 
@@ -721,6 +783,7 @@ function createProject() {
     activeProjectId.value = project.id
     saveActiveReplayProjectId(project.id)
     saveReplayProjects(projects.value)
+    queueProjectSync(project, true)
     syncDraftFromProject(project)
     playbackPlaying.value = false
     openReplay()
@@ -744,6 +807,7 @@ function saveActiveProject() {
     activeProjectId.value = next.id
     saveActiveReplayProjectId(next.id)
     saveReplayProjects(projects.value)
+    queueProjectSync(next, true)
     syncDraftFromProject(next)
     playbackPlaying.value = false
     openReplay()
@@ -756,6 +820,7 @@ function saveActiveProject() {
 function selectProject(projectId: string) {
   const storedProject = projects.value.find((item) => item.id === projectId)
   if (!storedProject) return
+  flushPendingProjectSync()
   const { project, changed } = alignProjectToMarket(storedProject)
   projectError.value = ''
   activeProjectId.value = project.id
@@ -990,6 +1055,89 @@ function retryLoadMoreReplay() {
   void loadMoreReplay({ retry: true })
 }
 
+async function uploadLocalProjects(list: ReplayProject[]) {
+  try {
+    for (const project of list) await saveProject(serverProject(project))
+    syncError.value = ''
+  } catch {
+    syncError.value = t('app.syncPending')
+  }
+}
+
+async function restoreServerProjects(requestId: number) {
+  if (!hasStorageUser()) return
+  let remote: ReplayProject[]
+  try {
+    remote = normalizeReplayProjectList(await listProjects())
+  } catch {
+    // Offline or the service is unavailable: keep the per-user local cache.
+    return
+  }
+  if (disposed || requestId !== initializationId) return
+
+  const legacy = loadLegacyReplayProjects()
+  if (legacy.length) legacyImportCandidates.value = legacy
+
+  if (remote.length) {
+    projects.value = remote
+    const storedActive = loadActiveReplayProjectId()
+    const active = remote.find((project) => project.id === storedActive) ?? remote[0]
+    activeProjectId.value = active?.id ?? ''
+    saveActiveReplayProjectId(activeProjectId.value)
+    saveReplayProjects(remote)
+    if (active) syncDraftFromProject(active)
+  } else if (projects.value.length) {
+    // The server has no copy yet; this scoped cache belongs to this user.
+    await uploadLocalProjects(projects.value)
+  }
+}
+
+function seedProjectIfEmpty() {
+  if (projects.value.length || legacyImportCandidates.value || !metadata.value) return
+  const seed = createSeedReplayProject(metadata.value)
+  projects.value = [seed]
+  activeProjectId.value = seed.id
+  persistProjectsState()
+  queueProjectSync(seed, true)
+  syncDraftFromProject(seed)
+}
+
+async function importLegacyProjects() {
+  const candidates = legacyImportCandidates.value
+  if (!candidates?.length || importBusy.value) return
+  importBusy.value = true
+  try {
+    const imported: ReplayProject[] = []
+    for (const project of candidates) imported.push(await saveProject(serverProject(project)))
+    const importedIds = new Set(imported.map((project) => project.id))
+    const merged = normalizeReplayProjectList([
+      ...imported,
+      ...projects.value.filter((project) => !importedIds.has(project.id)),
+    ])
+    projects.value = merged
+    const active = merged.find((project) => project.id === activeProjectId.value) ?? merged[0]
+    activeProjectId.value = active?.id ?? ''
+    saveActiveReplayProjectId(activeProjectId.value)
+    saveReplayProjects(merged)
+    if (active) syncDraftFromProject(active)
+    clearLegacyReplayProjects()
+    legacyImportCandidates.value = null
+    syncError.value = ''
+    setNotice(t('app.legacyImported', { count: imported.length }))
+    seedProjectIfEmpty()
+  } catch {
+    syncError.value = t('app.legacyImportFailed')
+  } finally {
+    importBusy.value = false
+  }
+}
+
+function discardLegacyProjects() {
+  clearLegacyReplayProjects()
+  legacyImportCandidates.value = null
+  seedProjectIfEmpty()
+}
+
 async function initialize() {
   const requestId = ++initializationId
   pageError.value = ''
@@ -1005,16 +1153,14 @@ async function initialize() {
     if (new URLSearchParams(window.location.search).get('auth') === '1') activeView.value = 'projects'
     if (active) syncDraftFromProject(active)
   }
+  await restoreServerProjects(requestId)
+  if (disposed || requestId !== initializationId) return
   try {
     const market = await getMarketMetadata()
     if (disposed || requestId !== initializationId) return
     metadata.value = market
     if (!projects.value.length) {
-      const seed = createSeedReplayProject(market)
-      projects.value = [seed]
-      activeProjectId.value = seed.id
-      persistProjectsState()
-      syncDraftFromProject(seed)
+      seedProjectIfEmpty()
     } else if (activeProject.value) {
       const { project, changed } = alignProjectToMarket(activeProject.value)
       if (changed) {
@@ -1105,9 +1251,19 @@ watch(
   { immediate: true },
 )
 
+function flushOnPageHide() {
+  flushPendingProjectSync(true)
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') flushPendingProjectSync(true)
+}
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', syncReplayFullscreen)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('keydown', handleReplayShortcut)
+  window.addEventListener('pagehide', flushOnPageHide)
   void initialize()
 })
 
@@ -1116,8 +1272,11 @@ onBeforeUnmount(() => {
   initializationId += 1
   snapshotRequestId += 1
   clearPlaybackTimer()
+  flushPendingProjectSync(true)
   document.removeEventListener('fullscreenchange', syncReplayFullscreen)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('keydown', handleReplayShortcut)
+  window.removeEventListener('pagehide', flushOnPageHide)
 })
 </script>
 
@@ -1127,6 +1286,26 @@ onBeforeUnmount(() => {
     :class="{ 'replay-active': activeView === 'replay', 'replay-immersive': isReplayFullscreen }"
   >
     <WorkspaceSettings ref="workspaceSettings" :bindings="shortcutBindings" :colors="candleColors" @bindings="updateShortcuts" @colors="updateCandleColors" @opened="settingsOpen = $event" />
+    <div
+      v-if="legacyImportCandidates"
+      class="fixed inset-0 z-[300] grid place-items-center p-4 [background:rgba(17,_24,_39,_0.42)] [backdrop-filter:blur(6px)]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="legacy-import-title"
+    >
+      <section class="w-full max-w-[460px] [border:1px_solid_var(--border)] rounded-[12px] [background:var(--surface)] [padding:24px] [box-shadow:0_18px_48px_rgba(17,_24,_39,_0.18)]">
+        <h2 id="legacy-import-title" class="[margin:0_0_8px] text-[16px] font-extrabold">{{ t('app.legacyTitle') }}</h2>
+        <p class="[margin:0_0_18px] text-[color:var(--text-muted)] text-[13px] leading-[1.7]">{{ t('app.legacyBody', { count: legacyImportCandidates.length }) }}</p>
+        <div class="flex justify-end gap-2">
+          <button type="button" class="secondary-button inline-flex items-center justify-center gap-2 rounded-[var(--radius)] [padding:0_14px] [background:var(--surface-2)]" :disabled="importBusy" @click="discardLegacyProjects">
+            {{ t('app.legacyDiscard') }}
+          </button>
+          <button type="button" class="primary-button inline-flex items-center justify-center gap-2 rounded-[var(--radius)] font-extrabold" :disabled="importBusy" @click="importLegacyProjects">
+            {{ importBusy ? t('app.legacyImporting') : t('app.legacyImport') }}
+          </button>
+        </div>
+      </section>
+    </div>
     <header class="topbar top-0 z-[30] items-center justify-between [border-bottom:1px_solid_var(--border)] [background:rgba(255,_255,_255,_0.92)] [backdrop-filter:blur(12px)]">
       <a class="brand items-center no-underline" href="/" :aria-label="t('product.homeLabel')">
         <span class="brand-mark grid place-items-center [border:1px_solid_var(--border-strong)] [background:var(--text)] text-[color:var(--surface)]" aria-hidden="true"><ChartCandlestick :size="20" /></span>
@@ -1232,6 +1411,11 @@ onBeforeUnmount(() => {
           <span>{{ activeError }}</span>
           <button type="button" class="text-button font-bold" @click="initialize">{{ t('common.retry') }}</button>
         </div>
+
+        <p v-if="syncError" class="alert flex items-center gap-2.5 [padding:12px_14px] [border:1px_solid_var(--border)] rounded-[var(--radius)] [background:var(--surface-2)] text-[color:var(--text-muted)]" role="status">
+          <ServerCog :size="18" aria-hidden="true" />
+          <span>{{ syncError }}</span>
+        </p>
 
         <div class="project-layout grid gap-4 items-start">
           <section class="panel project-form-panel" aria-labelledby="project-form-title">
