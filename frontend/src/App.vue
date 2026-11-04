@@ -18,7 +18,7 @@ import {
 import ChartLoadState from './components/ChartLoadState.vue'
 import TimeframeSwitcher from './components/TimeframeSwitcher.vue'
 import WorkspaceSettings from './components/WorkspaceSettings.vue'
-import { locale, t, timeframeLabel, toggleLocale, TIMEFRAMES } from './i18n'
+import { t, timeframeLabel, TIMEFRAMES } from './i18n'
 import { loadShortcuts, shortcutActions, shortcutStorageKey, type ShortcutBindings } from './shortcuts'
 
 const workspaceSettings = ref<InstanceType<typeof WorkspaceSettings> | null>(null)
@@ -1169,7 +1169,6 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="topbar-actions flex items-center">
-        <button class="topbar-action lang-switch min-h-8 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[length:12px] font-extrabold whitespace-nowrap" type="button" data-testid="locale-toggle" :aria-label="t('app.languageSwitch')" :title="t('app.languageSwitch')" @click="toggleLocale">{{ locale === 'zh' ? 'EN' : '中文' }}</button>
         <button class="topbar-action min-h-8 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[length:12px] font-extrabold whitespace-nowrap" type="button" :aria-label="t('app.settings')" @click="workspaceSettings?.open('settings')"><SlidersHorizontal :size="15" aria-hidden="true" /><span class="topbar-action-label">{{ t('app.settings') }}</span></button>
         <div v-if="activeView === 'projects'" class="service-state flex items-center gap-2 text-[color:var(--text-muted)] text-[length:13px] whitespace-nowrap">
           <span class="status-dot w-2 h-2 rounded-full [background:var(--profit)] [box-shadow:0_0_0_4px_rgba(22,_101,_52,_0.14)]" aria-hidden="true" />
