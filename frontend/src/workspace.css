@@ -123,6 +123,47 @@ select {
 .console-strip {
   @apply gap-3;
 }
+/* The two groups only exist to re-layout the console on phones; on desktop
+   they dissolve so every control keeps its original place in the strip. */
+.console-sheet,
+.console-primary {
+  @apply contents;
+}
+.console-strip .pane-count-control {
+  @apply order-1;
+}
+.console-strip .console-history-button,
+.console-strip .console-history-error {
+  @apply order-2;
+}
+.console-strip .console-jump-form {
+  @apply order-3;
+}
+.console-strip .replay-speed-control {
+  @apply order-4;
+}
+.console-strip .console-play {
+  @apply order-5;
+}
+.console-strip .console-trade-actions {
+  @apply order-6;
+}
+.console-strip .console-help-button {
+  @apply order-7;
+}
+.console-strip .console-quick-stats {
+  @apply order-8;
+}
+.console-sheet-backdrop,
+.console-clock-mobile,
+.console-more-toggle,
+.console-home-link {
+  @apply hidden;
+}
+/* The product link floats over the workspace; keep it clear of the replay console. */
+.product-return {
+  @apply bottom-[76px]! left-[14px]!;
+}
 .replay-speed-control {
   @apply [flex:0_1_220px];
 }
@@ -137,19 +178,19 @@ select {
   @apply [transform:translateY(0)];
 }
 .app-shell {
-  @apply min-h-[100dvh];
+  @apply min-h-[100dvh] grid-cols-[minmax(0,_1fr)];
 }
 .app-shell.replay-active {
-  @apply grid grid-rows-[48px_minmax(0,_1fr)] h-[100dvh] overflow-hidden;
+  @apply grid grid-rows-[48px_minmax(0,_1fr)] grid-cols-[minmax(0,_1fr)] h-[100dvh] overflow-hidden;
 }
 .app-shell.replay-active .topbar {
-  @apply relative h-[48px] [padding:0_14px] gap-[12px] flex-nowrap;
+  @apply relative h-[48px] [padding:0_14px] gap-[12px] flex-nowrap min-w-0;
 }
 .app-shell.replay-active .brand-mark {
   @apply w-[30px] h-[30px] rounded-[6px];
 }
 .app-shell.replay-immersive {
-  @apply fixed inset-0 z-[100] grid grid-rows-[minmax(0,_1fr)] min-h-[100dvh] h-[100dvh] [background:var(--chart-bg)];
+  @apply fixed inset-0 z-[100] grid grid-rows-[minmax(0,_1fr)] grid-cols-[minmax(0,_1fr)] min-h-[100dvh] h-[100dvh] [background:var(--chart-bg)];
 }
 .app-shell.replay-immersive .topbar {
   @apply hidden;
@@ -229,7 +270,7 @@ select {
   @apply w-[min(1680px,_100%)] [padding:18px_16px_40px] grid;
 }
 .workspace-replay {
-  @apply w-full max-w-[none] h-full min-h-0 p-0 block overflow-hidden;
+  @apply w-full max-w-[none] h-full min-h-0 min-w-0 p-0! block overflow-hidden;
 }
 .workspace-copy p:last-child {
   @apply mt-[8px] max-w-[68ch] text-[color:var(--text-muted)] leading-[1.5];
@@ -302,7 +343,10 @@ select {
   @apply [border:0];
 }
 .replay-pane-header {
-  @apply [padding:4px_6px];
+  @apply [padding:4px_6px] min-w-0;
+}
+.replay-pane > .fullscreen-chart {
+  @apply min-w-0;
 }
 .timeframe-shortcuts {
   @apply flex;
@@ -1000,39 +1044,166 @@ select {
     @apply hidden;
   }
 }
-@media (max-width: 640px) {
+@media (max-width: 640px), (pointer: coarse) and (max-height: 500px) {
   .app-shell.replay-active .topbar {
     @apply pr-[8px] pl-[8px];
   }
   .app-shell.replay-active .brand small {
     @apply hidden;
   }
-  .replay-topbar-status .status-chip {
-    @apply pr-[5px] pl-[5px];
+  .topbar .topbar-action-label {
+    @apply hidden;
   }
+  .topbar-actions .topbar-action {
+    @apply w-[40px] h-[40px] justify-center p-0;
+  }
+  .topbar-actions .topbar-icon-button {
+    @apply w-[40px]! h-[40px]!;
+  }
+  .replay-topbar-status {
+    @apply min-w-0 overflow-hidden [flex:0_1_auto]!;
+  }
+  .replay-topbar-status .status-chip {
+    @apply min-h-[22px] pr-[5px] pl-[5px];
+  }
+  /* The floating product link would sit on top of the dock; the sheet carries it instead. */
+  .product-return {
+    @apply hidden;
+  }
+
+  /* The replay chart is edge to edge; the generic .chart-card gutter would
+     shrink it and make the plot overflow its own frame. */
+  .fullscreen-chart {
+    @apply pr-0! pl-0!;
+  }
+  /* Chart control strip: drop the Stoch period/lengths so auto-scale and the
+     indicator toggle stay on screen. */
+  .chart-control-strip {
+    @apply [padding:0_76px_0_8px]! gap-[2px];
+  }
+  .stoch-summary-detail {
+    @apply hidden;
+  }
+
+  /* Phone console: a two-row thumb dock. Playback and orders stay on the
+     first row; clock, speed and the secondary-controls sheet on the second. */
   .replay-console {
-    @apply h-auto min-h-[56px];
+    @apply h-auto min-h-0 overflow-visible! [padding:6px_8px_max(6px,_env(safe-area-inset-bottom))];
   }
   .console-strip {
-    @apply flex-wrap gap-y-[4px];
+    @apply flex-wrap gap-[6px];
   }
-  .timeframe-control {
-    @apply [order:1];
+  .console-sheet-backdrop {
+    @apply block absolute inset-0 z-[4] [background:rgba(17,_24,_39,_0.28)];
   }
-  .console-play {
-    @apply [order:2];
+  .console-sheet {
+    @apply hidden;
   }
-  .console-trade-actions {
-    @apply [order:3];
+  .console-more-open .console-sheet {
+    @apply flex flex-wrap items-center gap-2 absolute z-[6] left-0 right-0 bottom-full max-h-[70dvh] overflow-y-auto
+      [padding:12px_max(10px,_env(safe-area-inset-left))_12px_max(10px,_env(safe-area-inset-right))]
+      [border:1px_solid_rgba(185,_180,_168,_0.9)] [border-bottom:0] rounded-t-[var(--radius)]
+      [background:rgba(255,_255,_255,_0.97)] [box-shadow:0_-14px_36px_rgba(17,_24,_39,_0.18)];
   }
-  .replay-speed-control {
-    @apply [order:4] [flex:1_1_140px];
+  .console-more-open .console-sheet > .pane-count-control {
+    @apply order-1;
   }
-  .console-quick-stats {
-    @apply [order:5] [flex:1_1_100%] justify-end ml-0;
+  .console-more-open .console-sheet > .console-history-button,
+  .console-more-open .console-sheet > .console-history-error {
+    @apply order-2;
+  }
+  .console-more-open .console-sheet > .console-jump-form {
+    @apply order-3 [flex:1_0_100%]! grid! gap-[6px_8px] items-center [grid-template-columns:minmax(0,_1fr)_auto];
+  }
+  .console-more-open .console-sheet > .console-help-button {
+    @apply order-4 min-h-[40px] [padding:0_12px];
+  }
+  .console-sheet .pane-count-control > span {
+    @apply whitespace-nowrap;
+  }
+  .console-more-open .console-sheet > .console-quick-stats {
+    @apply order-5 [flex:1_0_100%] justify-between ml-0;
+  }
+  .console-more-open .console-sheet > .console-home-link {
+    @apply order-6 [flex:1_0_100%];
+  }
+  .console-jump-form > label {
+    @apply [grid-column:1_/_-1];
+  }
+  .console-jump-form > input {
+    @apply min-h-[40px];
+  }
+  .console-jump-form > button {
+    @apply min-h-[40px] [padding:0_12px] [border:1px_solid_var(--border)] rounded-[var(--radius-sm)] [background:var(--surface-2)];
+  }
+  .console-home-link {
+    @apply flex items-center justify-center min-h-[40px] mt-[2px] [border-top:1px_solid_var(--border)]
+      text-[color:var(--text-muted)] text-[length:12px] font-bold no-underline;
   }
   .console-quick-stats > .console-stat {
     @apply max-w-[none];
+  }
+
+  .console-primary {
+    @apply flex [flex:1_0_100%] order-1 gap-[6px];
+  }
+  .console-primary .console-play {
+    @apply [flex:0_0_72px]! min-h-[46px] [padding:0_8px] gap-[4px];
+  }
+  .console-primary .console-trade-actions {
+    @apply [flex:1_1_auto]! [grid-template-columns:repeat(3,_minmax(0,_1fr))]! min-w-0 gap-[6px];
+  }
+  .console-primary .trade-button {
+    @apply min-w-0 [padding:0_6px] min-h-[46px];
+  }
+
+  .console-clock-mobile {
+    @apply inline-flex order-2 items-center flex-none min-h-[36px] [padding:0_8px]
+      [border:1px_solid_var(--border)] rounded-[var(--radius-sm)] [background:rgba(247,_247,_244,_0.9)]
+      text-[color:var(--text-muted)] [font:700_10px/1.2_"Fira_Code",_ui-monospace,_SFMono-Regular,_Consolas,_monospace]
+      [font-variant-numeric:tabular-nums] whitespace-nowrap;
+  }
+  .console-strip .replay-speed-control {
+    @apply order-3 [flex:1_1_0]! min-w-0!
+      [grid-template-columns:auto_minmax(48px,_1fr)_auto]!;
+  }
+  .console-more-toggle {
+    @apply inline-flex order-4 items-center justify-center gap-[4px] flex-none min-h-[36px] [padding:0_10px]
+      [border:1px_solid_var(--border-strong)] rounded-[var(--radius-sm)] [background:var(--surface)]
+      text-[color:var(--text)] text-[length:12px] font-extrabold cursor-pointer;
+  }
+}
+/* Landscape phones have the width to keep panes side by side. */
+@media (pointer: coarse) and (max-height: 500px) and (min-width: 641px) {
+  .replay-panes[data-panes="2"] {
+    @apply grid-cols-[repeat(2,_minmax(0,_1fr))]! grid-rows-[minmax(0,_1fr)]!;
+  }
+  .replay-panes[data-panes="3"] {
+    @apply grid-cols-[repeat(3,_minmax(0,_1fr))]! grid-rows-[minmax(0,_1fr)]!;
+  }
+  .replay-panes[data-panes="4"] {
+    @apply grid-cols-[repeat(2,_minmax(0,_1fr))]! grid-rows-[repeat(2,_minmax(0,_1fr))]!;
+  }
+}
+@media (max-width: 480px) {
+  .app-shell.replay-active .brand > span:last-child {
+    @apply hidden;
+  }
+}
+@media (max-width: 360px) {
+  .replay-topbar-status .status-chip:nth-child(2) {
+    @apply hidden!;
+  }
+}
+@media (pointer: coarse) {
+  .chart-toolbox {
+    @apply w-12!;
+  }
+  .chart-tool-button {
+    @apply w-9! min-h-9!;
+  }
+  .replay-pane-header {
+    @apply [padding:4px_8px];
   }
 }
 @media (prefers-reduced-motion: reduce) {

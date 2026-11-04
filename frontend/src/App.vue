@@ -17,6 +17,32 @@ import {
 } from '@lucide/vue'
 import ChartLoadState from './components/ChartLoadState.vue'
 import TimeframeSwitcher from './components/TimeframeSwitcher.vue'
+import WorkspaceSettings from './components/WorkspaceSettings.vue'
+import { locale, t, timeframeLabel, toggleLocale, TIMEFRAMES } from './i18n'
+import { loadShortcuts, shortcutActions, shortcutStorageKey, type ShortcutBindings } from './shortcuts'
+
+const workspaceSettings = ref<InstanceType<typeof WorkspaceSettings> | null>(null)
+const settingsOpen = ref(false)
+const mobileConsoleOpen = ref(false)
+const shortcutBindings = ref(loadShortcuts())
+const candleColors = ref(loadCandleColors())
+function loadCandleColors() {
+  try {
+    const value = JSON.parse(localStorage.getItem('btcusd.candle-colors.v1') ?? 'null')
+    if (value && /^#[0-9a-f]{6}$/i.test(value.up) && /^#[0-9a-f]{6}$/i.test(value.down) && typeof value.hollow === 'boolean') return { up: value.up as string, down: value.down as string, hollow: value.hollow as boolean }
+  } catch { /* Use default colors when browser storage is unavailable. */ }
+  return { up: '#ffffff', down: '#ffffff', hollow: true }
+}
+function updateShortcuts(value: ShortcutBindings) {
+  try { localStorage.setItem(shortcutStorageKey, JSON.stringify(value)) }
+  catch { setNotice(t('app.storageUnavailable')) }
+  shortcutBindings.value = value
+}
+function updateCandleColors(value: { up: string; down: string; hollow: boolean }) {
+  try { localStorage.setItem('btcusd.candle-colors.v1', JSON.stringify(value)) }
+  catch { setNotice(t('app.storageUnavailable')) }
+  candleColors.value = value
+}
 
 const MarketChart = defineAsyncComponent({
   loader: () => import('./components/MarketChart.vue'),
@@ -91,19 +117,9 @@ interface ReplayPaneState {
 const viewKey = 'btcusd.workspace.view.v2'
 const replayLengths: [number, number, number] = [30, 120, 840]
 
-const timeframeLabels: Record<string, string> = {
-  '1m': '1 分',
-  '5m': '5 分',
-  '15m': '15 分',
-  '30m': '30 分',
-  '1h': '1 小时',
-  '2h': '2 小时',
-  '3h': '3 小时',
-  '4h': '4 小时',
-  '1d': '日',
-  '1w': '周',
-  '1M': '月',
-}
+const timeframeLabels = computed<Record<string, string>>(() =>
+  Object.fromEntries(TIMEFRAMES.map((value) => [value, timeframeLabel(value)])),
+)
 
 const metadata = ref<MarketMetadata | null>(null)
 const projects = ref<ReplayProject[]>([])
@@ -150,21 +166,23 @@ const chartPlaybackIndex = computed(() => {
 })
 const currentCandle = computed(() => replaySnapshot.value?.candles[activePlaybackIndex.value] ?? null)
 const currentTimeLabel = computed(() => currentCandle.value ? `${formatUtc(currentCandle.value.timestamp)} UTC` : '—')
-const currentProjectLabel = computed(() => activeProject.value?.name ?? '未命名项目')
+// Phones show the compact date-time without the year and UTC suffix.
+const currentTimeShortLabel = computed(() => currentCandle.value ? formatUtc(currentCandle.value.timestamp).slice(5) : '—')
+const currentProjectLabel = computed(() => activeProject.value?.name ?? t('app.untitledProject'))
 const currentRangeLabel = computed(() => activeProject.value ? projectRangeLabel(activeProject.value) : '—')
 const currentProgressLabel = computed(() => activeProject.value
   ? replayProgressLabel(activeProject.value, replaySnapshot.value?.candles ?? [])
   : '0 / 0')
 const replayStatusLabel = computed(() => {
-  if (!activeProject.value) return '未选择项目'
-  if (replayLoading.value) return '加载中'
-  if (replayWindowLoading.value) return '行情加载中'
-  if (replayWindowError.value) return '行情加载失败'
-  return playbackPlaying.value ? '播放中' : '已暂停'
+  if (!activeProject.value) return t('app.notSelected')
+  if (replayLoading.value) return t('app.loading')
+  if (replayWindowLoading.value) return t('app.marketLoading')
+  if (replayWindowError.value) return t('app.marketFailed')
+  return playbackPlaying.value ? t('app.playing') : t('app.paused')
 })
 const appStatusLabel = computed(() => {
   if (activeView.value === 'replay') return replayStatusLabel.value
-  return '项目库'
+  return t('app.library')
 })
 const activeError = computed(() => {
   if (activeView.value === 'replay') {
@@ -179,8 +197,8 @@ const manualTradeStats = computed(() => summarizeManualTrades(
 ))
 const positionLabel = computed(() => {
   const stats = manualTradeStats.value
-  if (stats.side === 'flat') return '空仓'
-  return `${stats.side === 'long' ? '多' : '空'} ${stats.quantity}`
+  if (stats.side === 'flat') return t('app.flat')
+  return `${stats.side === 'long' ? t('app.long') : t('app.short')} ${stats.quantity}`
 })
 const canPlaceManualTrade = computed(() => Boolean(
   activeProject.value && currentCandle.value && !replayLoading.value && !replayError.value,
@@ -191,20 +209,20 @@ const canCloseManualTrade = computed(() => Boolean(
 const currentTimeframeValue = computed(() => activeProject.value?.timeframe ?? projectDraft.timeframe)
 const replayPaneCount = computed(() => Math.min(activeProject.value?.panes.length ?? 1, MAX_REPLAY_PANES))
 const timeframeOptions = computed(() => {
-  const supported = metadata.value?.supported_timeframes ?? Object.keys(timeframeLabels)
-  return supported.filter((value) => value in timeframeLabels)
+  const supported = metadata.value?.supported_timeframes ?? TIMEFRAMES
+  return supported.filter((value) => TIMEFRAMES.includes(value))
 })
 const projectFormError = computed(() => {
-  if (!projectDraft.name.trim()) return '请输入项目名称。'
-  if (!projectDraft.symbol.trim()) return '请输入品种。'
-  if (!projectDraft.timeframe.trim()) return '请选择周期。'
+  if (!projectDraft.name.trim()) return t('app.formName')
+  if (!projectDraft.symbol.trim()) return t('app.formSymbol')
+  if (!projectDraft.timeframe.trim()) return t('app.formTimeframe')
   const from = fromUtcInput(projectDraft.fromInput)
   const to = fromUtcInput(projectDraft.toInput)
-  if (!Number.isFinite(from) || !Number.isFinite(to)) return '请选择有效的 UTC 时间。'
-  if (from >= to) return '开始时间必须早于结束时间。'
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return t('app.formTime')
+  if (from >= to) return t('app.formRange')
   return ''
 })
-const projectActionLabel = computed(() => activeProject.value ? '保存并打开' : '创建并打开')
+const projectActionLabel = computed(() => activeProject.value ? t('app.saveAndOpen') : t('app.createAndOpen'))
 
 function loadAppView(): AppView {
   if (typeof window === 'undefined') return 'projects'
@@ -229,7 +247,7 @@ function updateProjectDrawings(drawings: ReplayDrawing[]) {
     drawings,
     updatedAt: new Date().toISOString(),
   })
-  setNotice('绘图已保存到当前项目。')
+  setNotice(t('app.drawingsSaved'))
 }
 
 function syncDraftFromProject(project: ReplayProject) {
@@ -253,7 +271,7 @@ function reconcileProjectWithMarket(project: ReplayProject): { project: ReplayPr
 }
 
 function marketAlignmentNotice(project: ReplayProject): string {
-  return `当前时间范围没有可用行情，已调整到 ${projectRangeLabel(project)}。`
+  return t('app.marketAligned', { range: projectRangeLabel(project) })
 }
 
 function alignProjectToMarket(project: ReplayProject): { project: ReplayProject; changed: boolean } {
@@ -377,13 +395,13 @@ function changeReplayTimeframeTo(timeframe: string, panes?: string[]) {
 
   updateProject(nextProject)
   syncDraftFromProject(nextProject)
-  const timeframeLabel = timeframeLabels[timeframe] ?? timeframe
+  const nextTimeframeLabel = timeframeLabels.value[timeframe] ?? timeframe
   if (metadataPending) return
   void loadReplaySnapshot(nextProject, {
     cursorTimestamp,
     notice: cursorTimestamp
-      ? `周期已切换为 ${timeframeLabel}，已保留 ${formatUtc(cursorTimestamp)} UTC 的复盘进度、交易与绘图记录。`
-      : `周期已切换为 ${timeframeLabel}，已保留交易与绘图记录。`,
+      ? t('app.timeframeSwitchedKept', { label: nextTimeframeLabel, time: formatUtc(cursorTimestamp) })
+      : t('app.timeframeSwitched', { label: nextTimeframeLabel }),
   })
 }
 
@@ -450,7 +468,7 @@ async function loadReplayPane(pane: ReplayPaneState, project: ReplayProject, anc
     if (clock !== null) void refreshReplayPaneForming(pane, clock)
   } catch (caught) {
     if (pane.requestId !== requestId) return
-    pane.error = caught instanceof Error ? caught.message : '副屏行情加载失败。'
+    pane.error = caught instanceof Error ? caught.message : t('app.paneLoadFailed')
   } finally {
     if (pane.requestId === requestId) {
       pane.loading = false
@@ -500,7 +518,7 @@ async function refreshReplayPaneForming(
     pane.error = ''
   } catch (caught) {
     if (pane.formingRequestId !== requestId || paneClockTimestamp() !== clockTimestamp) return
-    pane.error = caught instanceof Error ? caught.message : '副屏当前 K 线同步失败，请重试。'
+    pane.error = caught instanceof Error ? caught.message : t('app.paneSyncFailed')
   }
 }
 
@@ -619,7 +637,11 @@ function placeManualTrade(side: ManualTradeSide) {
   })
   updateProject(next)
   const action = next.trades.at(-1)?.action
-  setNotice(`${side === 'buy' ? 'Buy' : 'Sell'} 已按 ${formatNumber(candle.close)} 成交，${tradeActionLabel(action)}。`)
+  setNotice(t('app.tradeFilled', {
+    side: side === 'buy' ? 'Buy' : 'Sell',
+    price: formatNumber(candle.close),
+    action: tradeActionLabel(action),
+  }))
 }
 
 function closeManualTrade() {
@@ -635,7 +657,7 @@ function closeManualTrade() {
   })
   updateProject(next)
   const action = next.trades.at(-1)?.action
-  setNotice(`平仓已按 ${formatNumber(candle.close)} 成交，${tradeActionLabel(action)}。`)
+  setNotice(t('app.closeFilled', { price: formatNumber(candle.close), action: tradeActionLabel(action) }))
 }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
@@ -648,6 +670,7 @@ function isEditableShortcutTarget(target: EventTarget | null): boolean {
 
 function handleReplayShortcut(event: KeyboardEvent) {
   if (
+    settingsOpen.value ||
     activeView.value !== 'replay' ||
     event.defaultPrevented ||
     event.repeat ||
@@ -658,28 +681,29 @@ function handleReplayShortcut(event: KeyboardEvent) {
     isEditableShortcutTarget(event.target)
   ) return
 
-  switch (event.key.toLowerCase()) {
-    case ' ':
+  const action = shortcutActions.find(item => shortcutBindings.value[item.id] === event.key.toLowerCase())?.id
+  switch (action) {
+    case 'forward':
       event.preventDefault()
       setPlaybackCursor(activePlaybackIndex.value + 1)
       break
-    case 'backspace':
+    case 'backward':
       event.preventDefault()
       setPlaybackCursor(activePlaybackIndex.value - 1)
       break
-    case 'a':
+    case 'play':
       event.preventDefault()
       togglePlayback()
       break
-    case 'b':
+    case 'buy':
       event.preventDefault()
       placeManualTrade('buy')
       break
-    case 's':
+    case 'sell':
       event.preventDefault()
       placeManualTrade('sell')
       break
-    case 'c':
+    case 'trend':
       event.preventDefault()
       marketChartRef.value?.activateTrendLine()
       break
@@ -700,9 +724,9 @@ function createProject() {
     syncDraftFromProject(project)
     playbackPlaying.value = false
     openReplay()
-    setNotice(changed ? marketAlignmentNotice(project) : `项目“${project.name}”已创建。`)
+    setNotice(changed ? marketAlignmentNotice(project) : t('app.projectCreated', { name: project.name }))
   } catch (caught) {
-    projectError.value = caught instanceof Error ? caught.message : '项目创建失败。'
+    projectError.value = caught instanceof Error ? caught.message : t('app.projectCreateFailed')
   }
 }
 
@@ -723,9 +747,9 @@ function saveActiveProject() {
     syncDraftFromProject(next)
     playbackPlaying.value = false
     openReplay()
-    setNotice(changed ? marketAlignmentNotice(next) : `项目“${next.name}”已保存。`)
+    setNotice(changed ? marketAlignmentNotice(next) : t('app.projectSaved', { name: next.name }))
   } catch (caught) {
-    projectError.value = caught instanceof Error ? caught.message : '项目保存失败。'
+    projectError.value = caught instanceof Error ? caught.message : t('app.projectSaveFailed')
   }
 }
 
@@ -739,7 +763,7 @@ function selectProject(projectId: string) {
   syncDraftFromProject(project)
   playbackPlaying.value = false
   openReplay()
-  if (changed) setNotice(`${marketAlignmentNotice(project)}旧区间交易记录已清除。`)
+  if (changed) setNotice(`${marketAlignmentNotice(project)}${t('app.staleTradesCleared')}`)
 }
 
 function mergeMarketSnapshots(current: MarketSnapshot, incoming: MarketSnapshot): MarketSnapshot {
@@ -789,7 +813,7 @@ async function loadReplayHistory() {
     }
   } catch (caught) {
     if (requestId === snapshotRequestId) {
-      replayHistoryError.value = caught instanceof Error ? caught.message : '历史行情加载失败，请重试。'
+      replayHistoryError.value = caught instanceof Error ? caught.message : t('app.historyFailed')
     }
   } finally {
     if (requestId === snapshotRequestId) replayHistoryLoading.value = false
@@ -804,7 +828,7 @@ function jumpToCandle() {
   if (!project || replayLoading.value) return
   const timestamp = fromUtcInput(jumpTimeInput.value)
   if (!Number.isFinite(timestamp)) {
-    jumpError.value = '请选择有效的 UTC 时间。'
+    jumpError.value = t('app.formTime')
     return
   }
   jumpError.value = ''
@@ -878,10 +902,14 @@ async function loadReplaySnapshot(
         updateProjectCursor(project.id, clamped, mappedTimestamp)
       }
     }
-    setNotice(options.notice ?? `项目“${project.name}”已加载 ${snapshot.candles.length} 根 ${project.timeframe} K 线。`)
+    setNotice(options.notice ?? t('app.snapshotLoaded', {
+      name: project.name,
+      count: snapshot.candles.length,
+      timeframe: project.timeframe,
+    }))
   } catch (caught) {
     if (requestId !== snapshotRequestId) return
-    replayError.value = caught instanceof Error ? caught.message : '复盘行情加载失败。'
+    replayError.value = caught instanceof Error ? caught.message : t('app.replayFailed')
   } finally {
     if (requestId === snapshotRequestId) {
       replayLoading.value = false
@@ -932,7 +960,7 @@ async function loadMoreReplay(options: { retry?: boolean } = {}) {
     )
     const nextFrom = nextReplayRequestFrom(mergedSnapshot, project, requestedTo)
     if (!hasNewCandles || (nextFrom !== null && nextFrom <= from)) {
-      replayWindowError.value = '更多行情没有返回新的 K 线，请重试。'
+      replayWindowError.value = t('app.noNewCandles')
       resumePlaybackAfterWindowRetry.value = Boolean(shouldResumeAfterRetry || playbackPlaying.value)
       if (playbackPlaying.value) pausePlayback()
       return
@@ -942,10 +970,10 @@ async function loadMoreReplay(options: { retry?: boolean } = {}) {
     replayWindowError.value = ''
     resumePlaybackAfterWindowRetry.value = false
     if (shouldResumeAfterRetry) playbackPlaying.value = true
-    setNotice(`按需加载了 ${snapshot.candles.length} 根 ${project.timeframe} K 线。`)
+    setNotice(t('app.moreLoaded', { count: snapshot.candles.length, timeframe: project.timeframe }))
   } catch (caught) {
     if (requestId === snapshotRequestId && activeProject.value?.id === projectId) {
-      replayWindowError.value = caught instanceof Error ? caught.message : '更多行情加载失败。'
+      replayWindowError.value = caught instanceof Error ? caught.message : t('app.moreFailed')
       resumePlaybackAfterWindowRetry.value = Boolean(
         resumePlaybackAfterWindowRetry.value || playbackPlaying.value,
       )
@@ -990,12 +1018,12 @@ async function initialize() {
       const { project, changed } = alignProjectToMarket(activeProject.value)
       if (changed) {
         syncDraftFromProject(project)
-        setNotice(`${marketAlignmentNotice(project)}旧区间交易记录已清除。`)
+        setNotice(`${marketAlignmentNotice(project)}${t('app.staleTradesCleared')}`)
       }
     }
   } catch (caught) {
     if (disposed || requestId !== initializationId) return
-    pageError.value = caught instanceof Error ? caught.message : '平台初始化失败。'
+    pageError.value = caught instanceof Error ? caught.message : t('app.initFailed')
   } finally {
     if (!disposed && requestId === initializationId) {
       metadataPending = false
@@ -1011,15 +1039,16 @@ function speedToText(speed: number): string {
 }
 
 function tradeActionLabel(action: ManualTradeAction | undefined): string {
-  if (action === 'open-long') return '开多'
-  if (action === 'close-long') return '平多'
-  if (action === 'open-short') return '开空'
-  if (action === 'close-short') return '平空'
-  return '已记录'
+  if (action === 'open-long') return t('trade.openLong')
+  if (action === 'close-long') return t('trade.closeLong')
+  if (action === 'open-short') return t('trade.openShort')
+  if (action === 'close-short') return t('trade.closeShort')
+  return t('trade.recorded')
 }
 
 watch(activeView, (value) => {
   saveAppView(value)
+  mobileConsoleOpen.value = false
   if (value !== 'replay') {
     playbackPlaying.value = false
   }
@@ -1096,8 +1125,9 @@ onBeforeUnmount(() => {
     class="app-shell"
     :class="{ 'replay-active': activeView === 'replay', 'replay-immersive': isReplayFullscreen }"
   >
+    <WorkspaceSettings ref="workspaceSettings" :bindings="shortcutBindings" :colors="candleColors" @bindings="updateShortcuts" @colors="updateCandleColors" @opened="settingsOpen = $event" />
     <header class="topbar top-0 z-[30] items-center justify-between [border-bottom:1px_solid_var(--border)] [background:rgba(255,_255,_255,_0.92)] [backdrop-filter:blur(12px)]">
-      <a class="brand items-center no-underline" href="/" aria-label="grailab 首页">
+      <a class="brand items-center no-underline" href="/" :aria-label="t('product.homeLabel')">
         <span class="brand-mark grid place-items-center [border:1px_solid_var(--border-strong)] [background:var(--text)] text-[color:var(--surface)]" aria-hidden="true"><ChartCandlestick :size="20" /></span>
         <span>
           <strong>grailab</strong>
@@ -1106,7 +1136,7 @@ onBeforeUnmount(() => {
         </span>
       </a>
 
-      <div v-if="activeView === 'projects'" class="mode-switch inline-flex items-center gap-1.5 p-1 [border:1px_solid_var(--border)] rounded-full [background:var(--surface)]" role="tablist" aria-label="工作区模式">
+      <div v-if="activeView === 'projects'" class="mode-switch inline-flex items-center gap-1.5 p-1 [border:1px_solid_var(--border)] rounded-full [background:var(--surface)]" role="tablist" :aria-label="t('app.workspaceMode')">
         <button
           type="button"
           class="mode-chip min-h-8.5 [padding:0_14px] rounded-full"
@@ -1114,7 +1144,7 @@ onBeforeUnmount(() => {
           :aria-pressed="activeView === 'projects'"
           @click="openProjects"
         >
-          项目
+          {{ t('app.tabProjects') }}
         </button>
         <button
           type="button"
@@ -1123,38 +1153,40 @@ onBeforeUnmount(() => {
           :disabled="!activeProject"
           @click="openReplay"
         >
-          复盘
+          {{ t('app.tabReplay') }}
         </button>
       </div>
 
-      <div v-if="activeView === 'replay'" class="replay-topbar-meta [flex:1_1_auto] gap-[1px] min-w-0" aria-label="当前复盘项目">
+      <div v-if="activeView === 'replay'" class="replay-topbar-meta [flex:1_1_auto] gap-[1px] min-w-0" :aria-label="t('app.currentReplayProject')">
         <strong>{{ currentProjectLabel }}</strong>
         <span>{{ currentRangeLabel }}</span>
       </div>
 
-      <div v-if="activeView === 'replay'" class="replay-topbar-status flex flex-none items-center" aria-label="当前复盘状态">
+      <div v-if="activeView === 'replay'" class="replay-topbar-status flex flex-none items-center" :aria-label="t('app.currentReplayStatus')">
         <span class="status-chip inline-flex items-center rounded-full whitespace-nowrap" :data-status="playbackPlaying ? 'running' : 'paused'">{{ replayStatusLabel }}</span>
         <span class="status-chip muted inline-flex items-center rounded-full whitespace-nowrap">{{ currentProgressLabel }}</span>
         <span class="status-chip muted inline-flex items-center rounded-full whitespace-nowrap">{{ positionLabel }}</span>
       </div>
 
       <div class="topbar-actions flex items-center">
+        <button class="topbar-action lang-switch min-h-8 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[length:12px] font-extrabold whitespace-nowrap" type="button" data-testid="locale-toggle" :aria-label="t('app.languageSwitch')" :title="t('app.languageSwitch')" @click="toggleLocale">{{ locale === 'zh' ? 'EN' : '中文' }}</button>
+        <button class="topbar-action min-h-8 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[length:12px] font-extrabold whitespace-nowrap" type="button" :aria-label="t('app.settings')" @click="workspaceSettings?.open('settings')"><SlidersHorizontal :size="15" aria-hidden="true" /><span class="topbar-action-label">{{ t('app.settings') }}</span></button>
         <div v-if="activeView === 'projects'" class="service-state flex items-center gap-2 text-[color:var(--text-muted)] text-[length:13px] whitespace-nowrap">
           <span class="status-dot w-2 h-2 rounded-full [background:var(--profit)] [box-shadow:0_0_0_4px_rgba(22,_101,_52,_0.14)]" aria-hidden="true" />
           <span>{{ appStatusLabel }}</span>
         </div>
 
         <template v-else>
-          <button class="topbar-action min-h-8 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[length:12px] font-extrabold whitespace-nowrap" type="button" @click="openProjects">
+          <button class="topbar-action min-h-8 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[length:12px] font-extrabold whitespace-nowrap" type="button" :aria-label="t('app.library')" @click="openProjects">
             <FolderOpen :size="15" aria-hidden="true" />
-            项目库
+            <span class="topbar-action-label">{{ t('app.library') }}</span>
           </button>
           <button
             class="topbar-icon-button w-8 h-8 inline-grid place-items-center p-0 rounded-[var(--radius-sm)]"
             type="button"
             data-testid="replay-fullscreen"
-            :aria-label="isReplayFullscreen ? '退出全屏' : '进入全屏'"
-            :title="isReplayFullscreen ? '退出全屏' : '进入全屏'"
+            :aria-label="isReplayFullscreen ? t('app.exitFullscreen') : t('app.fullscreen')"
+            :title="isReplayFullscreen ? t('app.exitFullscreen') : t('app.fullscreen')"
             @click="toggleReplayFullscreen"
           >
             <Minimize2 v-if="isReplayFullscreen" :size="16" aria-hidden="true" />
@@ -1172,24 +1204,24 @@ onBeforeUnmount(() => {
         <section class="workspace-head flex justify-between gap-5" aria-labelledby="page-title">
           <div class="workspace-copy">
             <p class="eyebrow text-[color:var(--info)] [font:700_10px/1.4_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] tracking-[0]">PROJECT LIBRARY / UTC</p>
-            <h1 id="page-title">复盘项目库</h1>
-            <p>先创建或打开项目，随后进入独立的全屏 K 线复盘窗口。</p>
+            <h1 id="page-title">{{ t('app.projectLibraryTitle') }}</h1>
+            <p>{{ t('app.projectLibraryLead') }}</p>
           </div>
           <dl class="workspace-stats grid gap-[1px] [border:1px_solid_var(--border)] rounded-[var(--radius)] overflow-hidden">
             <div>
-              <dt>当前项目</dt>
+              <dt>{{ t('app.statProject') }}</dt>
               <dd>{{ currentProjectLabel }}</dd>
             </div>
             <div>
-              <dt>时间范围</dt>
+              <dt>{{ t('app.statRange') }}</dt>
               <dd>{{ currentRangeLabel }}</dd>
             </div>
             <div>
-              <dt>当前进度</dt>
+              <dt>{{ t('app.statProgress') }}</dt>
               <dd>{{ currentProgressLabel }}</dd>
             </div>
             <div>
-              <dt>手动交易</dt>
+              <dt>{{ t('app.statTrades') }}</dt>
               <dd>{{ activeProject?.trades.length ?? 0 }}</dd>
             </div>
           </dl>
@@ -1198,7 +1230,7 @@ onBeforeUnmount(() => {
         <div v-if="activeError" class="alert error-alert flex items-center gap-2.5 [padding:12px_14px] [border:1px_solid_rgba(153,_27,_27,_0.32)] rounded-[var(--radius)] [background:#fff1f2] text-[color:var(--danger)]" role="alert">
           <ServerCog :size="20" aria-hidden="true" />
           <span>{{ activeError }}</span>
-          <button type="button" class="text-button font-bold" @click="initialize">重试</button>
+          <button type="button" class="text-button font-bold" @click="initialize">{{ t('common.retry') }}</button>
         </div>
 
         <div class="project-layout grid gap-4 items-start">
@@ -1206,23 +1238,23 @@ onBeforeUnmount(() => {
             <div class="panel-head [padding:16px_16px_0]">
               <div>
                 <p class="eyebrow text-[color:var(--info)] [font:700_10px/1.4_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] tracking-[0]">SETUP</p>
-                <h2 id="project-form-title">新建项目</h2>
+                <h2 id="project-form-title">{{ t('app.newProject') }}</h2>
               </div>
               <FolderPlus :size="22" class="heading-icon text-[color:var(--text-dim)]" aria-hidden="true" />
             </div>
 
             <form class="project-form grid gap-3 [border-top:1px_solid_var(--border)] [border-bottom:1px_solid_var(--border)]" @submit.prevent="saveActiveProject">
               <label>
-                项目名称
+                {{ t('app.projectName') }}
                 <input v-model="projectDraft.name" type="text" maxlength="120" autocomplete="off" />
               </label>
               <div class="field-grid two grid gap-2.5">
                 <label>
-                  品种
+                  {{ t('app.symbol') }}
                   <input v-model="projectDraft.symbol" type="text" autocomplete="off" />
                 </label>
                 <label>
-                  周期
+                  {{ t('app.timeframe') }}
                   <select v-model="projectDraft.timeframe">
                     <option v-for="timeframe in timeframeOptions" :key="timeframe" :value="timeframe">
                       {{ timeframeLabels[timeframe] ?? timeframe }}
@@ -1232,17 +1264,17 @@ onBeforeUnmount(() => {
               </div>
               <div class="field-grid two grid gap-2.5">
                 <label>
-                  开始时间（UTC）
+                  {{ t('app.startTime') }}
                   <input v-model="projectDraft.fromInput" type="datetime-local" />
                 </label>
                 <label>
-                  结束时间（UTC）
+                  {{ t('app.endTime') }}
                   <input v-model="projectDraft.toInput" type="datetime-local" />
                 </label>
               </div>
               <div class="field-grid two speed-field grid gap-2.5 items-end">
                 <label>
-                  播放速度
+                  {{ t('app.playbackSpeed') }}
                   <input v-model.number="projectDraft.speed" type="number" min="0.25" max="8" step="0.25" />
                 </label>
                 <div class="speed-hint min-h-10.5 inline-flex items-center gap-2.5 [padding:0_12px] [border:1px_solid_var(--border)] rounded-[var(--radius)] [background:var(--surface-2)] text-[color:var(--text-muted)] text-[length:12px]">
@@ -1259,7 +1291,7 @@ onBeforeUnmount(() => {
                   {{ projectActionLabel }}
                 </button>
                 <button class="secondary-button inline-flex items-center justify-center gap-2 [padding:0_14px] rounded-[var(--radius)] [background:var(--surface-2)]" type="button" :disabled="Boolean(projectFormError)" @click="createProject">
-                  新建并打开
+                  {{ t('app.newAndOpen') }}
                 </button>
               </div>
             </form>
@@ -1269,7 +1301,7 @@ onBeforeUnmount(() => {
             <div class="panel-head [padding:16px_16px_0]">
               <div>
                 <p class="eyebrow text-[color:var(--info)] [font:700_10px/1.4_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] tracking-[0]">PROJECTS</p>
-                <h2 id="project-list-title">已保存项目</h2>
+                <h2 id="project-list-title">{{ t('app.savedProjects') }}</h2>
               </div>
               <FolderOpen :size="22" class="heading-icon text-[color:var(--text-dim)]" aria-hidden="true" />
             </div>
@@ -1286,27 +1318,27 @@ onBeforeUnmount(() => {
                 <div class="project-item-head flex items-center justify-between gap-2.5">
                   <strong>{{ project.name }}</strong>
                   <span class="status-pill inline-flex items-center justify-center min-h-6 [padding:0_8px] rounded-full text-[length:11px] whitespace-nowrap" :data-status="project.id === activeProjectId ? 'running' : 'idle'">
-                    {{ project.id === activeProjectId ? '当前' : '已保存' }}
+                    {{ project.id === activeProjectId ? t('app.current') : t('app.saved') }}
                   </span>
                 </div>
                 <span>{{ timeframeLabels[project.timeframe] ?? project.timeframe }} · {{ projectRangeLabel(project) }}</span>
-                <span>游标 {{ project.cursorIndex + 1 }} · 交易 {{ project.trades.length }} · 绘图 {{ project.drawings.length }} · {{ speedToText(project.speed) }}</span>
+                <span>{{ t('app.projectMeta', { cursor: project.cursorIndex + 1, trades: project.trades.length, drawings: project.drawings.length, speed: speedToText(project.speed) }) }}</span>
               </button>
             </div>
-            <p v-else class="history-empty">暂无项目。填写左侧表单后会直接打开全屏 K 线复盘窗口。</p>
+            <p v-else class="history-empty">{{ t('app.noProjects') }}</p>
           </section>
         </div>
       </template>
 
       <section v-else-if="activeView === 'replay'" class="replay-screen relative grid grid-rows-[minmax(0,_1fr)_auto] h-full min-h-0 overflow-hidden [background:var(--chart-bg)]" aria-labelledby="replay-title">
-        <h1 id="replay-title" class="sr-only">{{ currentProjectLabel }} 复盘</h1>
+        <h1 id="replay-title" class="sr-only">{{ t('app.replayTitle', { name: currentProjectLabel }) }}</h1>
         <div class="replay-panes grid gap-0.5 min-w-0 min-h-0 overflow-hidden [background:var(--chart-bg)]" :data-panes="replayPaneCount">
           <div class="replay-pane relative grid grid-rows-[auto_minmax(0,_1fr)] min-w-0 min-h-0 overflow-hidden">
             <div class="replay-pane-header flex items-center gap-1.5 [border-bottom:1px_solid_rgba(185,_180,_168,_0.25)] [background:var(--chart-bg)]">
-              <span class="replay-pane-label flex-none text-[color:rgba(255,_255,_255,_0.72)] [font:700_11px/16px_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace]">主屏</span>
+              <span class="replay-pane-label flex-none text-[color:rgba(255,_255,_255,_0.72)] [font:700_11px/16px_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace]">{{ t('app.mainPane') }}</span>
               <TimeframeSwitcher
                 id="replay-pane-timeframe-0"
-                label="主屏周期"
+                :label="t('app.mainPaneTimeframe')"
                 :model-value="currentTimeframeValue"
                 :options="timeframeOptions"
                 :labels="timeframeLabels"
@@ -1314,6 +1346,7 @@ onBeforeUnmount(() => {
               />
             </div>
             <MarketChart
+              :candle-colors="candleColors"
               :key="`${activeProjectId}-${currentTimeframeValue}`"
               ref="marketChartRef"
               class="fullscreen-chart"
@@ -1333,10 +1366,10 @@ onBeforeUnmount(() => {
           </div>
           <div v-for="(pane, index) in secondaryPanes" :key="`${pane.projectId}-${index}-${pane.timeframe}`" class="replay-pane relative grid grid-rows-[auto_minmax(0,_1fr)] min-w-0 min-h-0 overflow-hidden">
             <div class="replay-pane-header flex items-center gap-1.5 [border-bottom:1px_solid_rgba(185,_180,_168,_0.25)] [background:var(--chart-bg)]">
-              <span class="replay-pane-label flex-none text-[color:rgba(255,_255,_255,_0.72)] [font:700_11px/16px_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace]">第 {{ index + 2 }} 屏</span>
+              <span class="replay-pane-label flex-none text-[color:rgba(255,_255,_255,_0.72)] [font:700_11px/16px_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace]">{{ t('app.paneN', { n: index + 2 }) }}</span>
               <TimeframeSwitcher
                 :id="`replay-pane-timeframe-${index + 1}`"
-                :label="`第 ${index + 2} 屏周期`"
+                :label="t('app.paneTimeframe', { n: index + 2 })"
                 :model-value="pane.timeframe"
                 :options="timeframeOptions"
                 :labels="timeframeLabels"
@@ -1345,8 +1378,8 @@ onBeforeUnmount(() => {
               <button
                 class="replay-pane-remove ml-auto shrink-0 h-6.5 rounded-[var(--radius-sm)] [background:rgba(0,_0,_0,_0.75)] text-[color:#ffffff] [font:700_12px/1_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] flex items-center justify-center w-6.5 cursor-pointer"
                 type="button"
-                :aria-label="`移除第 ${index + 2} 屏`"
-                :title="`移除第 ${index + 2} 屏`"
+                :aria-label="t('app.removePane', { n: index + 2 })"
+                :title="t('app.removePane', { n: index + 2 })"
                 @click="removeReplayPane(index)"
               >
                 ×
@@ -1354,9 +1387,10 @@ onBeforeUnmount(() => {
             </div>
             <p v-if="pane.error" class="replay-pane-error absolute z-[5] top-10.5 left-2 right-2 flex items-center gap-2 m-0 [padding:6px_10px] [border:1px_solid_rgba(255,_255,_255,_0.4)] rounded-[var(--radius-sm)] [background:rgba(0,_0,_0,_0.8)] text-[color:#ffffff] text-[length:12px]" role="alert">
               <span>{{ pane.error }}</span>
-              <button class="text-button font-bold" type="button" @click="retryReplayPane(pane)">重试</button>
+              <button class="text-button font-bold" type="button" @click="retryReplayPane(pane)">{{ t('common.retry') }}</button>
             </p>
             <MarketChart
+              :candle-colors="candleColors"
               class="fullscreen-chart"
               :snapshot="pane.snapshot"
               :loading="pane.loading || (!pane.snapshot && !pane.error && !activeError)"
@@ -1375,42 +1409,77 @@ onBeforeUnmount(() => {
         <div v-if="activeError" class="alert replay-alert flex items-center gap-2.5 [padding:12px_14px] [border:1px_solid_rgba(153,_27,_27,_0.32)] rounded-[var(--radius)] [background:#fff1f2] text-[color:var(--danger)] absolute z-[6] top-3 left-3 right-3" role="alert">
           <ServerCog :size="20" aria-hidden="true" />
           <span>{{ activeError }}</span>
-          <button type="button" class="text-button font-bold" @click="initialize">重试</button>
+          <button type="button" class="text-button font-bold" @click="initialize">{{ t('common.retry') }}</button>
         </div>
 
-        <div class="replay-console [background:rgba(255,_255,_255,_0.9)] [backdrop-filter:blur(10px)] relative z-[5] flex items-center overflow-hidden" aria-label="复盘状态栏">
+        <div v-if="mobileConsoleOpen" class="console-sheet-backdrop" aria-hidden="true" @click="mobileConsoleOpen = false" />
+        <div class="replay-console [background:rgba(255,_255,_255,_0.9)] [backdrop-filter:blur(10px)] relative z-[5] flex items-center overflow-hidden" :class="{ 'console-more-open': mobileConsoleOpen }" :aria-label="t('app.replayStatusBar')">
           <div class="console-strip flex w-full min-w-0 items-center">
-            <label class="timeframe-control pane-count-control flex-none flex items-center gap-1.5 min-h-9">
-              <span>分屏</span>
-              <select
-                data-testid="replay-pane-count"
-                :value="String(replayPaneCount)"
-                :disabled="!activeProject || replayLoading"
-                @change="changeReplayPaneCount"
-              >
-                <option v-for="count in MAX_REPLAY_PANES" :key="count" :value="String(count)">
-                  {{ count === 1 ? '单屏' : `${count} 屏` }}
-                </option>
-              </select>
-            </label>
+            <div id="replay-console-sheet" class="console-sheet">
+              <label class="timeframe-control pane-count-control flex-none flex items-center gap-1.5 min-h-9">
+                <span>{{ t('app.panes') }}</span>
+                <select
+                  data-testid="replay-pane-count"
+                  :value="String(replayPaneCount)"
+                  :disabled="!activeProject || replayLoading"
+                  @change="changeReplayPaneCount"
+                >
+                  <option v-for="count in MAX_REPLAY_PANES" :key="count" :value="String(count)">
+                    {{ count === 1 ? t('app.singlePane') : t('app.paneCount', { n: count }) }}
+                  </option>
+                </select>
+              </label>
 
-            <button v-if="replayHistoryBefore !== null" class="text-button font-bold" type="button" :disabled="replayHistoryLoading || replayLoading" data-testid="load-replay-history" @click="loadReplayHistory">
-              {{ replayHistoryLoading ? '加载历史中…' : replayHistoryError ? '重试加载历史' : '加载更早行情' }}
-            </button>
-            <span v-if="replayHistoryError" role="alert">{{ replayHistoryError }}</span>
-            <form class="timeframe-control flex-none flex items-center gap-1.5 min-h-9" @submit.prevent="jumpToCandle">
-              <label for="replay-jump-time">跳转时间（UTC）</label>
-              <input id="replay-jump-time" v-model="jumpTimeInput" type="datetime-local" :disabled="replayLoading" required />
-              <button class="text-button font-bold" type="submit" :disabled="!activeProject || replayLoading">跳转</button>
-              <span v-if="jumpError" role="alert">{{ jumpError }}</span>
-            </form>
+              <button v-if="replayHistoryBefore !== null" class="text-button console-history-button font-bold" type="button" :disabled="replayHistoryLoading || replayLoading" data-testid="load-replay-history" @click="loadReplayHistory">
+                {{ replayHistoryLoading ? t('app.loadingHistory') : replayHistoryError ? t('app.retryHistory') : t('app.loadEarlier') }}
+              </button>
+              <span v-if="replayHistoryError" class="console-history-error" role="alert">{{ replayHistoryError }}</span>
+              <form class="timeframe-control console-jump-form flex-none flex items-center gap-1.5 min-h-9" @submit.prevent="jumpToCandle">
+                <label for="replay-jump-time">{{ t('app.jumpTime') }}</label>
+                <input id="replay-jump-time" v-model="jumpTimeInput" type="datetime-local" :disabled="replayLoading" required />
+                <button class="text-button font-bold" type="submit" :disabled="!activeProject || replayLoading">{{ t('app.jump') }}</button>
+                <span v-if="jumpError" role="alert">{{ jumpError }}</span>
+              </form>
+
+              <button class="topbar-action console-help-button shrink-0 whitespace-nowrap" type="button" @click="workspaceSettings?.open('help')">{{ t('app.help') }}</button>
+
+              <div class="console-quick-stats flex-wrap gap-2 min-w-0" :aria-label="t('app.replayAux')">
+                <span class="console-stat">{{ currentTimeLabel }}</span>
+                <div v-if="replayHasMore" class="console-load-control items-center gap-1.5 max-w-45 min-w-0" aria-live="polite">
+                  <span v-if="replayWindowLoading">{{ t('app.loadingMore') }}</span>
+                  <span v-else-if="replayWindowError" :title="replayWindowError">{{ t('app.loadFailed') }}</span>
+                  <button
+                    class="text-button console-load-button font-bold rounded-[var(--radius-sm)] whitespace-nowrap"
+                    type="button"
+                    data-testid="replay-load-more"
+                    :disabled="replayWindowLoading"
+                    @click="replayWindowError ? retryLoadMoreReplay() : loadMoreReplay()"
+                  >
+                    {{ replayWindowLoading ? t('app.loadingMore') : replayWindowError ? t('app.retryLoad') : t('app.loadMore') }}
+                  </button>
+                </div>
+                <button
+                  class="topbar-icon-button console-fullscreen-button w-8 h-8 inline-grid place-items-center p-0 rounded-[var(--radius-sm)] flex-none"
+                  type="button"
+                  data-testid="replay-fullscreen-console"
+                  :aria-label="isReplayFullscreen ? t('app.exitFullscreen') : t('app.fullscreen')"
+                  :title="isReplayFullscreen ? t('app.exitFullscreen') : t('app.fullscreen')"
+                  @click="toggleReplayFullscreen"
+                >
+                  <Minimize2 v-if="isReplayFullscreen" :size="16" aria-hidden="true" />
+                  <Maximize2 v-else :size="16" aria-hidden="true" />
+                </button>
+              </div>
+
+              <a class="console-home-link" href="#">{{ t('app.backHome') }}</a>
+            </div>
 
             <label class="replay-speed-control grid grid-cols-[auto_minmax(76px,_1fr)_auto] gap-1.5 items-center min-w-0">
-              <span>速度</span>
+              <span>{{ t('app.speed') }}</span>
               <input
                 v-if="activeProject"
                 type="range"
-                aria-label="播放速度"
+                :aria-label="t('app.playbackSpeed')"
                 data-testid="replay-speed"
                 min="0.25"
                 max="8"
@@ -1422,62 +1491,46 @@ onBeforeUnmount(() => {
               <output>{{ speedToText(activeProject?.speed ?? 1) }}</output>
             </label>
 
-            <button class="primary-button console-play inline-flex items-center justify-center gap-2 [border:1px_solid_transparent] rounded-[var(--radius)] text-[color:var(--accent-ink)] font-extrabold flex-none whitespace-nowrap" type="button" :disabled="!totalReplayCandles" @click="togglePlayback">
-              <Pause v-if="playbackPlaying" :size="18" aria-hidden="true" />
-              <Play v-else :size="18" aria-hidden="true" />
-              {{ playbackPlaying ? '暂停' : '播放' }}
-            </button>
-
-            <div class="console-trade-actions flex-none grid-cols-[repeat(3,_minmax(68px,_1fr))]" aria-label="手动交易">
-              <button class="trade-button buy min-h-11 items-center justify-center font-black" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('buy')">
-                <TrendingUp :size="16" aria-hidden="true" />
-                Buy
+            <div class="console-primary">
+              <button class="primary-button console-play inline-flex items-center justify-center gap-2 [border:1px_solid_transparent] rounded-[var(--radius)] text-[color:var(--accent-ink)] font-extrabold flex-none whitespace-nowrap" type="button" :disabled="!totalReplayCandles" @click="togglePlayback">
+                <Pause v-if="playbackPlaying" :size="18" aria-hidden="true" />
+                <Play v-else :size="18" aria-hidden="true" />
+                <span>{{ playbackPlaying ? t('app.pause') : t('app.play') }}</span>
               </button>
-              <button class="trade-button sell min-h-11 items-center justify-center font-black" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('sell')">
-                <TrendingDown :size="16" aria-hidden="true" />
-                Sell
-              </button>
-              <button
-                class="trade-button close min-h-11 items-center justify-center font-black"
-                type="button"
-                data-testid="replay-close-position"
-                :disabled="!canCloseManualTrade"
-                @click="closeManualTrade"
-              >
-                <X :size="16" aria-hidden="true" />
-                平仓
-              </button>
-            </div>
 
-            <span class="console-shortcuts [flex:0_1_auto] min-w-0 text-[color:var(--text-dim)] [font:700_10px/1.2_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] whitespace-nowrap" aria-label="复盘快捷键">空格 前进 1 根 · Backspace 回退 1 根 · A 播放/暂停 · B Buy · S Sell · C 趋势线</span>
-
-            <div class="console-quick-stats flex-wrap gap-2 min-w-0" aria-label="复盘辅助信息">
-              <span class="console-stat">{{ currentTimeLabel }}</span>
-              <div v-if="replayHasMore" class="console-load-control items-center gap-1.5 max-w-45 min-w-0" aria-live="polite">
-                <span v-if="replayWindowLoading">加载中…</span>
-                <span v-else-if="replayWindowError" :title="replayWindowError">加载失败</span>
+              <div class="console-trade-actions flex-none grid-cols-[repeat(3,_minmax(68px,_1fr))]" :aria-label="t('app.manualTrades')">
+                <button class="trade-button buy min-h-11 items-center justify-center font-black" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('buy')">
+                  <TrendingUp :size="16" aria-hidden="true" />
+                  Buy
+                </button>
+                <button class="trade-button sell min-h-11 items-center justify-center font-black" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('sell')">
+                  <TrendingDown :size="16" aria-hidden="true" />
+                  Sell
+                </button>
                 <button
-                  class="text-button console-load-button font-bold rounded-[var(--radius-sm)] whitespace-nowrap"
+                  class="trade-button close min-h-11 items-center justify-center font-black"
                   type="button"
-                  data-testid="replay-load-more"
-                  :disabled="replayWindowLoading"
-                  @click="replayWindowError ? retryLoadMoreReplay() : loadMoreReplay()"
+                  data-testid="replay-close-position"
+                  :disabled="!canCloseManualTrade"
+                  @click="closeManualTrade"
                 >
-                  {{ replayWindowLoading ? '加载中…' : replayWindowError ? '重试加载' : '加载更多' }}
+                  <X :size="16" aria-hidden="true" />
+                  {{ t('app.closePosition') }}
                 </button>
               </div>
-              <button
-                class="topbar-icon-button console-fullscreen-button w-8 h-8 inline-grid place-items-center p-0 rounded-[var(--radius-sm)] flex-none"
-                type="button"
-                data-testid="replay-fullscreen-console"
-                :aria-label="isReplayFullscreen ? '退出全屏' : '进入全屏'"
-                :title="isReplayFullscreen ? '退出全屏' : '进入全屏'"
-                @click="toggleReplayFullscreen"
-              >
-                <Minimize2 v-if="isReplayFullscreen" :size="16" aria-hidden="true" />
-                <Maximize2 v-else :size="16" aria-hidden="true" />
-              </button>
             </div>
+
+            <span class="console-clock-mobile" aria-hidden="true">{{ currentTimeShortLabel }}</span>
+            <button
+              class="console-more-toggle"
+              type="button"
+              :aria-expanded="mobileConsoleOpen"
+              aria-controls="replay-console-sheet"
+              @click="mobileConsoleOpen = !mobileConsoleOpen"
+            >
+              <SlidersHorizontal :size="17" aria-hidden="true" />
+              <span>{{ mobileConsoleOpen ? t('app.collapse') : t('app.more') }}</span>
+            </button>
           </div>
         </div>
       </section>

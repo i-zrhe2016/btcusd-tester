@@ -55,6 +55,7 @@ import {
 } from '../replay'
 import type { Candle, MarketSnapshot } from '../types'
 import { formatUtc } from '../format'
+import { t } from '../i18n'
 import {
   calculateStoch,
   defaultStochSetting,
@@ -90,6 +91,7 @@ function revealAfterPaint() {
 }
 
 const props = withDefaults(defineProps<{
+  candleColors?: { up: string; down: string; hollow: boolean }
   snapshot: MarketSnapshot | null
   loading: boolean
   error?: string
@@ -193,7 +195,7 @@ function applyStoch(reset = false) {
   const defaults = STOCH_DEFAULTS[stochPeriod.value] ?? STOCH_DEFAULTS['1h']
   const active = stochDraft.value.slice(0, groups)
   if (!validStochLengths(active)) {
-    stochMessage.value = 'K1～K6 必须是大于或等于 1 的整数。'
+    stochMessage.value = t('chart.stochInvalid')
     return
   }
   const setting: StochSetting = reset
@@ -206,9 +208,9 @@ function applyStoch(reset = false) {
   updateStoch()
   try {
     localStorage.setItem(STOCH_STORAGE_KEY, JSON.stringify(stochSettings.value))
-    void nextTick(() => { stochMessage.value = reset ? '已恢复当前周期默认参数。' : '参数已应用并保存。' })
+    void nextTick(() => { stochMessage.value = reset ? t('chart.stochDefaultsRestored') : t('chart.stochApplied') })
   } catch {
-    void nextTick(() => { stochMessage.value = '参数已应用；浏览器无法保存，刷新后将恢复默认。' })
+    void nextTick(() => { stochMessage.value = t('chart.stochAppliedUnsaved') })
   }
 }
 
@@ -259,15 +261,15 @@ interface DrawingToolGroup {
   tools: DrawingToolOption[]
 }
 
-const drawingToolGroups: DrawingToolGroup[] = [
+const drawingToolGroups = computed<DrawingToolGroup[]>(() => [
   {
-    label: '绘图',
+    label: t('chart.drawing'),
     tools: [
-      { id: 'TrendLine', label: '趋势线', icon: Spline },
-      { id: 'Rectangle', label: '矩形', icon: Square },
+      { id: 'TrendLine', label: t('chart.trendLine'), icon: Spline },
+      { id: 'Rectangle', label: t('chart.rectangle'), icon: Square },
     ],
   },
-]
+])
 
 const priceContainer = ref<HTMLElement | null>(null)
 const contextMenuElement = ref<HTMLElement | null>(null)
@@ -363,13 +365,13 @@ const activeTool = computed<ReplayDrawingTool | null>(() => {
 const activeToolLabel = computed(() => {
   const tool = activeTool.value
   if (!tool) return ''
-  return drawingToolGroups.flatMap((group) => group.tools).find((item) => item.id === tool)?.label ?? tool
+  return drawingToolGroups.value.flatMap((group) => group.tools).find((item) => item.id === tool)?.label ?? tool
 })
 
 const drawingHint = computed(() => {
   const tool = activeTool.value
   return tool
-    ? activeToolLabel.value + '已启用；点击图表（含右侧未加载区域）放置 ' + replayDrawingPointsNeeded(tool) + ' 个锚点。按 Esc 取消。'
+    ? t('chart.toolEnabledHint', { tool: activeToolLabel.value, points: replayDrawingPointsNeeded(tool) })
     : ''
 })
 
@@ -386,27 +388,40 @@ const hasSelection = computed(() => {
 const measurementSummary = computed(() => {
   const result = measurementResult.value
   if (!result) return ''
-  const direction = result.direction === 'up' ? '上涨' : result.direction === 'down' ? '下跌' : '持平'
+  const direction = result.direction === 'up'
+    ? t('chart.directionUp')
+    : result.direction === 'down' ? t('chart.directionDown') : t('chart.directionFlat')
   const sign = result.priceDiff > 0 ? '+' : ''
-  return '测量：' + direction + ' ' + sign + result.priceDiff.toFixed(2) +
-    ' (' + sign + result.pricePct.toFixed(2) + '%) · ' + result.barCount +
-    ' 根 K 线 · ' + formatMeasurementDuration(result.timeDiffSeconds)
+  return t('chart.measurement', {
+    direction,
+    sign,
+    change: result.priceDiff.toFixed(2),
+    percent: result.pricePct.toFixed(2),
+    bars: result.barCount,
+    duration: formatMeasurementDuration(result.timeDiffSeconds),
+  })
 })
 
 const summary = computed(() => {
   const candles = visibleCandles.value
-  if (!candles.length) return '当前范围没有 K 线数据。'
+  if (!candles.length) return t('chart.summaryEmpty')
   const first = candles[0]
   const last = currentCandle.value ?? candles[candles.length - 1]
   const change = ((last.close / first.open) - 1) * 100
   const progress = totalCandles.value
     ? String(candles.length) + '/' + String(totalCandles.value)
     : String(candles.length)
-  const drawingSummary = props.drawings.length ? '，已绘制 ' + props.drawings.length + ' 个图形' : ''
-  return (props.projectName ? props.projectName + ' · ' : '') + progress + ' 根 ' + props.snapshot?.timeframe +
-    ' K 线，从 ' + formatUtc(first.timestamp) + ' 至 ' + formatUtc(last.timestamp) +
-    ' UTC，区间涨跌 ' + (change >= 0 ? '上涨' : '下跌') + ' ' + Math.abs(change).toFixed(2) +
-    '%' + drawingSummary + '。'
+  const drawingSummary = props.drawings.length ? t('chart.summaryDrawings', { count: props.drawings.length }) : ''
+  return t('chart.summary', {
+    project: props.projectName ? props.projectName + ' · ' : '',
+    progress,
+    timeframe: props.snapshot?.timeframe ?? '',
+    from: formatUtc(first.timestamp),
+    to: formatUtc(last.timestamp),
+    direction: change >= 0 ? t('chart.directionUp') : t('chart.directionDown'),
+    change: Math.abs(change).toFixed(2),
+    drawings: drawingSummary,
+  })
 })
 
 function isReplayDrawingTool(value: unknown): value is ReplayDrawingTool {
@@ -418,9 +433,9 @@ function formatMeasurementDuration(seconds: number): string {
   const days = Math.floor(total / 86400)
   const hours = Math.floor((total % 86400) / 3600)
   const minutes = Math.floor((total % 3600) / 60)
-  if (days) return days + '天' + (hours ? ' ' + hours + '小时' : '')
-  if (hours) return hours + '小时' + (minutes ? ' ' + minutes + '分' : '')
-  return minutes + '分'
+  if (days) return `${days}${t('chart.unitDay')}` + (hours ? ` ${hours}${t('chart.unitHour')}` : '')
+  if (hours) return `${hours}${t('chart.unitHour')}` + (minutes ? ` ${minutes}${t('chart.unitMinute')}` : '')
+  return `${minutes}${t('chart.unitMinute')}`
 }
 
 function containerSize() {
@@ -666,6 +681,20 @@ function resizeChart() {
   priceChart.applyOptions(size)
 }
 
+function applyCandleColors() {
+  const colors = props.candleColors ?? { up: '#ffffff', down: '#ffffff', hollow: true }
+  candleSeries?.applyOptions({
+    upColor: colors.hollow ? 'transparent' : colors.up,
+    downColor: colors.down,
+    borderUpColor: colors.up,
+    borderDownColor: colors.down,
+    wickUpColor: colors.up,
+    wickDownColor: colors.down,
+    priceLineVisible: false,
+  })
+}
+watch(() => props.candleColors, applyCandleColors, { deep: true })
+
 function buildCharts() {
   if (disposed || chartController || !priceContainer.value || !props.snapshot?.candles.length) return
 
@@ -679,15 +708,7 @@ function buildCharts() {
   chartController = controller
   priceChart = controller.getChart()
   candleSeries = controller.getSeries() as ISeriesApi<'Candlestick'>
-  candleSeries.applyOptions({
-    upColor: 'transparent',
-    downColor: '#ffffff',
-    borderUpColor: '#ffffff',
-    borderDownColor: '#ffffff',
-    wickUpColor: '#ffffff',
-    wickDownColor: '#ffffff',
-    priceLineVisible: false,
-  })
+  applyCandleColors()
   tradeMarkers = createSeriesMarkers(candleSeries, [], { autoScale: true, zOrder: 'top' })
   syncStochSeries()
 
@@ -781,7 +802,7 @@ function selectTool(tool: ReplayDrawingTool) {
     return
   }
   drawingEngine.startTool(tool)
-  setToolFeedback(activeToolLabel.value + '已启用，点击图表放置锚点。')
+  setToolFeedback(t('chart.toolEnabled', { tool: activeToolLabel.value }))
 }
 
 function activateTrendLine() {
@@ -795,27 +816,27 @@ function stopDrawingTool() {
   drawingEngine?.cancelDraft()
   drawingEngine?.stopTool()
   drawingEngine?.select(null)
-  setToolFeedback('已返回选择工具。')
+  setToolFeedback(t('chart.toolClosed'))
 }
 
 function toggleLock() {
   if (!drawingEngine) return
   drawingEngine.setLocked(!drawingEngine.isLocked())
-  setToolFeedback(drawingEngine.isLocked() ? '绘图已锁定。' : '绘图已解锁。')
+  setToolFeedback(drawingEngine.isLocked() ? t('chart.drawingsLocked') : t('chart.drawingsUnlocked'))
 }
 
 function deleteSelected() {
   if (!drawingEngine || isLocked.value || !drawingEngine.getSelectedId()) return
   drawingEngine.removeSelected()
-  setToolFeedback('已删除选中的图形。')
+  setToolFeedback(t('chart.drawingDeleted'))
 }
 
 function clearDrawings() {
   if (!drawingEngine || !props.drawings.length || isLocked.value) return
-  if (typeof window !== 'undefined' && !window.confirm('确定清除当前项目的全部绘图吗？')) return
+  if (typeof window !== 'undefined' && !window.confirm(t('chart.clearDrawingsConfirm'))) return
   drawingEngine.removeAll()
   drawingEngine.stopTool()
-  setToolFeedback('当前项目的绘图已清除。')
+  setToolFeedback(t('chart.drawingsCleared'))
 }
 
 function closeContextMenu() {
@@ -859,7 +880,7 @@ function handleDocumentPointerDown(event: PointerEvent) {
 
 function clearMeasurement() {
   measurementController?.clear()
-  setToolFeedback('测量已清除。')
+  setToolFeedback(t('chart.measurementCleared'))
 }
 
 function handleKeyDown(event: KeyboardEvent) {
@@ -927,21 +948,21 @@ onBeforeUnmount(() => {
     <div v-if="showHeader" class="card-heading chart-heading">
       <div>
         <p class="eyebrow text-[color:var(--info)] [font:700_10px/1.4_'Fira_Code',_ui-monospace,_SFMono-Regular,_Consolas,_monospace] tracking-[0]">PLAYBACK VIEW</p>
-        <h2 id="market-chart-title">BTCUSD 复盘图</h2>
+        <h2 id="market-chart-title">{{ t('chart.title') }}</h2>
         <p class="chart-note mt-1.5 max-w-[68ch] text-[color:var(--text-muted)] text-[length:12px] leading-[1.45]">{{ summary }}</p>
       </div>
       <div class="chart-status flex flex-wrap items-center gap-2">
-        <span class="status-chip inline-flex items-center rounded-full whitespace-nowrap" :data-status="playing ? 'running' : 'paused'">{{ playing ? '播放中' : '已暂停' }}</span>
+        <span class="status-chip inline-flex items-center rounded-full whitespace-nowrap" :data-status="playing ? 'running' : 'paused'">{{ playing ? t('app.playing') : t('app.paused') }}</span>
         <span class="status-chip muted inline-flex items-center rounded-full whitespace-nowrap">{{ visibleCount }}/{{ totalCandles }}</span>
       </div>
-      <div class="chart-actions flex flex-wrap gap-2" aria-label="图表缩放控制">
-        <button class="icon-button w-11 h-11 grid place-items-center rounded-[var(--radius)] [background:var(--surface-2)]" type="button" aria-label="放大图表" title="放大" @click="zoom(0.75)">
+      <div class="chart-actions flex flex-wrap gap-2" :aria-label="t('chart.zoomLabel')">
+        <button class="icon-button w-11 h-11 grid place-items-center rounded-[var(--radius)] [background:var(--surface-2)]" type="button" :aria-label="t('chart.zoomIn')" :title="t('chart.zoomInTitle')" @click="zoom(0.75)">
           <ZoomIn :size="18" aria-hidden="true" />
         </button>
-        <button class="icon-button w-11 h-11 grid place-items-center rounded-[var(--radius)] [background:var(--surface-2)]" type="button" aria-label="缩小图表" title="缩小" @click="zoom(1.3)">
+        <button class="icon-button w-11 h-11 grid place-items-center rounded-[var(--radius)] [background:var(--surface-2)]" type="button" :aria-label="t('chart.zoomOut')" :title="t('chart.zoomOutTitle')" @click="zoom(1.3)">
           <ZoomOut :size="18" aria-hidden="true" />
         </button>
-        <button class="icon-button w-11 h-11 grid place-items-center rounded-[var(--radius)] [background:var(--surface-2)]" type="button" aria-label="重置图表范围" title="重置" @click="resetView">
+        <button class="icon-button w-11 h-11 grid place-items-center rounded-[var(--radius)] [background:var(--surface-2)]" type="button" :aria-label="t('chart.resetView')" :title="t('chart.reset')" @click="resetView">
           <RotateCcw :size="18" aria-hidden="true" />
         </button>
       </div>
@@ -949,39 +970,39 @@ onBeforeUnmount(() => {
 
     <p class="sr-only" role="status">{{ summary }}</p>
     <!-- Background refreshes must keep the container bound to the live chart instance. -->
-    <ChartLoadState v-if="loading && !snapshot?.candles.length" message="正在加载行情…" aria-label="正在加载行情" />
+    <ChartLoadState v-if="loading && !snapshot?.candles.length" :message="t('chart.loading')" :aria-label="t('chart.loadingAria')" />
     <div v-else-if="!snapshot?.candles.length" class="empty-state chart-feedback place-content-center text-center" :role="error ? 'alert' : 'status'">
-      <p>{{ error ? '行情加载失败' : '当前时间范围没有行情数据。' }}</p>
-      <span>{{ error || '请调整 UTC 时间范围后重新加载。' }}</span>
+      <p>{{ error ? t('chart.loadFailed') : t('chart.noData') }}</p>
+      <span>{{ error || t('chart.adjustRange') }}</span>
     </div>
     <div v-else class="chart-stage relative w-full overflow-hidden [background:var(--chart-bg)]" :class="{ 'chart-stage-with-controls': Boolean(stochLengths) }" :aria-busy="!chartReady">
-      <ChartLoadState v-if="!chartReady" class="chart-preparing-cover absolute inset-0 z-20" message="正在准备 K 线图表…" />
+      <ChartLoadState v-if="!chartReady" class="chart-preparing-cover absolute inset-0 z-20" :message="t('chart.preparing')" />
       <div class="chart-control-strip absolute z-[7] top-0 left-0 right-0 flex items-center justify-end h-[var(--chart-control-strip-height)] [padding:0_76px_0_12px] [background:var(--chart-bg)]">
         <button
           class="stoch-visibility-toggle chart-auto-scale mr-2 [padding:5px_10px] rounded-[6px] text-[length:12px] whitespace-nowrap"
           type="button"
           data-testid="chart-auto-scale"
-          aria-label="自动缩放价格轴"
+          :aria-label="t('chart.autoScaleAria')"
           :aria-pressed="autoScale"
-          :title="autoScale ? '自动缩放已开启：价格轴随可见 K 线调整' : '开启自动缩放，适配可见 K 线'"
+          :title="autoScale ? t('chart.autoScaleOn') : t('chart.autoScaleOff')"
           @click="toggleAutoScale"
-        >自动</button>
+        >{{ t('chart.auto') }}</button>
         <button class="stoch-visibility-toggle mr-2 [padding:5px_10px] rounded-[6px] text-[length:12px] whitespace-nowrap" type="button" :aria-pressed="stochVisible" @click="toggleStoch">
-          {{ stochVisible ? '隐藏指标' : '显示指标' }}
+          {{ stochVisible ? t('chart.hideIndicator') : t('chart.showIndicator') }}
         </button>
         <details v-if="stochLengths" class="stoch-settings z-[7]">
-          <summary>Stoch · {{ stochPeriod }} · {{ stochLengths.join(' / ') }}</summary>
+          <summary :aria-label="`Stoch · ${stochPeriod} · ${stochLengths.join(' / ')}`"><span>Stoch</span><span class="stoch-summary-detail"> · {{ stochPeriod }} · {{ stochLengths.join(' / ') }}</span></summary>
           <form @submit.prevent="applyStoch()">
-            <strong>Stoch 参数 · {{ stochPeriod }}</strong>
-            <p>按当前周期保存；平滑长度为参数 × 0.3 四舍五入，最小为 1。</p>
+            <strong>{{ t('chart.stochSettings', { period: stochPeriod }) }}</strong>
+            <p>{{ t('chart.stochNote') }}</p>
             <fieldset class="stoch-groups border-0">
-              <legend>组数</legend>
-              <label v-for="count in ([2, 3, 4, 5, 6] as const)" :key="count"><input v-model="stochGroupsDraft" :data-testid="`stoch-groups-${count}`" type="radio" :value="count" />{{ count }} 组</label>
+              <legend>{{ t('chart.stochGroups') }}</legend>
+              <label v-for="count in ([2, 3, 4, 5, 6] as const)" :key="count"><input v-model="stochGroupsDraft" :data-testid="`stoch-groups-${count}`" type="radio" :value="count" />{{ t('chart.stochGroupOption', { n: count }) }}</label>
             </fieldset>
             <label v-for="index in stochGroupsDraft" :key="index">K{{ index }} <input v-model.number="stochDraft[index - 1]" :aria-label="`Stoch K${index}`" type="number" min="1" step="1" required /></label>
             <div class="stoch-legend"><span v-for="line in stochLines" :key="line.key" :style="{ color: line.color }">{{ line.key }}</span></div>
-            <p>仅使用已播放行情；历史较短时曲线仍在预热。</p>
-            <div class="stoch-actions"><button type="submit">应用参数</button><button type="button" @click="applyStoch(true)">恢复默认</button></div>
+            <p>{{ t('chart.stochWarmup') }}</p>
+            <div class="stoch-actions"><button type="submit">{{ t('chart.apply') }}</button><button type="button" @click="applyStoch(true)">{{ t('chart.restoreDefaults') }}</button></div>
             <p v-if="stochMessage" role="status">{{ stochMessage }}</p>
           </form>
         </details>
@@ -990,15 +1011,15 @@ onBeforeUnmount(() => {
       <div ref="priceContainer" class="price-chart absolute w-full min-h-0 [background:var(--chart-bg)]" aria-hidden="true" @pointerup="syncAutoScale" @pointercancel="syncAutoScale" @dblclick="syncAutoScale" @contextmenu="openContextMenu" />
 
       <div v-if="showTools" class="chart-toolbox-edge" aria-hidden="true" />
-      <div v-if="showTools" class="chart-toolbox absolute z-[4] flex flex-col items-stretch gap-0.5 w-10 p-1 overflow-y-auto [border:1px_solid_rgba(148,_163,_184,_0.42)] rounded-[7px] [background:rgba(15,_23,_42,_0.88)] [box-shadow:0_18px_36px_rgba(0,_0,_0,_0.32)] [backdrop-filter:blur(10px)] [scrollbar-width:thin]" role="toolbar" aria-label="绘图工具栏">
+      <div v-if="showTools" class="chart-toolbox absolute z-[4] flex flex-col items-stretch gap-0.5 w-10 p-1 overflow-y-auto [border:1px_solid_rgba(148,_163,_184,_0.42)] rounded-[7px] [background:rgba(15,_23,_42,_0.88)] [box-shadow:0_18px_36px_rgba(0,_0,_0,_0.32)] [backdrop-filter:blur(10px)] [scrollbar-width:thin]" role="toolbar" :aria-label="t('chart.drawingToolbar')">
         <div class="chart-tool-group chart-tool-group-primary grid gap-0.5">
           <button
             class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
             :class="{ active: !activeTool }"
             type="button"
             data-testid="drawing-tool-cursor"
-            aria-label="选择工具"
-            title="选择工具"
+            :aria-label="t('chart.selectTool')"
+            :title="t('chart.selectTool')"
             @click="stopDrawingTool"
           >
             <MousePointer2 :size="16" aria-hidden="true" />
@@ -1024,14 +1045,14 @@ onBeforeUnmount(() => {
           </button>
         </div>
 
-        <div class="chart-tool-group chart-tool-group-actions grid gap-0.5" aria-label="绘图操作">
+        <div class="chart-tool-group chart-tool-group-actions grid gap-0.5" :aria-label="t('chart.drawingActions')">
           <button
             class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
             type="button"
             data-testid="drawing-lock"
             :aria-pressed="isLocked"
-            :aria-label="isLocked ? '解锁绘图' : '锁定绘图'"
-            :title="isLocked ? '解锁绘图' : '锁定绘图'"
+            :aria-label="isLocked ? t('chart.unlockDrawing') : t('chart.lockDrawing')"
+            :title="isLocked ? t('chart.unlockDrawing') : t('chart.lockDrawing')"
             @click="toggleLock"
           >
             <Unlock v-if="!isLocked" :size="16" aria-hidden="true" />
@@ -1041,8 +1062,8 @@ onBeforeUnmount(() => {
             class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
             type="button"
             data-testid="drawing-delete"
-            aria-label="删除选中图形"
-            title="删除选中图形（Delete）"
+            :aria-label="t('chart.deleteSelected')"
+            :title="t('chart.deleteSelectedTitle')"
             :disabled="!hasSelection || isLocked"
             @click="deleteSelected"
           >
@@ -1052,8 +1073,8 @@ onBeforeUnmount(() => {
             class="chart-tool-button chart-tool-clear relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
             type="button"
             data-testid="drawing-clear"
-            aria-label="清除全部绘图"
-            title="清除全部绘图"
+            :aria-label="t('chart.clearDrawings')"
+            :title="t('chart.clearDrawings')"
             :disabled="!drawings.length || isLocked"
             @click="clearDrawings"
           >
@@ -1076,12 +1097,12 @@ onBeforeUnmount(() => {
           type="button"
           role="menuitem"
           data-testid="drawing-context-clear"
-          aria-label="删除全部绘图"
+          :aria-label="t('chart.deleteAllDrawings')"
           :disabled="!drawings.length || isLocked"
           @click="clearDrawingsFromContextMenu"
         >
           <Trash2 :size="15" aria-hidden="true" />
-          <span>删除全部绘图</span>
+          <span>{{ t('chart.deleteAllDrawings') }}</span>
         </button>
       </div>
 
@@ -1090,7 +1111,7 @@ onBeforeUnmount(() => {
       </p>
       <p v-if="measurementSummary" class="measurement-readout inline-flex items-center gap-2" role="status" aria-live="polite">
         {{ measurementSummary }}
-        <button type="button" class="measurement-clear inline-flex items-center justify-center w-5.5 h-5.5 p-0 rounded-[4px] bg-transparent cursor-pointer" aria-label="清除测量" @click="clearMeasurement">
+        <button type="button" class="measurement-clear inline-flex items-center justify-center w-5.5 h-5.5 p-0 rounded-[4px] bg-transparent cursor-pointer" :aria-label="t('chart.clearMeasurement')" @click="clearMeasurement">
           <X :size="14" aria-hidden="true" />
         </button>
       </p>

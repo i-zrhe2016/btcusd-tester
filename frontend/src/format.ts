@@ -1,29 +1,35 @@
-const currency = new Intl.NumberFormat('zh-CN', {
+import { locale } from './i18n'
+
+function intlLocale(): string {
+  return locale.value === 'zh' ? 'zh-CN' : 'en-US'
+}
+
+const currencyOptions: Intl.NumberFormatOptions = {
   style: 'currency',
   currency: 'USD',
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
-})
+}
 
-const decimal = new Intl.NumberFormat('zh-CN', {
+const decimalOptions: Intl.NumberFormatOptions = {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
-})
+}
 
 export function formatCurrency(value: number): string {
-  return currency.format(value)
+  return new Intl.NumberFormat(intlLocale(), currencyOptions).format(value)
 }
 
 export function formatNumber(value: number): string {
-  return decimal.format(value)
+  return new Intl.NumberFormat(intlLocale(), decimalOptions).format(value)
 }
 
 export function formatPercent(value: number): string {
-  return `${value >= 0 ? '+' : ''}${decimal.format(value)}%`
+  return `${value >= 0 ? '+' : ''}${formatNumber(value)}%`
 }
 
 export function formatUtc(timestamp: number): string {
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(intlLocale(), {
     timeZone: 'UTC',
     year: 'numeric',
     month: '2-digit',

@@ -1,5 +1,6 @@
 import type { Candle, MarketMetadata } from './types'
 import { fromUtcInput, toUtcInput, formatUtc } from './format'
+import { t } from './i18n'
 
 export interface ReplayProjectDraft {
   name: string
@@ -505,13 +506,13 @@ export function createReplayProjectFromDraft(
   const to = fromUtcInput(draft.toInput)
 
   if (!name) {
-    throw new Error('请输入项目名称。')
+    throw new Error(t('app.formName'))
   }
   if (!Number.isFinite(from) || !Number.isFinite(to)) {
-    throw new Error('请选择有效的 UTC 时间。')
+    throw new Error(t('app.formTime'))
   }
   if (from >= to) {
-    throw new Error('开始时间必须早于结束时间。')
+    throw new Error(t('app.formRange'))
   }
 
   const normalizedSpeed = normalizeSpeed(draft.speed)
@@ -795,7 +796,7 @@ export function manualTradeMarker(trade: ManualTrade, ordinal: number): ManualTr
     ? 'BUY'
     : trade.action === 'open-short'
       ? 'SELL'
-      : trade.action === 'close-long' ? '平多' : '平空'
+      : trade.action === 'close-long' ? t('trade.markerCloseLong') : t('trade.markerCloseShort')
   const sequence = Number.isFinite(ordinal) && ordinal > 0 ? ` #${Math.floor(ordinal)}` : ''
   return {
     text: `${label}${sequence}`,
