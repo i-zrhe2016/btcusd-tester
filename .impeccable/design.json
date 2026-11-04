@@ -1,0 +1,280 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-04T00:00:00.000Z",
+  "title": "Design System: grailab",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "oklch(97.7% 0.0074 80.7)",
+        "tonalRamp": ["#13110F", "#2D2B28", "#4A4743", "#686661", "#888681", "#AAA7A3", "#CCCAC7", "#F0EEEC"]
+      },
+      "paper-soft": {
+        "role": "neutral",
+        "displayName": "Paper Soft",
+        "canonical": "oklch(94.6% 0.0153 77.1)",
+        "tonalRamp": ["#14110C", "#2F2B24", "#4C473F", "#6B655C", "#8B857D", "#ACA79F", "#CECAC3", "#F1EEE9"]
+      },
+      "paper-raise": {
+        "role": "neutral",
+        "displayName": "Paper Raise",
+        "canonical": "oklch(99.4% 0.0057 84.6)",
+        "tonalRamp": ["#121110", "#2C2B29", "#494744", "#676662", "#888682", "#A9A7A4", "#CCCAC8", "#EFEEEC"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Deep Coffee Ink",
+        "canonical": "oklch(29.7% 0.0170 55.6)",
+        "tonalRamp": ["#16100C", "#312A24", "#4F463F", "#6E645D", "#8E847D", "#AFA69F", "#D1C9C3", "#F3EDE9"]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Coffee",
+        "canonical": "oklch(49.4% 0.0220 62.1)",
+        "tonalRamp": ["#17100A", "#332922", "#50453C", "#706459", "#90847A", "#B1A59C", "#D2C9C1", "#F4EDE7"]
+      },
+      "ink-dim": {
+        "role": "neutral",
+        "displayName": "Dim Coffee",
+        "canonical": "oklch(52.6% 0.0247 65.0)",
+        "tonalRamp": ["#171009", "#332920", "#51453A", "#706358", "#918478", "#B1A59A", "#D3C8BF", "#F5EDE6"]
+      },
+      "terracotta": {
+        "role": "primary",
+        "displayName": "Terracotta Signal",
+        "canonical": "oklch(63.0% 0.1168 40.6)",
+        "tonalRamp": ["#2D0000", "#521000", "#782D0C", "#9C4B2D", "#BE6D50", "#DE9277", "#FAB9A2", "#FFE2D1"]
+      },
+      "terracotta-fill": {
+        "role": "primary",
+        "displayName": "Terracotta Fill",
+        "canonical": "oklch(56.1% 0.1165 39.7)",
+        "tonalRamp": ["#2D0000", "#521000", "#782C0F", "#9C4B2E", "#BF6D51", "#DE9278", "#FAB9A3", "#FFE2D1"]
+      },
+      "terracotta-deep": {
+        "role": "primary",
+        "displayName": "Terracotta Deep",
+        "canonical": "oklch(51.8% 0.1139 39.1)",
+        "tonalRamp": ["#2C0000", "#521100", "#772D12", "#9B4C31", "#BE6E53", "#DD927A", "#F9B9A4", "#FFE2D2"]
+      },
+      "chart-ground": {
+        "role": "neutral",
+        "displayName": "Instrument Ground",
+        "canonical": "oklch(18.7% 0.0102 52.8)",
+        "tonalRamp": ["#14110F", "#2F2A27", "#4C4643", "#6B6561", "#8B8581", "#ACA6A3", "#CEC9C6", "#F1EEEB"]
+      },
+      "chart-candle": {
+        "role": "neutral",
+        "displayName": "Candle Cream",
+        "canonical": "oklch(92.6% 0.0205 74.7)",
+        "tonalRamp": ["#16110A", "#312A21", "#4E463C", "#6D6559", "#8D8579", "#AEA69C", "#D0C9C0", "#F3EEE7"]
+      },
+      "chart-muted": {
+        "role": "neutral",
+        "displayName": "Chart Muted",
+        "canonical": "oklch(63.1% 0.0236 65.1)",
+        "tonalRamp": ["#171009", "#332921", "#51453B", "#706458", "#908478", "#B1A59B", "#D2C9C0", "#F4EDE6"]
+      },
+      "statement-ground": {
+        "role": "neutral",
+        "displayName": "Statement Ground",
+        "canonical": "oklch(25.8% 0.0189 52.6)",
+        "tonalRamp": ["#17100C", "#322924", "#50453F", "#6F635C", "#90837C", "#B0A59F", "#D2C8C3", "#F4EDE9"]
+      },
+      "danger": {
+        "role": "danger",
+        "displayName": "Danger",
+        "canonical": "oklch(49.6% 0.1414 29.5)",
+        "tonalRamp": ["#320000", "#5A0000", "#821D14", "#A83E32", "#CB6254", "#EA897A", "#FFB2A5", "#FFDDD3"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The two-line homepage headline only, in Schibsted Grotesk or Grailab Sans SC."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section titles, the statement band and gate headings."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Feature and step names where a heading does not need a full scale step."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Product copy and explanations, held to 34–46ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Chart chrome, captions, disclaimers and navigation."
+      }
+    },
+    "shadows": [
+      {
+        "name": "instrument",
+        "value": "0 2px 3px rgba(52, 43, 37, 0.10), 0 48px 90px -48px rgba(52, 43, 37, 0.55)",
+        "purpose": "The replay panel and pane figure: one tight contact shadow plus a long ambient one."
+      },
+      {
+        "name": "card",
+        "value": "0 2px 4px rgba(52, 43, 37, 0.05), 0 40px 72px -50px rgba(52, 43, 37, 0.50)",
+        "purpose": "The plan card only; a soft lift, never a border."
+      },
+      {
+        "name": "primary-button",
+        "value": "0 1px 2px rgba(90, 45, 25, 0.18), 0 12px 26px -16px rgba(140, 70, 40, 0.70)",
+        "purpose": "The filled action, lifted slightly off the paper."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.22, 0.61, 0.36, 1)",
+        "purpose": "Default easing for hover, focus and control state changes."
+      },
+      {
+        "name": "rise",
+        "value": "760ms cubic-bezier(0.22, 0.61, 0.36, 1)",
+        "purpose": "Entrance for hero copy and sections; never applied to the instrument."
+      },
+      {
+        "name": "replay-tick",
+        "value": "650ms / 180ms / 90ms",
+        "purpose": "Candle advance at 1×, 4× and 8× in the replay demo."
+      }
+    ],
+    "breakpoints": [
+      { "name": "desktop", "value": "1200px" },
+      { "name": "tablet", "value": "980px" },
+      { "name": "mobile-wide", "value": "720px" },
+      { "name": "mobile", "value": "480px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled action on a surface: signup, start replay, return to workspace.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">开始回放<svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14M13 6l6 6-6 6\"/></svg></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 23px; border: 0; border-radius: 11px; background: #AD5A3D; color: #FFF9F4; font-family: 'Schibsted Grotesk', 'Grailab Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 14.5px; font-weight: 600; letter-spacing: 0.01em; box-shadow: 0 1px 2px rgba(90, 45, 25, 0.18), 0 12px 26px -16px rgba(140, 70, 40, 0.70); transition: background 180ms ease, transform 180ms ease, box-shadow 180ms ease; cursor: pointer; } .ds-btn-primary:hover { background: #9E4E33; } .ds-btn-primary:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(90, 45, 25, 0.18); } .ds-btn-primary:focus-visible { outline: 2px solid #C46F50; outline-offset: 3px; } .ds-btn-primary:disabled { background: #C9B4A9; box-shadow: none; cursor: not-allowed; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "The secondary action: log in, return, or a paired CTA beside the primary.",
+      "html": "<button class=\"ds-btn-ghost\" type=\"button\">登录</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 23px; border: 0; border-radius: 11px; background: transparent; color: #342B25; box-shadow: inset 0 0 0 1px rgba(52, 43, 37, 0.12); font-family: 'Schibsted Grotesk', 'Grailab Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 14.5px; font-weight: 500; transition: background 180ms ease; cursor: pointer; } .ds-btn-ghost:hover { background: rgba(52, 43, 37, 0.045); } .ds-btn-ghost:focus-visible { outline: 2px solid #C46F50; outline-offset: 3px; }"
+    },
+    {
+      "name": "Header Signup",
+      "kind": "button",
+      "description": "The compact primary action in the navigation; the same fill at a smaller radius.",
+      "html": "<a class=\"ds-btn-signup\" href=\"#\">开始练习</a>",
+      "css": ".ds-btn-signup { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 17px; border-radius: 9px; background: #AD5A3D; color: #FFF9F4; font-family: 'Schibsted Grotesk', 'Grailab Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 13.5px; font-weight: 600; text-decoration: none; box-shadow: 0 8px 18px -14px rgba(140, 70, 40, 0.7); transition: background 180ms ease; } .ds-btn-signup:hover { background: #9E4E33; } .ds-btn-signup:focus-visible { outline: 2px solid #C46F50; outline-offset: 3px; }"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "description": "A single hairline row: terracotta mark, wordmark, three quiet links, then account actions.",
+      "html": "<header class=\"ds-nav\"><a class=\"ds-nav-brand\" href=\"#\"><svg width=\"27\" height=\"21\" viewBox=\"0 0 28 22\" aria-hidden=\"true\"><path d=\"M14 1 27 21H1Z\" fill=\"#C46F50\"/></svg><span>grailab</span></a><nav class=\"ds-nav-links\"><a href=\"#\">回放方式</a><a href=\"#\">功能</a><a href=\"#\">价格</a></nav><div class=\"ds-nav-actions\"><a class=\"ds-nav-login\" href=\"#\">登录</a><a class=\"ds-nav-signup\" href=\"#\">开始练习</a></div></header>",
+      "css": ".ds-nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 32px; min-height: 78px; border-bottom: 1px solid rgba(52, 43, 37, 0.12); background: #FAF7F2; font-family: 'Schibsted Grotesk', 'Grailab Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; } .ds-nav-brand { display: inline-flex; align-items: center; gap: 10px; color: #342B25; font-size: 21px; font-weight: 700; letter-spacing: -0.02em; text-decoration: none; } .ds-nav-links { display: flex; align-items: center; gap: 30px; margin-left: auto; } .ds-nav-links a { display: inline-flex; align-items: center; min-height: 44px; color: #6B5F55; font-size: 13.5px; text-decoration: none; transition: color 160ms ease; } .ds-nav-links a:hover { color: #342B25; } .ds-nav-actions { display: flex; align-items: center; gap: 8px; } .ds-nav-login { display: inline-flex; align-items: center; min-height: 44px; padding: 0 13px; border-radius: 9px; color: #342B25; font-size: 13.5px; text-decoration: none; } .ds-nav-login:hover { background: rgba(52, 43, 37, 0.045); } .ds-nav-signup { display: inline-flex; align-items: center; min-height: 44px; padding: 0 17px; border-radius: 9px; background: #AD5A3D; color: #FFF9F4; font-size: 13.5px; font-weight: 600; text-decoration: none; } .ds-nav-signup:hover { background: #9E4E33; } .ds-nav a:focus-visible { outline: 2px solid #C46F50; outline-offset: 3px; }"
+    },
+    {
+      "name": "Timeframe Tab",
+      "kind": "chip",
+      "description": "Timeframe selection inside the instrument; the active tab is a terracotta underscore, not a filled chip.",
+      "html": "<div class=\"ds-tf-group\" role=\"group\" aria-label=\"时间周期\"><button class=\"ds-tf\" type=\"button\" aria-pressed=\"false\">1m</button><button class=\"ds-tf is-active\" type=\"button\" aria-pressed=\"true\">5m</button><button class=\"ds-tf\" type=\"button\" aria-pressed=\"false\">15m</button><button class=\"ds-tf\" type=\"button\" aria-pressed=\"false\">1H</button><button class=\"ds-tf\" type=\"button\" aria-pressed=\"false\">4H</button><button class=\"ds-tf\" type=\"button\" aria-pressed=\"false\">1D</button></div>",
+      "css": ".ds-tf-group { display: flex; gap: 2px; padding: 0 18px; border-bottom: 1px solid rgba(246, 237, 225, 0.09); background: #17120F; } .ds-tf { position: relative; min-height: 44px; padding: 0 13px; border: 0; background: transparent; color: #94877B; font-family: 'Schibsted Grotesk', 'Grailab Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; transition: color 160ms ease; } .ds-tf:hover { color: #F3EADD; } .ds-tf[aria-pressed='true'] { color: #F3EADD; } .ds-tf[aria-pressed='true']::after { content: ''; position: absolute; left: 13px; right: 13px; bottom: -1px; height: 2px; background: #C46F50; } .ds-tf:focus-visible { outline: 2px solid #C46F50; outline-offset: -4px; }"
+    },
+    {
+      "name": "Chart Chrome",
+      "kind": "custom",
+      "description": "The replay instrument header: symbol, live status, speed well, play toggle, timeframe tabs and progress.",
+      "html": "<div class=\"ds-chrome\"><div class=\"ds-chrome-head\"><div class=\"ds-chrome-symbol\"><span class=\"ds-chrome-tick\"></span>BTCUSD <span>/ USD</span></div><div class=\"ds-chrome-status\"><span class=\"ds-chrome-dot\"></span>回放中</div><div class=\"ds-chrome-actions\"><div class=\"ds-chrome-speed\" role=\"group\" aria-label=\"回放速度\"><button type=\"button\" aria-pressed=\"false\">1×</button><button type=\"button\" aria-pressed=\"true\">4×</button><button type=\"button\" aria-pressed=\"false\">16×</button></div><button class=\"ds-chrome-play\" type=\"button\" aria-label=\"暂停回放\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><rect x=\"6\" y=\"5\" width=\"4\" height=\"14\" rx=\"1\"/><rect x=\"14\" y=\"5\" width=\"4\" height=\"14\" rx=\"1\"/></svg></button></div></div><div class=\"ds-chrome-tabs\"><button class=\"ds-chrome-tab\" type=\"button\" aria-pressed=\"false\">1m</button><button class=\"ds-chrome-tab\" type=\"button\" aria-pressed=\"true\">5m</button><button class=\"ds-chrome-tab\" type=\"button\" aria-pressed=\"false\">15m</button><button class=\"ds-chrome-tab\" type=\"button\" aria-pressed=\"false\">1H</button><button class=\"ds-chrome-tab\" type=\"button\" aria-pressed=\"false\">4H</button><button class=\"ds-chrome-tab\" type=\"button\" aria-pressed=\"false\">1D</button></div><div class=\"ds-chrome-foot\"><span>09:42 UTC</span><div class=\"ds-chrome-progress\"><span></span></div><span>35 / 76</span></div></div>",
+      "css": ".ds-chrome { overflow: hidden; border-radius: 16px; background: #17120F; color: #F3EADD; font-family: 'Schibsted Grotesk', 'Grailab Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; box-shadow: 0 2px 3px rgba(52, 43, 37, 0.10), 0 48px 90px -48px rgba(52, 43, 37, 0.55); } .ds-chrome-head { display: flex; align-items: center; gap: 18px; min-height: 58px; padding: 0 18px; border-bottom: 1px solid rgba(246, 237, 225, 0.09); } .ds-chrome-symbol { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; } .ds-chrome-symbol span { color: #94877B; font-weight: 500; letter-spacing: 0.02em; } .ds-chrome-tick { width: 3px; height: 15px; background: #C46F50; } .ds-chrome-status { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; color: #94877B; font-size: 11.5px; font-weight: 500; } .ds-chrome-dot { width: 5px; height: 5px; border-radius: 999px; background: #C46F50; } .ds-chrome-actions { display: inline-flex; align-items: center; gap: 10px; margin-left: 16px; } .ds-chrome-speed { display: inline-flex; padding: 3px; border-radius: 9px; background: rgba(246, 237, 225, 0.045); } .ds-chrome-speed button { min-width: 44px; min-height: 44px; border: 0; border-radius: 6px; background: transparent; color: #94877B; font-family: inherit; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; } .ds-chrome-speed button:hover { color: #F3EADD; } .ds-chrome-speed button[aria-pressed='true'] { background: rgba(246, 237, 225, 0.09); color: #F3EADD; } .ds-chrome-play { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: transparent; color: #F3EADD; box-shadow: inset 0 0 0 1px rgba(246, 237, 225, 0.16); cursor: pointer; } .ds-chrome-play:hover { background: rgba(246, 237, 225, 0.07); } .ds-chrome button:focus-visible { outline: 2px solid #C46F50; outline-offset: 2px; } .ds-chrome-tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid rgba(246, 237, 225, 0.09); } .ds-chrome-tab { position: relative; min-height: 44px; padding: 0 13px; border: 0; background: transparent; color: #94877B; font-family: inherit; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; } .ds-chrome-tab:hover { color: #F3EADD; } .ds-chrome-tab[aria-pressed='true'] { color: #F3EADD; } .ds-chrome-tab[aria-pressed='true']::after { content: ''; position: absolute; left: 13px; right: 13px; bottom: -1px; height: 2px; background: #C46F50; } .ds-chrome-foot { display: flex; align-items: center; gap: 16px; min-height: 46px; padding: 0 18px; color: #94877B; font-size: 11.5px; font-variant-numeric: tabular-nums; } .ds-chrome-progress { flex: 1; height: 3px; border-radius: 999px; background: rgba(246, 237, 225, 0.09); overflow: hidden; } .ds-chrome-progress span { display: block; width: 46%; height: 100%; border-radius: inherit; background: #C46F50; }"
+    },
+    {
+      "name": "Plan Card",
+      "kind": "card",
+      "description": "The single pricing surface: paper-raise fill, card shadow, checks and one filled action.",
+      "html": "<article class=\"ds-plan\"><p class=\"ds-plan-eyebrow\">完整访问</p><div class=\"ds-plan-price\"><span class=\"ds-plan-amount\">US$12.99</span><span class=\"ds-plan-period\">/ 月</span></div><p class=\"ds-plan-note\">回放全部历史行情。可随时取消。</p><ul class=\"ds-plan-list\"><li><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#C46F50\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 12.5 9.5 18 20 6.5\"/></svg>11 个周期，0.25×–8× 速度</li><li><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#C46F50\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 12.5 9.5 18 20 6.5\"/></svg>1–4 个同步图表窗格</li><li><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#C46F50\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 12.5 9.5 18 20 6.5\"/></svg>手动买卖、平仓与随机工具</li></ul><button class=\"ds-plan-cta\" type=\"button\">继续订阅<svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14M13 6l6 6-6 6\"/></svg></button><p class=\"ds-plan-small\">测试结账 · 不产生真实扣款</p></article>",
+      "css": ".ds-plan { width: 100%; max-width: 380px; box-sizing: border-box; padding: 36px; border-radius: 16px; background: #FFFDF9; box-shadow: 0 2px 4px rgba(52, 43, 37, 0.05), 0 40px 72px -50px rgba(52, 43, 37, 0.50); font-family: 'Schibsted Grotesk', 'Grailab Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #342B25; } .ds-plan-eyebrow { margin: 0 0 14px; color: #75685C; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; } .ds-plan-price { display: flex; align-items: baseline; gap: 7px; } .ds-plan-amount { font-size: 42px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; } .ds-plan-period { color: #75685C; font-size: 13px; } .ds-plan-note { margin: 10px 0 22px; color: #6B5F55; font-size: 13px; line-height: 1.6; } .ds-plan-list { display: grid; gap: 11px; margin: 0 0 26px; padding: 22px 0 0; border-top: 1px solid rgba(52, 43, 37, 0.12); list-style: none; } .ds-plan-list li { display: flex; align-items: flex-start; gap: 10px; color: #342B25; font-size: 13px; line-height: 1.5; } .ds-plan-list svg { flex: none; margin-top: 2px; } .ds-plan-cta { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; border: 0; border-radius: 11px; background: #AD5A3D; color: #FFF9F4; font-family: inherit; font-size: 14px; font-weight: 600; box-shadow: 0 1px 2px rgba(90, 45, 25, 0.18), 0 12px 26px -16px rgba(140, 70, 40, 0.70); cursor: pointer; transition: background 180ms ease; } .ds-plan-cta:hover { background: #9E4E33; } .ds-plan-cta:focus-visible { outline: 2px solid #C46F50; outline-offset: 3px; } .ds-plan-small { margin: 12px 0 0; color: #75685C; font-size: 11.5px; text-align: center; }"
+    },
+    {
+      "name": "Gate Card",
+      "kind": "card",
+      "description": "The sign-in gate: a centred paper card with the mark, one sentence of reason, and the two actions.",
+      "html": "<section class=\"ds-gate\"><svg width=\"34\" height=\"27\" viewBox=\"0 0 28 22\" aria-hidden=\"true\"><path d=\"M14 1 27 21H1Z\" fill=\"#C46F50\"/></svg><h2>登录后开始回放</h2><p>重新操作历史行情，并保存你的练习进度。</p><div class=\"ds-gate-actions\"><button class=\"ds-gate-ghost\" type=\"button\">登录</button><button class=\"ds-gate-primary\" type=\"button\">创建账户</button></div><p class=\"ds-gate-small\">测试环境 · 不会产生真实扣款</p></section>",
+      "css": ".ds-gate { box-sizing: border-box; width: 100%; max-width: 440px; margin: 0 auto; padding: 44px 40px 36px; border-radius: 18px; background: #FAF7F2; box-shadow: 0 2px 4px rgba(52, 43, 37, 0.05), 0 40px 72px -50px rgba(52, 43, 37, 0.50); text-align: center; font-family: 'Schibsted Grotesk', 'Grailab Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; color: #342B25; } .ds-gate h2 { margin: 22px 0 0; font-size: 25px; font-weight: 700; letter-spacing: -0.02em; } .ds-gate p { margin: 10px auto 0; max-width: 30ch; color: #6B5F55; font-size: 13.5px; line-height: 1.7; } .ds-gate-actions { display: grid; gap: 10px; margin-top: 28px; } .ds-gate-ghost, .ds-gate-primary { min-height: 48px; border: 0; border-radius: 11px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; } .ds-gate-ghost { background: transparent; color: #342B25; box-shadow: inset 0 0 0 1px rgba(52, 43, 37, 0.12); } .ds-gate-ghost:hover { background: rgba(52, 43, 37, 0.045); } .ds-gate-primary { background: #AD5A3D; color: #FFF9F4; box-shadow: 0 1px 2px rgba(90, 45, 25, 0.18), 0 12px 26px -16px rgba(140, 70, 40, 0.70); } .ds-gate-primary:hover { background: #9E4E33; } .ds-gate button:focus-visible { outline: 2px solid #C46F50; outline-offset: 3px; } .ds-gate-small { color: #75685C !important; font-size: 11.5px !important; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Warm Paper Desk",
+    "overview": "The homepage treats grailab as a working instrument placed on warm paper. The chart is the one machine on the desk: dark, precise, always the largest object in the room. Everything around it is paper, coffee ink, hairline rules and air. Linear contributes the discipline — aligned edges, a small number of scale steps, the product itself as the argument — while Notion contributes the material softness: a warm ground instead of white, gentle radii, and shadows that sit under objects rather than around them. The surface rejects the cold-fintech register (blue-black fields, neon data lines, glass cards), the marketing register of gradients and decorative illustrations, and the three-equal-cards template. The replay panel is the proof, so it appears before any feature list and actually runs.",
+    "keyCharacteristics": [
+      "One dark instrument on a warm paper field.",
+      "Terracotta used as a sparse signal, never as a wash.",
+      "Self-hosted Schibsted Grotesk for Latin and figures; Noto Sans SC for Chinese.",
+      "16px surfaces, 1px hairlines, one soft offset shadow per elevated object.",
+      "Monochrome candles (hollow up, filled down) so direction never depends on hue.",
+      "Generous margins and short lines of copy."
+    ],
+    "rules": [
+      {
+        "name": "The One Instrument Rule",
+        "body": "Only the replay chart and the pane preview are dark. A second dark block on the page would compete with the product itself; the statement band uses coffee, not the chart ground.",
+        "section": "colors"
+      },
+      {
+        "name": "The Sparse Signal Rule",
+        "body": "Terracotta marks actions and live state, not surfaces. If a section reads as terracotta at arm's length, the rule has been broken.",
+        "section": "colors"
+      },
+      {
+        "name": "The Legible Fill Rule",
+        "body": "White text on terracotta is only legal on #AD5A3D or darker. #C46F50 carries graphics, rules and large marks, never small white type.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Data Rule",
+        "body": "Tabular figures belong to prices, clocks, counters and axes. The plan price stays proportional so it reads as one number rather than a slot machine.",
+        "section": "typography"
+      },
+      {
+        "name": "The Two-Script Rule",
+        "body": "Never set a Chinese headline in Schibsted's fallback; the CJK face must load before the hero paints. Latin display and Chinese body may mix on one line, but weights are chosen per script rather than inherited blindly.",
+        "section": "typography"
+      },
+      {
+        "name": "The Generous Margin Rule",
+        "body": "Whitespace is a material, not leftover space. A section earns separation with at least 72px of field; a divider is a refinement, never the only thing holding two sections apart.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Hairline Rule",
+        "body": "Structure is a 1px rule at 12% ink. Elevation is a soft shadow with an offset and a blur. A hairline under a wide shadow is the ghost card and is forbidden.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the chart the largest and darkest object on the first screen.",
+      "Do use #AD5A3D for white-on-terracotta small text and reserve #C46F50 for graphics and large marks.",
+      "Do label synthetic market data in the same viewport as the chart.",
+      "Do hold body copy to 34–46ch and let the page breathe at 72–118px section rhythm.",
+      "Do use hollow-up / filled-down candles so direction survives colour blindness and desaturation.",
+      "Do give every control a 44px target and a visible terracotta focus ring."
+    ],
+    "donts": [
+      "Don't introduce a second accent hue for “buy” or “profit”; the chart is monochrome and the signal is terracotta.",
+      "Don't put a border and a wide shadow on the same surface.",
+      "Don't use gradients, glass, neon glows, or a cold blue-black fintech ground.",
+      "Don't turn features into equal icon-heading-text cards; the page uses figures and hairline rows.",
+      "Don't set a Chinese headline in a Latin face or vice versa; the two scripts have separate responsibilities.",
+      "Don't invent testimonials, customer logos, performance data or live prices."
+    ]
+  }
+}
