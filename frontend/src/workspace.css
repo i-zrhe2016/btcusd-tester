@@ -1266,3 +1266,112 @@ select {
   @apply [outline:2px_solid_#facc15] outline-offset-[2px];
 }
 }
+/* Classic indicator picker shares the chart's compact, dark controls. */
+.indicator-picker-trigger {
+  @apply [border:1px_solid_#475569] [background:#0f172a] text-[color:#e2e8f0];
+}
+.indicator-picker-trigger:focus-visible,
+.indicator-picker-panel :focus-visible {
+  @apply [outline:2px_solid_#facc15] outline-offset-[2px];
+}
+.indicator-picker-count {
+  @apply inline-flex items-center justify-center min-w-[16px] h-[16px] [margin-left:5px] [padding:0_4px]
+    rounded-full text-[color:#0b1220] [background:#facc15] [font:700_10px/1_'Fira_Code',_ui-monospace,_monospace];
+}
+.indicator-picker-panel {
+  @apply absolute z-30 top-[calc(100%_+_4px)] right-0 flex flex-col w-[340px]
+    max-w-[min(360px,_calc(100vw_-_24px))] max-h-[min(520px,_70vh)] overflow-hidden
+    [border:1px_solid_#475569] rounded-[6px] [background:#0f172a] text-[color:#e2e8f0]
+    text-[length:12px] [box-shadow:0_18px_36px_rgba(0,_0,_0,_0.36)];
+}
+.indicator-picker-head {
+  @apply flex items-center justify-between [padding:8px_10px] [border-bottom:1px_solid_#334155];
+}
+.indicator-picker-head button {
+  @apply [border:0] [background:transparent] text-[color:#cbd5e1] cursor-pointer [font-size:14px];
+}
+.indicator-picker-search {
+  @apply [margin:8px_10px_0] [padding:6px_8px] [border:1px_solid_#475569] rounded-[4px]
+    [background:#0b1220] text-[color:#e2e8f0];
+}
+.indicator-picker-tabs {
+  @apply flex gap-[4px] [padding:8px_10px_0];
+}
+.indicator-picker-tabs button {
+  @apply flex-1 [padding:5px_6px] [border:1px_solid_#334155] rounded-[4px] cursor-pointer
+    [background:#0b1220] text-[color:#cbd5e1] whitespace-nowrap;
+}
+.indicator-picker-tabs button.active {
+  @apply [border-color:#facc15] text-[color:#facc15];
+}
+.indicator-picker-limit {
+  @apply [margin:8px_10px_0] text-[color:#fbbf24] leading-[1.4];
+}
+.indicator-picker-list {
+  @apply flex-1 overflow-y-auto [margin:8px_0_0] p-0 list-none
+    [scrollbar-width:thin] [scrollbar-color:#334155_transparent];
+}
+.indicator-picker-item {
+  @apply [border-top:1px_solid_rgba(51,_65,_85,_0.6)];
+}
+.indicator-picker-row {
+  @apply flex items-center gap-[6px] [padding:6px_10px];
+}
+.indicator-picker-row.active {
+  @apply [background:rgba(250,_204,_21,_0.06)];
+}
+.indicator-picker-chevron {
+  @apply w-[16px] shrink-0 [border:0] [background:transparent] text-[color:#cbd5e1] cursor-pointer
+    text-[length:11px] p-0;
+}
+.indicator-picker-name {
+  @apply flex-1 min-w-0 flex flex-col gap-[1px];
+}
+.indicator-picker-name > span {
+  @apply overflow-hidden text-ellipsis whitespace-nowrap;
+}
+.indicator-picker-name small {
+  @apply text-[color:#94a3b8] text-[length:10px];
+}
+.indicator-picker-category {
+  @apply shrink-0 [padding:1px_5px] rounded-[3px] [border:1px_solid_#334155]
+    text-[color:#94a3b8] text-[length:10px];
+}
+.indicator-picker-switch {
+  @apply relative w-[30px] h-[16px] shrink-0 cursor-pointer rounded-full [border:1px_solid_#475569]
+    [background:#0b1220] p-0;
+}
+.indicator-picker-switch span {
+  @apply absolute top-[1px] left-[1px] w-[12px] h-[12px] rounded-full [background:#94a3b8];
+}
+.indicator-picker-switch.on {
+  @apply [border-color:#facc15] [background:#302a0b];
+}
+.indicator-picker-switch.on span {
+  @apply [left:15px] [background:#facc15];
+}
+.indicator-picker-switch:disabled {
+  @apply cursor-not-allowed opacity-40;
+}
+.indicator-picker-params {
+  @apply flex flex-col gap-[5px] [padding:2px_10px_8px_32px];
+}
+.indicator-picker-params label {
+  @apply flex items-center justify-between gap-[10px];
+}
+.indicator-picker-params input[type="number"],
+.indicator-picker-params select {
+  @apply w-[110px] [padding:3px_6px] [border:1px_solid_#475569] rounded-[3px]
+    [background:#0b1220] text-[color:#e2e8f0];
+}
+.indicator-picker-empty {
+  @apply [margin:10px] text-[color:#94a3b8];
+}
+.indicator-picker-foot {
+  @apply flex items-center justify-between [padding:8px_10px] [border-top:1px_solid_#334155]
+    text-[color:#94a3b8];
+}
+.indicator-picker-clear {
+  @apply [padding:4px_8px] [border:1px_solid_#475569] rounded-[4px] cursor-pointer
+    [background:#0b1220] text-[color:#fecaca];
+}

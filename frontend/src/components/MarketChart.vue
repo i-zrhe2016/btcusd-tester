@@ -4,6 +4,7 @@ import {
   ChartController,
   DrawingController,
   DrawingEngine,
+  IndicatorController,
   MeasurementController,
   type Bar,
   type ChartTheme,
@@ -20,6 +21,7 @@ import {
   type CandlestickData,
   type CreatePriceLineOptions,
   type IChartApi,
+  type IPaneApi,
   type ISeriesMarkersPluginApi,
   type ISeriesApi,
   type LineWidth,
@@ -83,7 +85,17 @@ import {
   type StochSetting,
 } from '../stoch'
 
+import { activeIndicatorList } from '../indicatorModel'
+import {
+  MAX_OSCILLATOR_INDICATORS,
+  createReplayIndicatorRegistry,
+  normalizeIndicatorList,
+  replayIndicatorGroups,
+  type ReplayIndicator,
+  type ReplayIndicatorState,
+} from '../indicators'
 import ChartLoadState from './ChartLoadState.vue'
+import IndicatorPicker from './IndicatorPicker.vue'
 import { PositionDrawingPlugin } from '../chart/PositionDrawingPlugin'
 import { DrawingInteractionCoordinator, type ChartDrawingTool } from '../chart/DrawingInteractionCoordinator'
 
@@ -123,6 +135,7 @@ const props = withDefaults(defineProps<{
   clockLimited?: boolean
   formingBucket?: number | null
   formingCandle?: Candle | null
+  indicators?: ReplayIndicatorState
 }>(), {
   playbackIndex: undefined,
   playing: false,
@@ -135,11 +148,13 @@ const props = withDefaults(defineProps<{
   clockLimited: false,
   formingBucket: null,
   formingCandle: null,
+  indicators: () => ({}),
 })
 
 const emit = defineEmits<{
   (event: 'drawings-changed', drawings: ReplayDrawing[]): void
   (event: 'load-history'): void
+  (event: 'indicators-changed', payload: { timeframe: string; indicators: ReplayIndicator[] }): void
 }>()
 
 const autoScale = ref(true)
@@ -208,6 +223,104 @@ const STOCH_MIDLINE: CreatePriceLineOptions = {
   title: '',
 }
 let stochSeries: ISeriesApi<'Line'>[] = []
+let stochPane: IPaneApi<Time> | null = null
+
+// ── classic indicator library ────────────────────────────────────────────────
+const indicatorRegistry = createReplayIndicatorRegistry()
+const indicatorGroups = replayIndicatorGroups()
+const indicatorPeriod = stochPeriod
+const activeIndicators = computed<ReplayIndicator[]>(() =>
+  normalizeIndicatorList(activeIndicatorList(props.indicators ?? {}, indicatorPeriod.value)))
+let indicatorController: IndicatorController | null = null
+let applyingIndicators = false
+
+function snapshotParams(params: Record<string, unknown>): ReplayIndicator['params'] {
+  const result: ReplayIndicator['params'] = {}
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === 'boolean' || typeof value === 'string') result[key] = value
+    else if (typeof value === 'number' && Number.isFinite(value)) result[key] = value
+  }
+  return result
+}
+
+function indicatorSnapshot(): ReplayIndicator[] {
+  if (!indicatorController) return []
+  return indicatorController.activeNames().map((name) => ({
+    name,
+    params: snapshotParams(indicatorController?.getActive(name)?.params ?? {}),
+  }))
+}
+
+function emitIndicators(): void {
+  if (applyingIndicators) return
+  emit('indicators-changed', { timeframe: indicatorPeriod.value, indicators: indicatorSnapshot() })
+}
+
+function sameParams(left: Record<string, unknown>, right: Record<string, unknown>): boolean {
+  const leftKeys = Object.keys(left)
+  const rightKeys = Object.keys(right)
+  if (leftKeys.length !== rightKeys.length) return false
+  return leftKeys.every((key) => Object.hasOwn(right, key) && left[key] === right[key])
+}
+
+// Reconcile the chart controller with the project's stored selection for this
+// timeframe. Parent updates (another pane, server refresh) arrive through props.
+function applyIndicatorState(indicators: ReplayIndicator[]): void {
+  const controller = indicatorController
+  if (!controller) return
+  applyingIndicators = true
+  try {
+    const desired = new Map(indicators.map((indicator) => [indicator.name, indicator]))
+    for (const name of controller.activeNames()) {
+      if (!desired.has(name)) controller.remove(name)
+    }
+    for (const indicator of desired.values()) {
+      const current = controller.getActive(indicator.name)
+      if (!current || !sameParams(current.params, indicator.params)) {
+        controller.add(indicator.name, indicator.params)
+      }
+    }
+  } finally {
+    applyingIndicators = false
+  }
+  applyPaneLayout()
+}
+
+// Lightweight Charts turns `setHeight` into stretch factors measured against the
+// frame it was called in, so a pane added later rescales its siblings and a short
+// intermediate frame can crush every pane to the minimum. Stretch factors are
+// frame-independent, so re-assert them after selection changes: the price pane
+// keeps three shares and every Stoch/indicator pane takes one, which keeps each
+// sub-pane near its 140px intent across window sizes without collapsing the chart.
+function applyPaneLayout(): void {
+  if (!priceChart || disposed) return
+  const panes = priceChart.panes()
+  if (panes.length < 2) return
+  panes[0]?.setStretchFactor(3)
+  for (let index = 1; index < panes.length; index += 1) panes[index].setStretchFactor(1)
+}
+
+function toggleIndicator(name: string): void {
+  indicatorController?.toggle(name)
+  applyPaneLayout()
+  emitIndicators()
+}
+
+function updateIndicator(name: string, params: Record<string, number | boolean | string>): void {
+  indicatorController?.add(name, params)
+  applyPaneLayout()
+  emitIndicators()
+}
+
+function clearIndicators(): void {
+  indicatorController?.clear()
+  applyPaneLayout()
+  emitIndicators()
+}
+
+watch(() => props.indicators, () => {
+  if (!applyingIndicators) applyIndicatorState(activeIndicators.value)
+})
 
 watch(stochSetting, (setting) => {
   stochGroupsDraft.value = setting.groups
@@ -246,22 +359,38 @@ function syncStochSeries() {
     const series = stochSeries.pop()
     if (series) priceChart.removeSeries(series)
   }
+  if (!lines.length) {
+    // Removing the last series lets Lightweight Charts drop the empty pane;
+    // only remove it explicitly when it still exists.
+    if (stochPane) {
+      const index = priceChart.panes().indexOf(stochPane)
+      if (index > 0) priceChart.removePane(index)
+      stochPane = null
+    }
+    applyPaneLayout()
+    return
+  }
+  if (!stochPane || priceChart.panes().indexOf(stochPane) < 0) {
+    stochPane = priceChart.addPane()
+    // Keep the Stoch pane directly under the price pane even when library
+    // oscillator panes already exist.
+    if (priceChart.panes().length > 2) stochPane.moveTo(1)
+  }
+  const paneIndex = stochPane.paneIndex()
   while (stochSeries.length < lines.length) {
-    const index = stochSeries.length
-    const { key, color, lineWidth } = lines[index]
+    const position = stochSeries.length
+    const { key, color, lineWidth } = lines[position]
     const series = priceChart.addSeries(LineSeries, {
       title: key, color, lineWidth, priceLineVisible: false, lastValueVisible: false,
       crosshairMarkerVisible: true,
       autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
-    }, 1)
-    if (index === 0) {
+    }, paneIndex)
+    if (position === 0) {
       for (const price of [20, 50, 80]) series.createPriceLine({ ...STOCH_MIDLINE, price })
     }
     stochSeries.push(series)
   }
-  const panes = priceChart.panes()
-  panes[0]?.setStretchFactor(3)
-  panes[1]?.setStretchFactor(1)
+  applyPaneLayout()
 }
 
 function updateStoch() {
@@ -671,6 +800,8 @@ function disposeCharts() {
   if (scaleSyncFrame !== null) window.cancelAnimationFrame(scaleSyncFrame)
   scaleSyncFrame = null
   stochSeries = []
+  stochPane = null
+  indicatorController = null
   resizeObserver?.disconnect()
   resizeObserver = null
   if (priceChart && visibleRangeHandler) {
@@ -774,6 +905,8 @@ function buildCharts() {
   applyCandleColors()
   tradeMarkers = createSeriesMarkers(candleSeries, [], { autoScale: true, zOrder: 'top' })
   syncStochSeries()
+  indicatorController = new IndicatorController(indicatorRegistry)
+  controller.use(indicatorController)
 
   const engine = new DrawingEngine()
   try {
@@ -830,6 +963,7 @@ function buildCharts() {
 
   resizeChart()
   setSeriesData()
+  applyIndicatorState(activeIndicators.value)
   revealAfterPaint()
 }
 
@@ -1091,8 +1225,16 @@ onBeforeUnmount(() => {
           :title="autoScale ? t('chart.autoScaleOn') : t('chart.autoScaleOff')"
           @click="toggleAutoScale"
         >{{ t('chart.auto') }}</button>
+        <IndicatorPicker
+          :groups="indicatorGroups"
+          :active="activeIndicators"
+          :max-oscillators="MAX_OSCILLATOR_INDICATORS"
+          @toggle="toggleIndicator"
+          @update="updateIndicator"
+          @clear="clearIndicators"
+        />
         <button class="stoch-visibility-toggle mr-2 [padding:5px_10px] rounded-[6px] text-[length:12px] whitespace-nowrap" type="button" :aria-pressed="stochVisible" @click="toggleStoch">
-          {{ stochVisible ? t('chart.hideIndicator') : t('chart.showIndicator') }}
+          {{ stochVisible ? t('chart.hideStoch') : t('chart.showStoch') }}
         </button>
         <details v-if="stochLengths" class="stoch-settings z-[7]">
           <summary :aria-label="`Stoch · ${stochPeriod} · ${stochLengths.join(' / ')}`"><span>Stoch</span><span class="stoch-summary-detail"> · {{ stochPeriod }} · {{ stochLengths.join(' / ') }}</span></summary>

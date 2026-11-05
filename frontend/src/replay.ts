@@ -2,6 +2,7 @@ import type { Candle, MarketMetadata } from './types'
 import { fromUtcInput, toUtcInput, formatUtc } from './format'
 import { t } from './i18n'
 import { browserStorage, scopedStorageKey } from './userStorage'
+import { normalizeReplayIndicators, type ReplayIndicatorState } from './indicatorModel'
 
 export interface ReplayProjectDraft {
   name: string
@@ -132,6 +133,8 @@ export interface ReplayProject {
   cursorTimestamp?: number
   trades: ManualTrade[]
   drawings: ReplayDrawing[]
+  // Classic chart indicators, keyed by timeframe.
+  indicators: ReplayIndicatorState
   createdAt: string
   updatedAt: string
 }
@@ -574,6 +577,7 @@ export function createReplayProjectFromDraft(
     cursorTimestamp: keepExistingState ? existing?.cursorTimestamp : undefined,
     trades: keepExistingState ? existing?.trades ?? [] : [],
     drawings: keepExistingState ? existing?.drawings ?? [] : [],
+    indicators: keepExistingState ? normalizeReplayIndicators(existing?.indicators) : {},
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   }
@@ -627,6 +631,7 @@ export function normalizeReplayProject(raw: unknown, allowDrawings = true): Repl
     cursorTimestamp,
     trades,
     drawings,
+    indicators: normalizeReplayIndicators(candidate.indicators),
     createdAt,
     updatedAt,
   }

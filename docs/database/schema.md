@@ -46,7 +46,7 @@ M1 迁移写入固定本地访客。邮箱 `guest@local.invalid` 不用于登录
 
 ## `replay_projects`
 
-复盘项目库按 Clerk 用户隔离（迁移 `0003_replay_projects.sql`）：
+复盘项目库按 Clerk 用户隔离（迁移 `0003_replay_projects.sql`，`0004_replay_indicators.sql` 增加指标选择）：
 
 | 字段 | 类型 | 约束 |
 | --- | --- | --- |
@@ -62,6 +62,7 @@ M1 迁移写入固定本地访客。邮箱 `guest@local.invalid` 不用于登录
 | `cursor_timestamp` | BIGINT | 可空；存在时必须落在 `[range_from, range_to]` |
 | `trades` | JSONB | 非空数组，最多 10,000 条 |
 | `drawings` | JSONB | 非空数组，最多 5,000 条 |
+| `indicators` | JSONB | 非空对象，键为周期，每周期最多 8 项指标（迁移 `0004_replay_indicators.sql`，默认 `{}`） |
 | `created_at` / `updated_at` | TIMESTAMPTZ | 非空；更新时只刷新 `updated_at` |
 
 索引 `(user_id, updated_at DESC)` 支持项目库列表。所有读写都以认证中间件解析出的 `user_id` 过滤；联合主键允许不同用户的客户端 ID 相同而互不影响。单项目请求体上限为 1 MB（Nginx）并在应用层再次限制为 768 KB。

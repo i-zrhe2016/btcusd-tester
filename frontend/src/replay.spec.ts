@@ -8,6 +8,7 @@ import {
   loadReplayProjects,
   manualTradeMarker,
   nextReplayWindowStart,
+  normalizeReplayProject,
   normalizeSpeed,
   reanchorManualTrades,
   reconcileReplayProject,
@@ -146,6 +147,49 @@ describe('replay helpers', () => {
 
     expect(loaded.drawings).toEqual([drawing])
     expect(edited.drawings).toEqual([drawing])
+  })
+
+  it('defaults new projects to no indicators and keeps stored selections on edit', () => {
+    const project = createReplayProjectFromDraft({
+      name: 'Indicator Replay',
+      symbol: 'BTCUSD',
+      timeframe: '1m',
+      fromInput: '2026-08-27T00:00',
+      toInput: '2026-08-27T01:00',
+      speed: 1,
+    })
+    expect(project.indicators).toEqual({})
+
+    const selected = {
+      ...project,
+      indicators: { '1m': [{ name: 'MACD', params: { fast: 12 } }], '1h': [{ name: 'RSI', params: {} }] },
+    }
+    const edited = createReplayProjectFromDraft({
+      name: 'Indicator Replay',
+      symbol: 'BTCUSD',
+      timeframe: '1m',
+      fromInput: '2026-08-27T00:00',
+      toInput: '2026-08-27T01:00',
+      speed: 2,
+    }, selected)
+    expect(edited.indicators).toEqual(selected.indicators)
+  })
+
+  it('normalizes indicator maps and tolerates projects that predate them', () => {
+    const project = createReplayProjectFromDraft({
+      name: 'Indicator Replay',
+      symbol: 'BTCUSD',
+      timeframe: '1m',
+      fromInput: '2026-08-27T00:00',
+      toInput: '2026-08-27T01:00',
+      speed: 1,
+    })
+    expect(normalizeReplayProject({ ...project, indicators: undefined })?.indicators).toEqual({})
+    expect(normalizeReplayProject({ ...project, indicators: 'bad' })?.indicators).toEqual({})
+    expect(normalizeReplayProject({
+      ...project,
+      indicators: { '1m': [{ name: 'RSI', params: { length: 14 } }], '3m': [{ name: 'SMA' }] },
+    })?.indicators).toEqual({ '1m': [{ name: 'RSI', params: { length: 14 } }] })
   })
 
   it('loads old v1 replay projects, preserves trades, and clears old trend lines', () => {

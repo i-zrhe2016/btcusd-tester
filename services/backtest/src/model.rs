@@ -178,6 +178,11 @@ pub const REPLAY_TIMEFRAMES: [&str; 11] =
     ["1m", "5m", "15m", "30m", "1h", "2h", "3h", "4h", "1d", "1w", "1M"];
 pub const MAX_REPLAY_PANES: usize = 4;
 const MAX_PROJECT_PAYLOAD_BYTES: usize = 768 * 1024;
+const MAX_INDICATORS_PER_TIMEFRAME: usize = 8;
+const MAX_INDICATOR_NAME_CHARS: usize = 64;
+const MAX_INDICATOR_PARAMS: usize = 32;
+const MAX_INDICATOR_PARAM_KEY_CHARS: usize = 32;
+const MAX_INDICATOR_PARAM_STRING_CHARS: usize = 128;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -202,10 +207,94 @@ pub struct ReplayProjectRequest {
     pub trades: Vec<Value>,
     #[serde(default)]
     pub drawings: Vec<Value>,
+    #[serde(default = "empty_indicators")]
+    pub indicators: Value,
 }
 
 fn default_replay_speed() -> f64 {
     1.0
+}
+
+fn empty_indicators() -> Value {
+    Value::Object(serde_json::Map::new())
+}
+
+// Indicator names are intentionally not whitelisted: the chart layer owns the
+// catalogue, so a new client-side indicator must not need a server deployment.
+// This mirrors the structural checks the frontend applies before sending.
+fn validate_indicators(indicators: &Value) -> Result<(), String> {
+    let Some(timeframes) = indicators.as_object() else {
+        return Err("indicators must be an object keyed by timeframe".to_owned());
+    };
+    for (timeframe, entries) in timeframes {
+        if !REPLAY_TIMEFRAMES.contains(&timeframe.as_str()) {
+            return Err("indicators contain an unsupported timeframe".to_owned());
+        }
+        let Some(entries) = entries.as_array() else {
+            return Err(format!("indicators for {timeframe} must be an array"));
+        };
+        if entries.len() > MAX_INDICATORS_PER_TIMEFRAME {
+            return Err(format!(
+                "at most {MAX_INDICATORS_PER_TIMEFRAME} indicators are allowed per timeframe"
+            ));
+        }
+        let mut names = std::collections::HashSet::new();
+        for entry in entries {
+            let Some(entry) = entry.as_object() else {
+                return Err("indicator entries must be objects".to_owned());
+            };
+            for key in entry.keys() {
+                if key != "name" && key != "params" {
+                    return Err("indicator entries may only contain name and params".to_owned());
+                }
+            }
+            let Some(name) = entry.get("name").and_then(Value::as_str) else {
+                return Err("indicator name must be a string".to_owned());
+            };
+            if name.is_empty()
+                || name.chars().count() > MAX_INDICATOR_NAME_CHARS
+                || name.chars().any(char::is_control)
+            {
+                return Err(format!(
+                    "indicator names must contain 1-{MAX_INDICATOR_NAME_CHARS} printable characters"
+                ));
+            }
+            if !names.insert(name) {
+                return Err("indicator names must be unique per timeframe".to_owned());
+            }
+            let Some(params) = entry.get("params") else {
+                continue;
+            };
+            let Some(params) = params.as_object() else {
+                return Err("indicator params must be an object".to_owned());
+            };
+            if params.len() > MAX_INDICATOR_PARAMS {
+                return Err(format!(
+                    "at most {MAX_INDICATOR_PARAMS} indicator params are allowed"
+                ));
+            }
+            for (key, value) in params {
+                if key.is_empty()
+                    || key.len() > MAX_INDICATOR_PARAM_KEY_CHARS
+                    || !key.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+                {
+                    return Err("indicator param keys must be 1-32 ASCII letters, digits or '_'".to_owned());
+                }
+                match value {
+                    Value::Bool(_) => {}
+                    Value::Number(number) if number.as_f64().is_some_and(f64::is_finite) => {}
+                    Value::String(text) if text.chars().count() <= MAX_INDICATOR_PARAM_STRING_CHARS => {}
+                    _ => {
+                        return Err(
+                            "indicator params must be finite numbers, booleans or short strings"
+                                .to_owned(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 impl ReplayProjectRequest {
@@ -259,6 +348,7 @@ impl ReplayProjectRequest {
         if self.drawings.len() > 5_000 {
             return Err("a project may contain at most 5000 drawings".to_owned());
         }
+        validate_indicators(&self.indicators)?;
         let payload_bytes = serde_json::to_vec(self)
             .map_err(|error| format!("invalid project payload: {error}"))?
             .len();
@@ -286,6 +376,7 @@ pub struct ReplayProjectRecord {
     pub cursor_timestamp: Option<i64>,
     pub trades: Value,
     pub drawings: Value,
+    pub indicators: Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -308,6 +399,9 @@ mod replay_project_tests {
             cursor_timestamp: Some(1_650_000_000),
             trades: vec![serde_json::json!({"side": "buy"})],
             drawings: vec![serde_json::json!({"tool": "TrendLine"})],
+            indicators: serde_json::json!({
+                "1h": [{"name": "MACD", "params": {"fast": 12, "slow": 26}}],
+            }),
         }
     }
 
@@ -331,6 +425,55 @@ mod replay_project_tests {
             mutate(&mut project);
             assert!(project.validate().is_err());
         }
+    }
+
+    #[test]
+    fn validates_indicator_payloads_structurally() {
+        let mut project = valid_project();
+        project.indicators = serde_json::json!({
+            "1h": [
+                {"name": "MACD", "params": {"fast": 12, "slow": 26, "signal": 9}},
+                {"name": "Bollinger", "params": {"length": 20, "mult": 2.0}},
+                {"name": "TJ"},
+            ],
+            "15m": [{"name": "RSI", "params": {"length": 14}}],
+        });
+        assert!(project.validate().is_ok());
+
+        let too_many: Vec<Value> = (0..9)
+            .map(|index| serde_json::json!({"name": format!("IND{index}")}))
+            .collect();
+        for indicators in [
+            serde_json::json!(["MACD"]),
+            serde_json::json!({"7m": []}),
+            serde_json::json!({"1h": [{"name": "MACD"}, {"name": "MACD"}]}),
+            serde_json::json!({"1h": [{"name": ""}]}),
+            serde_json::json!({"1h": [{"params": {}}]}),
+            serde_json::json!({"1h": [{"name": "MACD", "params": {"fast": {"nested": 1}}}]}),
+            serde_json::json!({"1h": [{"name": "MACD", "params": {"bad-key": 1}}]}),
+            serde_json::json!({"1h": [{"name": "MACD", "params": {"fast": true}, "extra": 1}]}),
+            serde_json::json!({"1h": too_many}),
+        ] {
+            let mut project = valid_project();
+            project.indicators = indicators.clone();
+            assert!(project.validate().is_err(), "accepted {indicators}");
+        }
+    }
+
+    #[test]
+    fn omitted_indicators_default_to_an_empty_object() {
+        let project: ReplayProjectRequest = serde_json::from_value(serde_json::json!({
+            "id": "project_1",
+            "name": "BTCUSD 1h Replay",
+            "symbol": "BTCUSD",
+            "timeframe": "1h",
+            "panes": ["1h"],
+            "from": 1600000000,
+            "to": 1700000000,
+        }))
+        .expect("payload should deserialize");
+        assert_eq!(project.indicators, empty_indicators());
+        assert!(project.validate().is_ok());
     }
 
     #[test]

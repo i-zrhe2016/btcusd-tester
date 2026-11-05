@@ -7,7 +7,13 @@ import { calculateStoch, defaultStochSetting, stochVisibilityKey } from '../stoc
 import { DEFAULT_REPLAY_DRAWING_STYLE, type PositionReplayDrawing, type ReplayDrawing } from '../replay'
 import type { Candle, MarketSnapshot } from '../types'
 
-const mocks = vi.hoisted(() => ({ controllers: [] as any[], engines: [] as any[], disconnect: vi.fn(), observe: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  controllers: [] as any[],
+  engines: [] as any[],
+  indicators: [] as any[],
+  disconnect: vi.fn(),
+  observe: vi.fn(),
+}))
 vi.mock('@getcandlekit/charts', () => {
   class ChartController {
     bars: unknown[] = []
@@ -20,6 +26,7 @@ vi.mock('@getcandlekit/charts', () => {
       subscribeVisibleLogicalRangeChange: vi.fn(), unsubscribeVisibleLogicalRangeChange: vi.fn(),
     }
     priceScaleOptions = { autoScale: true }
+    panesList: any[] = [{ setHeight: vi.fn(), moveTo: vi.fn(), paneIndex: () => 0, setStretchFactor: vi.fn() }]
     priceScale = {
       options: () => this.priceScaleOptions,
       applyOptions: vi.fn((options) => { Object.assign(this.priceScaleOptions, options) }),
@@ -33,7 +40,23 @@ vi.mock('@getcandlekit/charts', () => {
         this.lines.push(line)
         return line
       }),
-      panes: () => [{ setStretchFactor: vi.fn() }, { setStretchFactor: vi.fn() }],
+      panes: () => this.panesList,
+      addPane: vi.fn(() => {
+        const pane: any = {
+          setHeight: vi.fn(),
+          setStretchFactor: vi.fn(),
+          paneIndex: () => this.panesList.indexOf(pane),
+          moveTo: vi.fn((index: number) => {
+            const current = this.panesList.indexOf(pane)
+            if (current < 0 || index < 0 || index >= this.panesList.length) return
+            this.panesList.splice(current, 1)
+            this.panesList.splice(index, 0, pane)
+          }),
+        }
+        this.panesList.push(pane)
+        return pane
+      }),
+      removePane: vi.fn((index: number) => { this.panesList.splice(index, 1) }),
     }
     setData = vi.fn((bars) => { this.bars = bars })
     getBars = () => this.bars
@@ -68,7 +91,62 @@ vi.mock('@getcandlekit/charts', () => {
     removeAll = () => { this.drawings = []; this.selectedId = null; this.listener?.() }
     constructor() { mocks.engines.push(this) }
   }
-  return { ChartController, DrawingEngine, DrawingController: class {}, MeasurementController: class { clear() {} } }
+  class IndicatorRegistry {
+    definitions = new Map<string, any>()
+    registerAll(definitions: any[]) {
+      for (const definition of definitions) this.definitions.set(definition.name, definition)
+      return this
+    }
+    get(name: string) { return this.definitions.get(name) }
+    byCategory() {
+      const groups: Record<string, any[]> = { overlay: [], oscillator: [], pattern: [] }
+      for (const definition of this.definitions.values()) (groups[definition.category] ??= []).push(definition)
+      return groups
+    }
+  }
+  class IndicatorController {
+    registry: InstanceType<typeof IndicatorRegistry>
+    active = new Map<string, any>()
+    constructor(registry: InstanceType<typeof IndicatorRegistry>) {
+      this.registry = registry
+      mocks.indicators.push(this)
+    }
+    add(name: string, params: Record<string, unknown> = {}) {
+      const defaults = this.registry.get(name)?.defaultInputs ?? {}
+      this.active.set(name, { name, params: { ...defaults, ...params } })
+      return this
+    }
+    remove(name: string) { this.active.delete(name); return this }
+    toggle(name: string) {
+      if (this.active.has(name)) this.remove(name)
+      else this.add(name)
+      return this
+    }
+    clear() { this.active.clear(); return this }
+    activeNames() { return [...this.active.keys()] }
+    getActive(name: string) { return this.active.get(name) }
+  }
+  const BUILTIN_INDICATORS = [
+    {
+      name: 'SMA', title: 'Simple Moving Average', shortTitle: 'SMA', category: 'overlay',
+      defaultInputs: { length: 20 }, inputConfig: [{ name: 'length', type: 'int', defval: 20, title: 'Length' }],
+      plotConfig: [], hlineConfig: [], calculate: () => ({ plots: {} }),
+    },
+    {
+      name: 'RSI', title: 'Relative Strength Index', shortTitle: 'RSI', category: 'oscillator',
+      defaultInputs: { length: 14 }, inputConfig: [{ name: 'length', type: 'int', defval: 14, title: 'Length' }],
+      plotConfig: [], hlineConfig: [], calculate: () => ({ plots: {} }),
+    },
+  ]
+  return {
+    ChartController,
+    DrawingEngine,
+    DrawingController: class {},
+    MeasurementController: class { clear() {} },
+    IndicatorRegistry,
+    IndicatorController,
+    BUILTIN_INDICATORS,
+  }
 })
 const markers = vi.hoisted(() => ({ setMarkers: vi.fn() }))
 vi.mock('lightweight-charts', () => ({
@@ -89,7 +167,7 @@ const drawing: ReplayDrawing = {
 let wrapper: VueWrapper | undefined
 beforeEach(() => {
   localStorage.clear()
-  mocks.controllers.length = mocks.engines.length = 0
+  mocks.controllers.length = mocks.engines.length = mocks.indicators.length = 0
   vi.clearAllMocks()
   vi.stubGlobal('ResizeObserver', class {
     observe = mocks.observe
@@ -314,7 +392,7 @@ describe('stochastic indicator visibility', () => {
     localStorage.setItem(stochVisibilityKey('shown'), 'true')
 
     wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, projectId: 'hidden' } })
-    expect(wrapper.get('.stoch-visibility-toggle:not(.chart-auto-scale)').text()).toBe('显示指标')
+    expect(wrapper.get('.stoch-visibility-toggle:not(.chart-auto-scale)').text()).toBe('显示 Stoch')
     expect(mocks.controllers[0].chart.addSeries).not.toHaveBeenCalled()
 
     await wrapper.get('.stoch-visibility-toggle:not(.chart-auto-scale)').trigger('click')
@@ -323,8 +401,51 @@ describe('stochastic indicator visibility', () => {
 
     wrapper.unmount()
     wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, projectId: 'shown' } })
-    expect(wrapper.get('.stoch-visibility-toggle:not(.chart-auto-scale)').text()).toBe('隐藏指标')
+    expect(wrapper.get('.stoch-visibility-toggle:not(.chart-auto-scale)').text()).toBe('隐藏 Stoch')
     expect(mocks.controllers[1].chart.addSeries).toHaveBeenCalled()
+  })
+})
+
+describe('classic indicator library', () => {
+  it('hydrates the stored selection for the current timeframe and reports picker changes', async () => {
+    wrapper = mount(MarketChart, {
+      props: {
+        snapshot: snapshot(), loading: false,
+        indicators: { '1m': [{ name: 'SMA', params: { length: 50 } }] },
+      },
+    })
+    const controller = mocks.indicators[0]
+    expect(controller.activeNames()).toEqual(['SMA'])
+    expect(controller.getActive('SMA').params).toEqual({ length: 50 })
+
+    await wrapper.get('[data-testid="indicator-picker-trigger"]').trigger('click')
+    const row = wrapper.findAll('.indicator-picker-item').find((item) => item.text().includes('RSI'))
+    expect(row).toBeDefined()
+    await row!.get('.indicator-picker-switch').trigger('click')
+
+    expect(controller.activeNames()).toEqual(['SMA', 'RSI'])
+    expect(wrapper.emitted('indicators-changed')?.at(-1)?.[0]).toEqual({
+      timeframe: '1m',
+      indicators: [
+        { name: 'SMA', params: { length: 50 } },
+        { name: 'RSI', params: { length: 14 } },
+      ],
+    })
+  })
+
+  it('reconciles external selection changes without emitting them back', async () => {
+    wrapper = mount(MarketChart, {
+      props: {
+        snapshot: snapshot(), loading: false,
+        indicators: { '1m': [{ name: 'SMA', params: { length: 20 } }] },
+      },
+    })
+    const controller = mocks.indicators[0]
+    await wrapper.setProps({ indicators: { '1m': [{ name: 'RSI', params: { length: 7 } }] } })
+
+    expect(controller.activeNames()).toEqual(['RSI'])
+    expect(controller.getActive('RSI').params).toEqual({ length: 7 })
+    expect(wrapper.emitted('indicators-changed')).toBeUndefined()
   })
 })
 
