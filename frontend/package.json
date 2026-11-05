@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@clerk/localizations": "^4.24.5",
     "@clerk/vue": "^2.5.18",
     "@getcandlekit/charts": "0.1.0",
     "@lucide/vue": "1.34.0",

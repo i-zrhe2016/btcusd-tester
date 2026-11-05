@@ -1,12 +1,26 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { formatUtc } from './format'
-import { locale, resolveLocale, setLocale, t, timeframeLabel } from './i18n'
+import { initialLocale, LOCALE_STORAGE_KEY, locale, resolveLocale, setLocale, t, timeframeLabel } from './i18n'
 
 afterEach(() => {
   setLocale('zh')
 })
 
 describe('Chinese and English support', () => {
+  it('persists the manual choice and restores it on initialization', () => {
+    setLocale('en')
+    expect(localStorage.getItem(LOCALE_STORAGE_KEY)).toBe('en')
+    expect(initialLocale()).toBe('en')
+    setLocale('zh')
+    expect(initialLocale()).toBe('zh')
+  })
+
+  it('does not override the manual choice when browser languages change', () => {
+    setLocale('en')
+    window.dispatchEvent(new Event('languagechange'))
+    expect(locale.value).toBe('en')
+  })
+
   it('interpolates placeholders in Chinese', () => {
     setLocale('zh')
     expect(t('app.paneN', { n: 2 })).toBe('第 2 屏')

@@ -4,6 +4,7 @@ import { UserButton, useAuth, useClerk } from '@clerk/vue'
 import { ArrowRight, ArrowUpRight, Check } from '@lucide/vue'
 import { locale, t } from './i18n'
 import { createCheckout, getPaymentStatus } from './api'
+import LanguageSwitcher from './components/LanguageSwitcher.vue'
 import PanePreview from './components/PanePreview.vue'
 import ReplayPreview from './components/ReplayPreview.vue'
 const Workspace = defineAsyncComponent(() => import('./App.vue'))
@@ -142,6 +143,7 @@ async function startCheckout() {
 
 <template>
   <AuthBridge />
+  <div v-if="inWorkspace || isPaymentReturn" style="position: fixed; bottom: 16px; right: 16px; z-index: 201"><LanguageSwitcher :dark="inWorkspace && canUseWorkspace" /></div>
   <div v-if="isPaymentReturn" class="gate">
     <main class="gate-card" aria-live="polite">
       <span class="gate-mark" aria-hidden="true"></span>
@@ -185,6 +187,7 @@ async function startCheckout() {
           <a href="#plans">{{ t('product.navPlans') }}</a>
         </nav>
         <div class="header-actions">
+          <LanguageSwitcher />
           <button class="text-button" @click="openAuth('login')">{{ t('product.login') }}</button>
           <button class="btn btn-primary btn-sm" @click="openAuth('register')">{{ t('product.signup') }}</button>
         </div>
