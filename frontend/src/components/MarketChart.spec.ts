@@ -9,7 +9,7 @@ vi.mock('@getcandlekit/charts', () => ({
     bars: unknown[] = []
     rangeHandler: (() => void) | null = null
     range: { from: number; to: number } | null = null
-    series = { applyOptions() {}, setData() {}, createPriceLine() {} }
+    series = { attachPrimitive() {}, detachPrimitive() {}, applyOptions() {}, setData() {}, createPriceLine() {} }
     scale = {
       getVisibleLogicalRange: () => this.range,
       setVisibleLogicalRange: (range: { from: number; to: number }) => { this.range = range },
@@ -32,6 +32,8 @@ vi.mock('@getcandlekit/charts', () => ({
     destroy() {}
   },
   DrawingEngine: class {
+    cancelDraft() {}
+    getDrawings() { return [] }
     setDefaultStyle() {}
     import() {}
     onChange() { return () => {} }

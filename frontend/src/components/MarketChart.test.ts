@@ -4,7 +4,7 @@ import { nextTick } from 'vue'
 import MarketChart from './MarketChart.vue'
 import ChartLoadState from './ChartLoadState.vue'
 import { calculateStoch, defaultStochSetting, stochVisibilityKey } from '../stoch'
-import { DEFAULT_REPLAY_DRAWING_STYLE, type ReplayDrawing } from '../replay'
+import { DEFAULT_REPLAY_DRAWING_STYLE, type PositionReplayDrawing, type ReplayDrawing } from '../replay'
 import type { Candle, MarketSnapshot } from '../types'
 
 const mocks = vi.hoisted(() => ({ controllers: [] as any[], engines: [] as any[], disconnect: vi.fn(), observe: vi.fn() }))
@@ -12,7 +12,7 @@ vi.mock('@getcandlekit/charts', () => {
   class ChartController {
     bars: unknown[] = []
     range: { from: number; to: number } | null = null
-    series = { applyOptions: vi.fn(), setData: vi.fn() }
+    series = { attachPrimitive: vi.fn(), detachPrimitive: vi.fn(), applyOptions: vi.fn(), setData: vi.fn() }
     lines: any[] = []
     scale = {
       getVisibleLogicalRange: () => this.range,
@@ -25,6 +25,7 @@ vi.mock('@getcandlekit/charts', () => {
       applyOptions: vi.fn((options) => { Object.assign(this.priceScaleOptions, options) }),
     }
     chart = {
+      options: () => ({ handleScroll: { pressedMouseMove: true }, handleScale: { mouseWheel: true } }),
       priceScale: () => this.priceScale,
       timeScale: () => this.scale, applyOptions: vi.fn(), removeSeries: vi.fn(),
       addSeries: vi.fn(() => {
@@ -45,18 +46,29 @@ vi.mock('@getcandlekit/charts', () => {
   class DrawingEngine {
     drawings: any[] = []
     tool: string | null = null
+    listener: (() => void) | undefined
+    selectedId: string | null = null
+    locked = false
     unsubscribe = vi.fn()
     setDefaultStyle = vi.fn()
     import = vi.fn((json: string) => { this.drawings = JSON.parse(json) })
+    cancelDraft = vi.fn(() => { this.tool = null })
+    stopTool = vi.fn(() => { this.tool = null })
+    select = vi.fn()
+    getDraft = () => null
     getDrawings = () => this.drawings
-    onChange = vi.fn(() => this.unsubscribe)
+    onChange = vi.fn((listener: () => void) => { this.listener = listener; return this.unsubscribe })
     getActiveTool = () => this.tool
-    startTool = vi.fn((tool) => { this.tool = tool })
-    isLocked = () => false
-    getSelectedId = () => null
+    startTool = vi.fn((tool) => { this.tool = tool; this.listener?.() })
+    isLocked = () => this.locked
+    setLocked = (locked: boolean) => { this.locked = locked; if (locked) this.selectedId = null; this.listener?.() }
+    getSelectedId = () => this.selectedId
+    setStyle = (id: string, style: unknown) => { const drawing = this.drawings.find(item => item.id === id); if (drawing) drawing.style = style; this.listener?.() }
+    removeSelected = () => { this.drawings = this.drawings.filter(item => item.id !== this.selectedId); this.selectedId = null; this.listener?.() }
+    removeAll = () => { this.drawings = []; this.selectedId = null; this.listener?.() }
     constructor() { mocks.engines.push(this) }
   }
-  return { ChartController, DrawingEngine, DrawingController: class {}, MeasurementController: class {} }
+  return { ChartController, DrawingEngine, DrawingController: class {}, MeasurementController: class { clear() {} } }
 })
 const markers = vi.hoisted(() => ({ setMarkers: vi.fn() }))
 vi.mock('lightweight-charts', () => ({
@@ -322,4 +334,85 @@ it('provides accessible component loading and actionable import failure feedback
   await wrapper.setProps({ error: new Error('chunk offline') })
   expect(wrapper.find('[role="alert"]').text()).toContain('图表组件加载失败')
   expect(wrapper.find('button').text()).toBe('刷新重试')
+})
+
+const planned: PositionReplayDrawing = {
+  id: 'position', tool: 'LongPosition', points: [], startTimestamp: candles[0].timestamp,
+  endTimestamp: candles[2].timestamp, entryPrice: 10, stopPrice: 9, targetPrice: 12,
+  style: { ...DEFAULT_REPLAY_DRAWING_STYLE },
+}
+
+describe('drawing controller integration', () => {
+  it('batches native pointer updates into one merged save on release', async () => {
+    wrapper = mount(MarketChart, { attachTo: document.body, props: { snapshot: snapshot(), loading: false, drawings: [drawing, planned] } })
+    const engine = mocks.engines[0]
+    engine.startTool('TrendLine')
+    wrapper.get('.price-chart').element.dispatchEvent(new MouseEvent('pointerdown', { button: 0, bubbles: true }))
+    engine.drawings[0].points[0].price = 13; engine.listener()
+    engine.drawings[0].points[0].price = 14; engine.listener()
+    expect(wrapper.emitted('drawings-changed')).toBeUndefined()
+    window.dispatchEvent(new MouseEvent('mouseup'))
+    await nextTick(); await Promise.resolve()
+    const saves = wrapper.emitted('drawings-changed')!
+    expect(saves).toHaveLength(1)
+    const saved = saves[0][0] as ReplayDrawing[]
+    expect(saved[0].points[0].price).toBe(14)
+    expect(saved[1]).toEqual(planned)
+  })
+  it('imports only native IDs into CandleKit and retains positions on a native save', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing, planned] } })
+    const engine = mocks.engines[0]
+    expect(engine.drawings.map((item: any) => item.tool)).toEqual(['TrendLine'])
+    engine.drawings[0].points[0].price = 15
+    engine.listener()
+    await nextTick()
+    const saved = wrapper.emitted('drawings-changed')!.at(-1)![0] as ReplayDrawing[]
+    expect(saved).toHaveLength(2)
+    expect(saved[0].points[0].price).toBe(15)
+    expect(saved[1]).toEqual(planned)
+    await wrapper.setProps({ drawings: saved })
+    expect(mocks.controllers).toHaveLength(1)
+  })
+  it('styles and deletes custom selections without changing the native object or earlier snapshots', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing, planned] } })
+    const plugin = mocks.controllers[0].series.attachPrimitive.mock.calls[0][0]
+    plugin.selectedId = 'position'; mocks.engines[0].listener(); await nextTick()
+    await wrapper.get('[data-testid="drawing-width"]').setValue('4')
+    const saves = wrapper.emitted('drawings-changed')!
+    const styled = saves.at(-1)![0] as ReplayDrawing[]
+    expect(styled[0].style).toEqual(DEFAULT_REPLAY_DRAWING_STYLE)
+    expect(styled[1].style.width).toBe(4)
+    expect(planned.style.width).toBe(2)
+    await wrapper.get('[data-testid="drawing-delete"]').trigger('click')
+    expect(wrapper.emitted('drawings-changed')!.at(-1)![0]).toEqual([drawing])
+    expect(styled[1].style.width).toBe(4)
+  })
+  it('clears both controllers in a single confirmed save and preserves both on cancellation', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing, planned] } })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await wrapper.get('[data-testid="drawing-more"]').trigger('click')
+    await wrapper.get('[data-testid="drawing-clear"]').trigger('click')
+    expect(wrapper.emitted('drawings-changed')).toBeUndefined()
+    confirm.mockReturnValue(true)
+    await wrapper.get('[data-testid="drawing-more"]').trigger('click')
+    await wrapper.get('[data-testid="drawing-clear"]').trigger('click')
+    expect(wrapper.emitted('drawings-changed')).toEqual([[[]]])
+    confirm.mockRestore()
+  })
+  it('opens grouped menus, restores focus with Escape, and cancels custom creation', async () => {
+    wrapper = mount(MarketChart, { attachTo: document.body, props: { snapshot: snapshot(), loading: false } })
+    const expand = wrapper.get('[data-testid="drawing-expand-LongPosition"]')
+    await expand.trigger('click'); await nextTick()
+    expect(wrapper.get('[data-testid="drawing-tool-LongPosition"]').text()).toContain('多头规划')
+    await wrapper.get('[role="menu"]').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.find('[role="menu"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(expand.element)
+    await expand.trigger('click')
+    await wrapper.get('[data-testid="drawing-tool-LongPosition"]').trigger('click')
+    expect(wrapper.get('[data-testid="drawing-tool-cursor"]').classes()).not.toContain('active')
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.get('[data-testid="drawing-tool-cursor"]').classes()).toContain('active')
+    expect(wrapper.emitted('drawings-changed')).toBeUndefined()
+  })
 })
