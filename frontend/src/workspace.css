@@ -100,10 +100,13 @@ select {
   @apply gap-1.5;
 }
 .topbar-actions {
-  @apply gap-3.5;
+  @apply gap-[8px];
 }
 .topbar-action {
-  @apply [padding:0_10px];
+  @apply [padding:0_12px];
+}
+.topbar-user {
+  @apply ml-[4px] min-h-[28px] pl-[12px] flex items-center [border-left:1px_solid_var(--border)];
 }
 .workspace-head {
   @apply items-end;
@@ -262,7 +265,10 @@ select {
   @apply text-[color:var(--text)];
 }
 .mode-chip.active {
-  @apply [background:var(--surface-2)] text-[color:var(--text)] [box-shadow:inset_0_0_0_1px_var(--border-strong)];
+  @apply [background:var(--text)] text-[color:var(--accent-ink)] [box-shadow:0_1px_2px_rgba(17,_24,_39,0.16)];
+}
+.mode-chip.active:hover {
+  @apply text-[color:var(--accent-ink)];
 }
 .mode-chip:disabled {
   @apply cursor-not-allowed opacity-[0.45];
@@ -912,7 +918,7 @@ select {
     @apply ml-auto;
   }
   .mode-chip {
-    @apply [flex:1_1_0];
+    @apply [flex:1_1_0] min-h-[34px]!;
   }
   .workspace {
     @apply [padding:16px_12px_36px];
@@ -1066,6 +1072,9 @@ select {
   }
   .topbar-actions .topbar-icon-button {
     @apply w-[40px]! h-[40px]!;
+  }
+  .topbar-user {
+    @apply ml-0 pl-[8px];
   }
   .replay-topbar-status {
     @apply min-w-0 overflow-hidden [flex:0_1_auto]!;

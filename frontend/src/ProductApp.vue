@@ -161,8 +161,9 @@ async function startCheckout() {
   </div>
   <template v-else-if="inWorkspace">
     <template v-if="canUseWorkspace">
-    <div class="fixed top-4 right-4 z-[200]"><UserButton /></div>
-    <Workspace :user-id="userId ?? undefined" :initial-view="workspaceInitialView" />
+    <Workspace :user-id="userId ?? undefined" :initial-view="workspaceInitialView">
+      <template #topbar-end><UserButton /></template>
+    </Workspace>
     </template>
     <div v-else class="gate">
       <section class="gate-card">
