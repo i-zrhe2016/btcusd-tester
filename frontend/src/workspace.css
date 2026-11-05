@@ -186,9 +186,6 @@ select {
 .app-shell.replay-active .topbar {
   @apply relative h-[48px] [padding:0_14px] gap-[12px] flex-nowrap min-w-0;
 }
-.app-shell.replay-active .brand-mark {
-  @apply w-[30px] h-[30px] rounded-[6px];
-}
 .app-shell.replay-immersive {
   @apply fixed inset-0 z-[100] grid grid-rows-[minmax(0,_1fr)] grid-cols-[minmax(0,_1fr)] min-h-[100dvh] h-[100dvh] [background:var(--chart-bg)];
 }
@@ -217,17 +214,38 @@ select {
   @apply sticky flex gap-[16px] h-[64px] [padding:0_18px];
 }
 .brand {
-  @apply inline-flex gap-[10px] text-[color:var(--text)];
+  @apply inline-flex gap-[10px];
+  flex: none;
+  justify-self: start;
+  min-height: 44px;
+  color: #342b25;
+  white-space: nowrap;
 }
-.brand-mark {
-  @apply w-[36px] h-[36px] rounded-[var(--radius)];
+.topbar > .brand:focus-visible {
+  outline: 2px solid #c46f50;
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+@media (min-width: 921px) {
+  .app-shell:not(.replay-active) .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+  .app-shell:not(.replay-active) .topbar-actions {
+    justify-self: end;
+  }
 }
 .brand strong,
 .brand small {
   @apply block;
 }
 .brand strong {
-  @apply text-[length:15px] tracking-[0];
+  color: #342b25;
+  font-family: 'Schibsted Grotesk', 'Grailab Sans SC', sans-serif;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
 }
 .brand small {
   @apply text-[color:var(--text-dim)]
