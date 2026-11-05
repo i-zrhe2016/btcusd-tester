@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import {
-  ChartCandlestick,
   FolderOpen,
   FolderPlus,
   Maximize2,
@@ -15,6 +14,7 @@ import {
   TrendingUp,
   X,
 } from '@lucide/vue'
+import BrandMark from './components/BrandMark.vue'
 import ChartLoadState from './components/ChartLoadState.vue'
 import TimeframeSwitcher from './components/TimeframeSwitcher.vue'
 import WorkspaceSettings from './components/WorkspaceSettings.vue'
@@ -1303,11 +1303,10 @@ onBeforeUnmount(() => {
     </div>
     <header class="topbar top-0 z-[30] items-center justify-between [border-bottom:1px_solid_var(--border)] [background:rgba(255,_255,_255,_0.92)] [backdrop-filter:blur(12px)]">
       <a class="brand items-center no-underline" href="/" :aria-label="t('product.homeLabel')">
-        <span class="brand-mark grid place-items-center [border:1px_solid_var(--border-strong)] [background:var(--text)] text-[color:var(--surface)]" aria-hidden="true"><ChartCandlestick :size="20" /></span>
+        <BrandMark />
         <span>
           <strong>grailab</strong>
           <small v-if="activeView === 'replay'">{{ currentTimeframeValue }} REPLAY</small>
-          <small v-else>REPLAY WORKSPACE</small>
         </span>
       </a>
 

@@ -4,6 +4,7 @@ import { UserButton, useAuth, useClerk } from '@clerk/vue'
 import { ArrowRight, ArrowUpRight, Check } from '@lucide/vue'
 import { locale, t } from './i18n'
 import { createCheckout, getPaymentStatus } from './api'
+import BrandMark from './components/BrandMark.vue'
 import LanguageSwitcher from './components/LanguageSwitcher.vue'
 import PanePreview from './components/PanePreview.vue'
 import ReplayPreview from './components/ReplayPreview.vue'
@@ -179,7 +180,7 @@ async function startCheckout() {
     <header class="site-header">
       <div class="wrap header-inner">
         <a class="brand" href="#" :aria-label="t('product.homeLabel')">
-          <span class="brand-mark" aria-hidden="true"></span>grailab
+          <BrandMark />grailab
         </a>
         <nav class="site-nav" :aria-label="t('product.navLabel')">
           <a href="#features">{{ t('product.navFeatures') }}</a>
@@ -346,7 +347,7 @@ async function startCheckout() {
     <footer class="site-footer">
       <div class="wrap footer-inner">
         <a class="brand" href="#" :aria-label="t('product.homeLabel')">
-          <span class="brand-mark" aria-hidden="true"></span>grailab
+          <BrandMark />grailab
         </a>
         <div class="footer-links">
           <a href="#features">{{ t('product.navFeatures') }}</a>
