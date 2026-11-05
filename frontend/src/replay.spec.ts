@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   applyManualTrade,
   clampReplayCursor,
-  closeManualPosition,
   createReplayProjectFromDraft,
   draftFromProject,
   loadReplayProjects,
@@ -438,7 +437,8 @@ describe('replay helpers', () => {
       timestamp: project.from + 60,
       price: 100,
     })
-    const afterClose = closeManualPosition(afterBuy, {
+    const afterClose = applyManualTrade(afterBuy, {
+      side: 'sell',
       candleIndex: 2,
       timestamp: project.from + 120,
       price: 105,
@@ -476,7 +476,7 @@ describe('replay helpers', () => {
     ])
   })
 
-  it('closes the entire current position with an explicit close action', () => {
+  it('closes the entire current position with an opposing order', () => {
     const project = createReplayProjectFromDraft({
       name: 'Close Replay',
       symbol: 'BTCUSD',
@@ -498,7 +498,8 @@ describe('replay helpers', () => {
       timestamp: project.from + 120,
       price: 110,
     })
-    const closedProject = closeManualPosition(secondLong, {
+    const closedProject = applyManualTrade(secondLong, {
+      side: 'sell',
       candleIndex: 4,
       timestamp: project.from + 240,
       price: 112,
@@ -516,11 +517,6 @@ describe('replay helpers', () => {
       realizedPnl: 14,
       unrealizedPnl: 0,
     })
-    expect(closeManualPosition(project, {
-      candleIndex: 4,
-      timestamp: project.from + 240,
-      price: 112,
-    })).toBe(project)
   })
 
   it('drops future manual trades when trading after rewinding', () => {

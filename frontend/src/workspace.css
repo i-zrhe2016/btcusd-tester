@@ -774,9 +774,6 @@ select {
 .trade-button.sell {
   @apply [background:#111827] text-[color:#ffffff];
 }
-.trade-button.close {
-  @apply [background:#e5e7eb] text-[color:#111827] [border-style:dashed];
-}
 .trade-button:disabled {
   @apply cursor-not-allowed opacity-[0.45] [transform:none];
 }
@@ -1167,7 +1164,7 @@ select {
     @apply [flex:0_0_72px]! min-h-[46px] [padding:0_8px] gap-[4px];
   }
   .console-primary .console-trade-actions {
-    @apply [flex:1_1_auto]! [grid-template-columns:repeat(3,_minmax(0,_1fr))]! min-w-0 gap-[6px];
+    @apply [flex:1_1_auto]! [grid-template-columns:repeat(2,_minmax(0,_1fr))]! min-w-0 gap-[6px];
   }
   .console-primary .trade-button {
     @apply min-w-0 [padding:0_6px] min-h-[46px];

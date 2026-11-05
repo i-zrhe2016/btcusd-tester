@@ -64,7 +64,6 @@ import { fromUtcInput, formatDuration, formatNumber, formatUtc, toUtcInput } fro
 import {
   applyManualTrade,
   clampReplayCursor,
-  closeManualPosition,
   createReplayDraft,
   createReplayProjectFromDraft,
   createSeedReplayProject,
@@ -212,9 +211,6 @@ const positionLabel = computed(() => {
 })
 const canPlaceManualTrade = computed(() => Boolean(
   activeProject.value && currentCandle.value && !replayLoading.value && !replayError.value,
-))
-const canCloseManualTrade = computed(() => Boolean(
-  canPlaceManualTrade.value && manualTradeStats.value.side !== 'flat',
 ))
 const currentTimeframeValue = computed(() => activeProject.value?.timeframe ?? projectDraft.timeframe)
 const replayPaneCount = computed(() => Math.min(activeProject.value?.panes.length ?? 1, MAX_REPLAY_PANES))
@@ -729,22 +725,6 @@ function placeManualTrade(side: ManualTradeSide) {
     price: formatNumber(candle.close),
     action: tradeActionLabel(action),
   }))
-}
-
-function closeManualTrade() {
-  const project = activeProject.value
-  const candle = currentCandle.value
-  const side = manualTradeStats.value.side
-  if (!project || !candle || side === 'flat' || !canCloseManualTrade.value) return
-
-  const next = closeManualPosition(project, {
-    candleIndex: activePlaybackIndex.value,
-    timestamp: candle.timestamp,
-    price: candle.close,
-  })
-  updateProject(next)
-  const action = next.trades.at(-1)?.action
-  setNotice(t('app.closeFilled', { price: formatNumber(candle.close), action: tradeActionLabel(action) }))
 }
 
 function isEditableShortcutTarget(target: EventTarget | null): boolean {
@@ -1699,7 +1679,7 @@ onBeforeUnmount(() => {
                 <span>{{ playbackPlaying ? t('app.pause') : t('app.play') }}</span>
               </button>
 
-              <div class="console-trade-actions flex-none grid-cols-[repeat(3,_minmax(68px,_1fr))]" :aria-label="t('app.manualTrades')">
+              <div class="console-trade-actions flex-none grid-cols-[repeat(2,_minmax(68px,_1fr))]" :aria-label="t('app.manualTrades')">
                 <button class="trade-button buy min-h-11 items-center justify-center font-black" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('buy')">
                   <TrendingUp :size="16" aria-hidden="true" />
                   Buy
@@ -1707,16 +1687,6 @@ onBeforeUnmount(() => {
                 <button class="trade-button sell min-h-11 items-center justify-center font-black" type="button" :disabled="!canPlaceManualTrade" @click="placeManualTrade('sell')">
                   <TrendingDown :size="16" aria-hidden="true" />
                   Sell
-                </button>
-                <button
-                  class="trade-button close min-h-11 items-center justify-center font-black"
-                  type="button"
-                  data-testid="replay-close-position"
-                  :disabled="!canCloseManualTrade"
-                  @click="closeManualTrade"
-                >
-                  <X :size="16" aria-hidden="true" />
-                  {{ t('app.closePosition') }}
                 </button>
               </div>
             </div>
