@@ -139,6 +139,9 @@ select {
 .console-strip .console-jump-form {
   @apply order-3;
 }
+.console-jump-form .console-jump-field {
+  @apply w-[188px] flex-none min-w-0;
+}
 .console-strip .replay-speed-control {
   @apply order-4;
 }
@@ -1134,8 +1137,8 @@ select {
   .console-jump-form > label {
     @apply [grid-column:1_/_-1];
   }
-  .console-jump-form > input {
-    @apply min-h-[40px];
+  .console-jump-form .console-jump-field {
+    @apply min-h-[40px] w-full;
   }
   .console-jump-form > button {
     @apply min-h-[40px] [padding:0_12px] [border:1px_solid_var(--border)] rounded-[var(--radius-sm)] [background:var(--surface-2)];

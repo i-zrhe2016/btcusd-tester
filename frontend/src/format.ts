@@ -40,6 +40,18 @@ export function formatUtc(timestamp: number): string {
   }).format(new Date(timestamp * 1000))
 }
 
+export function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds))
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const zh = locale.value === 'zh'
+  if (days > 0) return zh ? `${days} 天${hours ? ` ${hours} 小时` : ''}` : `${days}d${hours ? ` ${hours}h` : ''}`
+  if (hours > 0) return zh ? `${hours} 小时${minutes ? ` ${minutes} 分钟` : ''}` : `${hours}h${minutes ? ` ${minutes}m` : ''}`
+  if (minutes > 0) return zh ? `${minutes} 分钟` : `${minutes}m`
+  return zh ? '0 分钟' : '0m'
+}
+
 export function toUtcInput(timestamp: number): string {
   return new Date(timestamp * 1000).toISOString().slice(0, 16)
 }
