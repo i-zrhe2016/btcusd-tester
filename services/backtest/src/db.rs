@@ -133,7 +133,7 @@ pub async fn list_replay_projects(
     sqlx::query_as::<_, ReplayProjectRecord>(
         r#"
         SELECT id, name, symbol, timeframe, panes, range_from, range_to, speed,
-               cursor_index, cursor_timestamp, trades, drawings, created_at, updated_at
+               cursor_index, cursor_timestamp, trades, drawings, indicators, created_at, updated_at
         FROM replay_projects
         WHERE user_id = $1
         ORDER BY updated_at DESC
@@ -157,9 +157,9 @@ pub async fn upsert_replay_project(
         r#"
         INSERT INTO replay_projects (
             user_id, id, name, symbol, timeframe, panes, range_from, range_to,
-            speed, cursor_index, cursor_timestamp, trades, drawings
+            speed, cursor_index, cursor_timestamp, trades, drawings, indicators
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         ON CONFLICT (user_id, id) DO UPDATE SET
             name = EXCLUDED.name,
             symbol = EXCLUDED.symbol,
@@ -172,9 +172,10 @@ pub async fn upsert_replay_project(
             cursor_timestamp = EXCLUDED.cursor_timestamp,
             trades = EXCLUDED.trades,
             drawings = EXCLUDED.drawings,
+            indicators = EXCLUDED.indicators,
             updated_at = now()
         RETURNING id, name, symbol, timeframe, panes, range_from, range_to, speed,
-                  cursor_index, cursor_timestamp, trades, drawings, created_at, updated_at
+                  cursor_index, cursor_timestamp, trades, drawings, indicators, created_at, updated_at
         "#,
     )
     .bind(user_id)
@@ -190,6 +191,7 @@ pub async fn upsert_replay_project(
     .bind(project.cursor_timestamp)
     .bind(trades)
     .bind(drawings)
+    .bind(project.indicators.clone())
     .fetch_one(pool)
     .await
 }

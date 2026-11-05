@@ -106,6 +106,7 @@ import {
   type ReplayDrawing,
   type ReplayWindowRange,
 } from './replay'
+import type { ReplayIndicator } from './indicatorModel'
 import type { Candle, MarketMetadata, MarketSnapshot } from './types'
 
 type AppView = 'projects' | 'replay'
@@ -260,6 +261,21 @@ function updateProjectDrawings(drawings: ReplayDrawing[]) {
     updatedAt: new Date().toISOString(),
   })
   setNotice(t('app.drawingsSaved'))
+}
+
+// Indicator selections are stored per timeframe, so a pane only ever replaces
+// its own key and never clobbers another pane's selection.
+function updateProjectIndicators(payload: { timeframe: string; indicators: ReplayIndicator[] }) {
+  const project = activeProject.value
+  if (!project) return
+  const indicators = { ...project.indicators }
+  if (payload.indicators.length) indicators[payload.timeframe] = payload.indicators
+  else delete indicators[payload.timeframe]
+  updateProject({
+    ...project,
+    indicators,
+    updatedAt: new Date().toISOString(),
+  })
 }
 
 function syncDraftFromProject(project: ReplayProject) {
@@ -1542,7 +1558,9 @@ onBeforeUnmount(() => {
               :show-header="false"
               :manual-trades="activeProject?.trades ?? []"
               :drawings="activeProject?.drawings ?? []"
+              :indicators="activeProject?.indicators ?? {}"
               @drawings-changed="updateProjectDrawings"
+              @indicators-changed="updateProjectIndicators"
             />
           </div>
           <div v-for="(pane, index) in secondaryPanes" :key="`${pane.projectId}-${index}-${pane.timeframe}`" class="replay-pane relative grid grid-rows-[auto_minmax(0,_1fr)] min-w-0 min-h-0 overflow-hidden">
@@ -1584,6 +1602,8 @@ onBeforeUnmount(() => {
               :project-id="pane.projectId"
               :show-header="false"
               :show-tools="false"
+              :indicators="activeProject?.indicators ?? {}"
+              @indicators-changed="updateProjectIndicators"
             />
           </div>
         </div>

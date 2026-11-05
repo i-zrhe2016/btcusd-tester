@@ -16,12 +16,29 @@ vi.mock('@getcandlekit/charts', () => ({
       subscribeVisibleLogicalRangeChange: (handler: () => void) => { this.rangeHandler = handler },
       unsubscribeVisibleLogicalRangeChange() {},
     }
+    panesList: any[] = [{ setHeight() {}, moveTo() {}, paneIndex: () => 0, setStretchFactor() {} }]
     chart = {
       timeScale: () => this.scale,
       applyOptions() {},
       addSeries: () => this.series,
       removeSeries() {},
-      panes: () => [],
+      panes: () => this.panesList,
+      addPane: () => {
+        const pane: any = {
+          setHeight() {},
+          setStretchFactor() {},
+          paneIndex: () => this.panesList.indexOf(pane),
+          moveTo: (index: number) => {
+            const current = this.panesList.indexOf(pane)
+            if (current < 0 || index < 0 || index >= this.panesList.length) return
+            this.panesList.splice(current, 1)
+            this.panesList.splice(index, 0, pane)
+          },
+        }
+        this.panesList.push(pane)
+        return pane
+      },
+      removePane: (index: number) => { this.panesList.splice(index, 1) },
     }
     constructor() { charts.instances.push(this) }
     getChart() { return this.chart }
@@ -43,6 +60,29 @@ vi.mock('@getcandlekit/charts', () => ({
   },
   DrawingController: class {},
   MeasurementController: class {},
+  IndicatorRegistry: class {
+    definitions = new Map<string, any>()
+    registerAll(definitions: any[]) {
+      for (const definition of definitions) this.definitions.set(definition.name, definition)
+      return this
+    }
+    get(name: string) { return this.definitions.get(name) }
+    byCategory() {
+      const groups: Record<string, any[]> = { overlay: [], oscillator: [], pattern: [] }
+      for (const definition of this.definitions.values()) (groups[definition.category] ??= []).push(definition)
+      return groups
+    }
+  },
+  IndicatorController: class {
+    active = new Map<string, any>()
+    add(name: string, params: Record<string, unknown> = {}) { this.active.set(name, { name, params }); return this }
+    remove(name: string) { this.active.delete(name); return this }
+    toggle(name: string) { return this.add(name) }
+    clear() { this.active.clear(); return this }
+    activeNames() { return [...this.active.keys()] }
+    getActive(name: string) { return this.active.get(name) }
+  },
+  BUILTIN_INDICATORS: [],
 }))
 vi.mock('lightweight-charts', async (importOriginal) => ({
   ...await importOriginal<typeof import('lightweight-charts')>(),
