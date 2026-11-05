@@ -18,6 +18,7 @@ import BrandMark from './components/BrandMark.vue'
 import ChartLoadState from './components/ChartLoadState.vue'
 import LanguageSwitcher from './components/LanguageSwitcher.vue'
 import TimeframeSwitcher from './components/TimeframeSwitcher.vue'
+import UtcDateTimePicker from './components/UtcDateTimePicker.vue'
 import WorkspaceSettings from './components/WorkspaceSettings.vue'
 import { t, timeframeLabel, TIMEFRAMES } from './i18n'
 import { loadShortcuts, shortcutActions, shortcutStorageKey, type ShortcutBindings } from './shortcuts'
@@ -59,7 +60,7 @@ const MarketChart = defineAsyncComponent({
   timeout: 30_000,
 })
 import { getMarketMetadata, getMarketSnapshot, listProjects, saveProject } from './api'
-import { fromUtcInput, formatNumber, formatUtc } from './format'
+import { fromUtcInput, formatDuration, formatNumber, formatUtc, toUtcInput } from './format'
 import {
   applyManualTrade,
   clampReplayCursor,
@@ -234,6 +235,13 @@ const projectFormError = computed(() => {
   if (from >= to) return t('app.formRange')
   return ''
 })
+const projectRangeDuration = computed(() => {
+  const from = fromUtcInput(projectDraft.fromInput)
+  const to = fromUtcInput(projectDraft.toInput)
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return ''
+  return t('app.rangeDuration', { duration: formatDuration(to - from) })
+})
+const currentCandleInput = computed(() => (currentCandle.value ? toUtcInput(currentCandle.value.timestamp) : ''))
 const projectActionLabel = computed(() => activeProject.value ? t('app.saveAndOpen') : t('app.createAndOpen'))
 
 function loadAppView(): AppView {
@@ -1445,13 +1453,14 @@ onBeforeUnmount(() => {
               <div class="field-grid two grid gap-2.5">
                 <label>
                   {{ t('app.startTime') }}
-                  <input v-model="projectDraft.fromInput" type="datetime-local" />
+                  <UtcDateTimePicker v-model="projectDraft.fromInput" />
                 </label>
                 <label>
                   {{ t('app.endTime') }}
-                  <input v-model="projectDraft.toInput" type="datetime-local" />
+                  <UtcDateTimePicker v-model="projectDraft.toInput" />
                 </label>
               </div>
+              <p v-if="projectRangeDuration" class="m-0 -mt-1 text-[color:var(--text-dim)] text-[length:11px] leading-[1.4] [font-variant-numeric:tabular-nums]">{{ projectRangeDuration }}</p>
               <div class="field-grid two speed-field grid gap-2.5 items-end">
                 <label>
                   {{ t('app.playbackSpeed') }}
@@ -1618,7 +1627,15 @@ onBeforeUnmount(() => {
               <span v-if="replayHistoryError" class="console-history-error" role="alert">{{ replayHistoryError }}</span>
               <form class="timeframe-control console-jump-form flex-none flex items-center gap-1.5 min-h-9" @submit.prevent="jumpToCandle">
                 <label for="replay-jump-time">{{ t('app.jumpTime') }}</label>
-                <input id="replay-jump-time" v-model="jumpTimeInput" type="datetime-local" :disabled="replayLoading" required />
+                <div class="console-jump-field">
+                  <UtcDateTimePicker
+                    compact
+                    input-id="replay-jump-time"
+                    v-model="jumpTimeInput"
+                    :initial-value="currentCandleInput"
+                    :disabled="replayLoading"
+                  />
+                </div>
                 <button class="text-button font-bold" type="submit" :disabled="!activeProject || replayLoading">{{ t('app.jump') }}</button>
                 <span v-if="jumpError" role="alert">{{ jumpError }}</span>
               </form>
