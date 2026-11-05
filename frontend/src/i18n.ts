@@ -758,7 +758,17 @@ export function resolveLocale(languages: readonly string[]): Locale {
   return primary === 'zh' || primary.startsWith('zh-') ? 'zh' : 'en'
 }
 
-export const locale = ref<Locale>(resolveLocale(browserLanguages()))
+export const LOCALE_STORAGE_KEY = 'grailab.locale'
+
+export function initialLocale(): Locale {
+  try {
+    const saved = localStorage.getItem(LOCALE_STORAGE_KEY)
+    if (saved === 'zh' || saved === 'en') return saved
+  } catch { /* Language switching still works when storage is unavailable. */ }
+  return resolveLocale(browserLanguages())
+}
+
+export const locale = ref<Locale>(initialLocale())
 
 // The static shell in index.html is written in Chinese; keep its language tag,
 // title, description and skip link in step with the detected locale.
@@ -773,10 +783,15 @@ function applyDocumentLocale(value: Locale) {
 
 export function setLocale(value: Locale) {
   locale.value = value
+  try { localStorage.setItem(LOCALE_STORAGE_KEY, value) } catch { /* Keep the in-memory choice. */ }
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('languagechange', () => { locale.value = resolveLocale(browserLanguages()) })
+  window.addEventListener('storage', event => {
+    if (event.key === LOCALE_STORAGE_KEY && (event.newValue === 'zh' || event.newValue === 'en')) {
+      locale.value = event.newValue
+    }
+  })
 }
 
 export function t(key: MessageKey, params: MessageParams = {}): string {
