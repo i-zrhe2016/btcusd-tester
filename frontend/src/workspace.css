@@ -1200,12 +1200,6 @@ select {
   }
 }
 @media (pointer: coarse) {
-  .chart-toolbox {
-    @apply w-12!;
-  }
-  .chart-tool-button {
-    @apply w-9! min-h-9!;
-  }
   .replay-pane-header {
     @apply [padding:4px_8px];
   }

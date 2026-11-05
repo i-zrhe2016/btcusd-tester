@@ -30,6 +30,15 @@ import {
 } from 'lightweight-charts'
 import {
   Lock,
+  ChevronDown,
+  MoreHorizontal,
+  Minus,
+  ArrowUpRight,
+  MoveVertical,
+  Ruler,
+  GitBranch,
+  TrendingUp,
+  SlidersHorizontal,
   MousePointer2,
   RotateCcw,
   Square,
@@ -49,6 +58,8 @@ import {
   replayPaneDisplayCandles,
   replayUnloadedTimestamps,
   type ManualTrade,
+  isPositionDrawing,
+  type NativeReplayDrawing,
   type ReplayDrawing,
   type ReplayDrawingStyle,
   type ReplayDrawingTool,
@@ -73,6 +84,8 @@ import {
 } from '../stoch'
 
 import ChartLoadState from './ChartLoadState.vue'
+import { PositionDrawingPlugin } from '../chart/PositionDrawingPlugin'
+import { DrawingInteractionCoordinator, type ChartDrawingTool } from '../chart/DrawingInteractionCoordinator'
 
 const chartReady = ref(false)
 let revealFrame: number | null = null
@@ -263,7 +276,7 @@ function updateStoch() {
 }
 
 interface DrawingToolOption {
-  id: ReplayDrawingTool
+  id: ChartDrawingTool
   label: string
   icon: Component
 }
@@ -274,14 +287,52 @@ interface DrawingToolGroup {
 }
 
 const drawingToolGroups = computed<DrawingToolGroup[]>(() => [
-  {
-    label: t('chart.drawing'),
-    tools: [
-      { id: 'TrendLine', label: t('chart.trendLine'), icon: Spline },
-      { id: 'Rectangle', label: t('chart.rectangle'), icon: Square },
-    ],
-  },
+  { label: t('chart.lines'), tools: ['TrendLine', 'HorizontalLine', 'HorizontalRay', 'Ray', 'ExtendedLine', 'VerticalLine'].map(id => ({ id: id as ChartDrawingTool, label: toolName(id), icon: id === 'VerticalLine' ? MoveVertical : id === 'TrendLine' ? Spline : id === 'HorizontalLine' ? Minus : ArrowUpRight })) },
+  { label: t('chart.shapes'), tools: ['Rectangle', 'ParallelChannel', 'Arrow'].map(id => ({ id: id as ChartDrawingTool, label: toolName(id), icon: Square })) },
+  { label: t('chart.fibonacci'), tools: ['FibRetracement', 'FibExtension'].map(id => ({ id: id as ChartDrawingTool, label: toolName(id), icon: GitBranch })) },
+  { label: t('chart.measureTools'), tools: ['PriceRange', 'DateRange'].map(id => ({ id: id as ChartDrawingTool, label: toolName(id), icon: Ruler })) },
+  { label: t('chart.positions'), tools: ['LongPosition', 'ShortPosition'].map(id => ({ id: id as ChartDrawingTool, label: toolName(id), icon: TrendingUp })) },
 ])
+function toolName(id: string) { return t(('chart.tool' + id) as Parameters<typeof t>[0]) }
+const openToolGroup = ref<string | null>(null)
+const stylePreferencesOpen = ref(false)
+const toolMenuPosition = ref({ left: 88, top: 40 })
+let menuOpener: HTMLElement | null = null
+function closeToolMenu(restoreFocus = false) {
+  openToolGroup.value = null
+  if (restoreFocus) menuOpener?.focus()
+}
+function expandToolGroup(group: DrawingToolGroup, event: MouseEvent) {
+  if (openToolGroup.value === group.label) { closeToolMenu(); return }
+  menuOpener = event.currentTarget as HTMLElement
+  openToolGroup.value = group.label
+  const stage = priceContainer.value?.parentElement
+  if (!stage) return
+  const bounds = stage.getBoundingClientRect(), button = menuOpener.getBoundingClientRect()
+  toolMenuPosition.value = { left: Math.max(8, button.right - bounds.left + 8), top: Math.max(40, button.top - bounds.top) }
+  void nextTick(() => {
+    const menu = stage.querySelector<HTMLElement>('.drawing-tool-menu')
+    if (!menu) return
+    toolMenuPosition.value = { left: Math.max(8, Math.min(toolMenuPosition.value.left, stage.clientWidth - menu.offsetWidth - 8)), top: Math.max(40, Math.min(toolMenuPosition.value.top, stage.clientHeight - menu.offsetHeight - 8)) }
+    menu.querySelector<HTMLButtonElement>('button')?.focus()
+  })
+}
+const recentTools = ref<Record<string, ChartDrawingTool>>({})
+function groupTool(group: DrawingToolGroup) { return group.tools.find(tool => tool.id === recentTools.value[group.label]) ?? group.tools[0] }
+let positionPlugin: PositionDrawingPlugin | null = null
+let interaction: DrawingInteractionCoordinator | null = null
+const styleDraft = ref<ReplayDrawingStyle>({ ...DEFAULT_REPLAY_DRAWING_STYLE })
+function applyDrawingStyle() {
+  if (isLocked.value) return
+  interaction?.setStyle({ ...styleDraft.value })
+  try { localStorage.setItem(scopedStorageKey('btcusd.drawing.style.v1'), JSON.stringify(styleDraft.value)) } catch { /* optional preference */ }
+}
+const selectionStyle = computed(() => {
+  toolbarRevision.value
+  return positionPlugin?.drawings.find(drawing => drawing.id === positionPlugin?.selectedId)?.style
+    ?? drawingEngine?.getDrawings().find(drawing => drawing.id === drawingEngine?.getSelectedId())?.style
+})
+function focusToolMenuOpener() { menuOpener?.focus() }
 
 const priceContainer = ref<HTMLElement | null>(null)
 const contextMenuElement = ref<HTMLElement | null>(null)
@@ -297,11 +348,13 @@ let resizeObserver: ResizeObserver | null = null
 let visibleRangeHandler: (() => void) | null = null
 let feedbackTimer: number | null = null
 let lastDrawingSnapshot = ''
+let drawingMutationBatch = false
 let mounted = false
 let disposed = false
 
 const measurementResult = ref<MeasurementResult | null>(null)
 const toolbarRevision = ref(0)
+watch(selectionStyle, style => { if (style) styleDraft.value = { ...style } })
 const toolFeedback = ref('')
 const contextMenuPosition = ref<{ left: number; top: number } | null>(null)
 
@@ -367,8 +420,9 @@ const visibleTradeMarkers = computed<SeriesMarker<Time>[]>(() => {
     }))
 })
 
-const activeTool = computed<ReplayDrawingTool | null>(() => {
+const activeTool = computed<ChartDrawingTool | null>(() => {
   toolbarRevision.value
+  if (interaction?.activeTool) return interaction.activeTool
   const tool = drawingEngine?.getActiveTool()
   return isReplayDrawingTool(tool) ? tool : null
 })
@@ -382,7 +436,7 @@ const activeToolLabel = computed(() => {
 const drawingHint = computed(() => {
   const tool = activeTool.value
   return tool
-    ? t('chart.toolEnabledHint', { tool: activeToolLabel.value, points: replayDrawingPointsNeeded(tool) })
+    ? t('chart.toolEnabledHint', { tool: activeToolLabel.value, points: tool === 'LongPosition' || tool === 'ShortPosition' ? 3 : replayDrawingPointsNeeded(tool) })
     : ''
 })
 
@@ -393,7 +447,7 @@ const isLocked = computed(() => {
 
 const hasSelection = computed(() => {
   toolbarRevision.value
-  return Boolean(drawingEngine?.getSelectedId())
+  return Boolean(drawingEngine?.getSelectedId() || positionPlugin?.selectedId)
 })
 
 const measurementSummary = computed(() => {
@@ -531,7 +585,7 @@ function unloadedChartData(): Array<CandlestickData<UTCTimestamp> | WhitespaceDa
   ]
 }
 
-function toCandleKitDrawing(drawing: ReplayDrawing): CandleKitDrawing {
+function toCandleKitDrawing(drawing: NativeReplayDrawing): CandleKitDrawing {
   return {
     id: drawing.id,
     tool: drawing.tool as DrawingToolId,
@@ -577,21 +631,12 @@ function fromCandleKitDrawing(drawing: CandleKitDrawing): ReplayDrawing | null {
 }
 
 function serializeReplayDrawings(drawings: readonly ReplayDrawing[]): string {
-  return JSON.stringify(drawings.map((drawing) => ({
-    id: drawing.id,
-    tool: drawing.tool,
-    points: drawing.points.map((point) => ({
-      timestamp: point.timestamp,
-      price: point.price,
-    })),
-    style: { ...drawing.style },
-  })))
+  return JSON.stringify(drawings)
 }
 
 function engineDrawings(): ReplayDrawing[] {
-  return drawingEngine
-    ? drawingEngine.getDrawings().map(fromCandleKitDrawing).filter((drawing): drawing is ReplayDrawing => Boolean(drawing))
-    : []
+  const native = drawingEngine?.getDrawings().map(fromCandleKitDrawing).filter((drawing): drawing is ReplayDrawing => Boolean(drawing)) ?? []
+  return [...native, ...(interaction?.snapshot() ?? [])]
 }
 
 function bumpToolbar() {
@@ -599,7 +644,9 @@ function bumpToolbar() {
 }
 
 function syncDrawingChange() {
+  if (drawingEngine?.getSelectedId()) interaction?.clearSelection()
   bumpToolbar()
+  if (drawingMutationBatch || interaction?.nativePointerActive) return
   const drawings = engineDrawings()
   const snapshot = serializeReplayDrawings(drawings)
   if (snapshot === lastDrawingSnapshot) return
@@ -612,7 +659,8 @@ function syncDrawingsFromProps() {
   const snapshot = serializeReplayDrawings(props.drawings)
   if (snapshot === lastDrawingSnapshot) return
   lastDrawingSnapshot = snapshot
-  drawingEngine.import(JSON.stringify(props.drawings.map(toCandleKitDrawing)))
+  interaction?.load(props.drawings)
+  drawingEngine.import(JSON.stringify(props.drawings.filter((drawing): drawing is NativeReplayDrawing => !isPositionDrawing(drawing)).map(toCandleKitDrawing)))
   lastDrawingSnapshot = serializeReplayDrawings(engineDrawings())
   bumpToolbar()
 }
@@ -631,6 +679,10 @@ function disposeCharts() {
   visibleRangeHandler = null
   drawingChangeUnsubscribe?.()
   drawingChangeUnsubscribe = null
+  interaction?.destroy()
+  interaction = null
+  if (positionPlugin && candleSeries) candleSeries.detachPrimitive(positionPlugin)
+  positionPlugin = null
   measurementController = null
   drawingController = null
   drawingEngine = null
@@ -724,8 +776,12 @@ function buildCharts() {
   syncStochSeries()
 
   const engine = new DrawingEngine()
-  engine.setDefaultStyle({ ...DEFAULT_REPLAY_DRAWING_STYLE })
-  engine.import(JSON.stringify(props.drawings.map(toCandleKitDrawing)))
+  try {
+    const stored = JSON.parse(localStorage.getItem(scopedStorageKey('btcusd.drawing.style.v1')) ?? 'null')
+    styleDraft.value = stored && /^#[0-9a-f]{6}$/i.test(stored.color) && Number.isFinite(stored.width) ? { ...DEFAULT_REPLAY_DRAWING_STYLE, ...stored, width: Math.min(8, Math.max(1, stored.width)) } : { ...DEFAULT_REPLAY_DRAWING_STYLE }
+  } catch { styleDraft.value = { ...DEFAULT_REPLAY_DRAWING_STYLE } }
+  engine.setDefaultStyle({ ...styleDraft.value })
+  engine.import(JSON.stringify(props.drawings.filter((drawing): drawing is NativeReplayDrawing => !isPositionDrawing(drawing)).map(toCandleKitDrawing)))
   drawingEngine = engine
   drawingController = new DrawingController({
     engine,
@@ -747,6 +803,11 @@ function buildCharts() {
       bumpToolbar()
     },
   })
+  positionPlugin = new PositionDrawingPlugin(priceChart, candleSeries, () => unloadedChartData().map(bar => Number(bar.time)))
+  candleSeries.attachPrimitive(positionPlugin)
+  interaction = new DrawingInteractionCoordinator(priceContainer.value, engine, positionPlugin, syncDrawingChange, key => setToolFeedback(t(key as Parameters<typeof t>[0])))
+  interaction.defaultStyle = { ...styleDraft.value }
+  interaction.load(props.drawings)
   controller.use(drawingController)
   controller.use(measurementController)
   lastDrawingSnapshot = serializeReplayDrawings(props.drawings)
@@ -806,13 +867,16 @@ function setToolFeedback(message: string) {
   }, 2400)
 }
 
-function selectTool(tool: ReplayDrawingTool) {
+function selectTool(tool: ChartDrawingTool) {
   if (!drawingEngine || isLocked.value) return
   if (activeTool.value === tool) {
     stopDrawingTool()
     return
   }
-  drawingEngine.startTool(tool)
+  openToolGroup.value = null
+  const group = drawingToolGroups.value.find(group => group.tools.some(item => item.id === tool))
+  if (group) recentTools.value[group.label] = tool
+  interaction?.selectTool(tool)
   setToolFeedback(t('chart.toolEnabled', { tool: activeToolLabel.value }))
 }
 
@@ -824,6 +888,10 @@ function activateTrendLine() {
 defineExpose({ activateTrendLine })
 
 function stopDrawingTool() {
+  openToolGroup.value = null
+  interaction?.cancel()
+  interaction?.clearSelection()
+  bumpToolbar()
   drawingEngine?.cancelDraft()
   drawingEngine?.stopTool()
   drawingEngine?.select(null)
@@ -832,21 +900,30 @@ function stopDrawingTool() {
 
 function toggleLock() {
   if (!drawingEngine) return
+  interaction?.cancel()
+  drawingEngine.cancelDraft()
+  drawingEngine.stopTool()
   drawingEngine.setLocked(!drawingEngine.isLocked())
   setToolFeedback(drawingEngine.isLocked() ? t('chart.drawingsLocked') : t('chart.drawingsUnlocked'))
 }
 
 function deleteSelected() {
-  if (!drawingEngine || isLocked.value || !drawingEngine.getSelectedId()) return
-  drawingEngine.removeSelected()
+  if (!drawingEngine || isLocked.value) return
+  if (positionPlugin?.selectedId) interaction?.removeSelected()
+  else drawingEngine.removeSelected()
   setToolFeedback(t('chart.drawingDeleted'))
 }
 
 function clearDrawings() {
   if (!drawingEngine || !props.drawings.length || isLocked.value) return
   if (typeof window !== 'undefined' && !window.confirm(t('chart.clearDrawingsConfirm'))) return
-  drawingEngine.removeAll()
-  drawingEngine.stopTool()
+  drawingMutationBatch = true
+  try {
+    interaction?.clear()
+    drawingEngine.removeAll()
+    drawingEngine.stopTool()
+  } finally { drawingMutationBatch = false }
+  syncDrawingChange()
   setToolFeedback(t('chart.drawingsCleared'))
 }
 
@@ -884,6 +961,7 @@ function clearDrawingsFromContextMenu() {
 }
 
 function handleDocumentPointerDown(event: PointerEvent) {
+  if (openToolGroup.value && !(event.target as HTMLElement)?.closest('.drawing-tool-menu, .chart-toolbox')) closeToolMenu()
   if (!contextMenuPosition.value) return
   if (contextMenuElement.value?.contains(event.target as Node)) return
   closeContextMenu()
@@ -895,7 +973,22 @@ function clearMeasurement() {
 }
 
 function handleKeyDown(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null
+  if (target?.closest?.('input, textarea, select, [contenteditable="true"]')) {
+    if (['Delete', 'Backspace', 'Escape'].includes(event.key)) event.stopImmediatePropagation()
+    return
+  }
+  if ((event.key === 'Delete' || event.key === 'Backspace') && (positionPlugin?.selectedId || isLocked.value)) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (!isLocked.value) deleteSelected()
+    return
+  }
   if (event.key !== 'Escape') return
+  if (interaction?.activeTool || positionPlugin?.selectedId) event.stopImmediatePropagation()
+  const restoreMenu = Boolean(openToolGroup.value)
+  stopDrawingTool()
+  if (restoreMenu) menuOpener?.focus()
   closeContextMenu()
   measurementController?.clear()
   if (drawingEngine?.getActiveTool() || drawingEngine?.getDraft()) {
@@ -938,7 +1031,7 @@ watch(() => props.drawings, () => {
 
 onMounted(() => {
   mounted = true
-  window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keydown', handleKeyDown, true)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   updateCharts()
 })
@@ -946,7 +1039,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposed = true
   mounted = false
-  window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('keydown', handleKeyDown, true)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   closeContextMenu()
   clearFeedbackTimer()
@@ -986,7 +1079,7 @@ onBeforeUnmount(() => {
       <p>{{ error ? t('chart.loadFailed') : t('chart.noData') }}</p>
       <span>{{ error || t('chart.adjustRange') }}</span>
     </div>
-    <div v-else class="chart-stage relative w-full overflow-hidden [background:var(--chart-bg)]" :class="{ 'chart-stage-with-controls': Boolean(stochLengths) }" :aria-busy="!chartReady">
+    <div v-else class="chart-stage relative w-full overflow-hidden [background:var(--chart-bg)]" :class="{ 'chart-stage-with-controls': Boolean(stochLengths), 'chart-stage-tools': showTools, 'chart-stage-properties': showTools && (hasSelection || stylePreferencesOpen) }" :aria-busy="!chartReady">
       <ChartLoadState v-if="!chartReady" class="chart-preparing-cover absolute inset-0 z-20" :message="t('chart.preparing')" />
       <div class="chart-control-strip absolute z-[7] top-0 left-0 right-0 flex items-center justify-end h-[var(--chart-control-strip-height)] [padding:0_76px_0_12px] [background:var(--chart-bg)]">
         <button
@@ -1022,7 +1115,7 @@ onBeforeUnmount(() => {
       <div ref="priceContainer" class="price-chart absolute w-full min-h-0 [background:var(--chart-bg)]" aria-hidden="true" @pointerup="syncAutoScale" @pointercancel="syncAutoScale" @dblclick="syncAutoScale" @contextmenu="openContextMenu" />
 
       <div v-if="showTools" class="chart-toolbox-edge" aria-hidden="true" />
-      <div v-if="showTools" class="chart-toolbox absolute z-[4] flex flex-col items-stretch gap-0.5 w-10 p-1 overflow-y-auto [border:1px_solid_rgba(148,_163,_184,_0.42)] rounded-[7px] [background:rgba(15,_23,_42,_0.88)] [box-shadow:0_18px_36px_rgba(0,_0,_0,_0.32)] [backdrop-filter:blur(10px)] [scrollbar-width:thin]" role="toolbar" :aria-label="t('chart.drawingToolbar')">
+      <div v-if="showTools" class="chart-toolbox absolute z-[4] flex flex-col items-stretch" role="toolbar" :aria-label="t('chart.drawingToolbar')" @pointerdown.stop @keydown.stop>
         <div class="chart-tool-group chart-tool-group-primary grid gap-0.5">
           <button
             class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
@@ -1038,24 +1131,19 @@ onBeforeUnmount(() => {
         </div>
 
         <div v-for="group in drawingToolGroups" :key="group.label" class="chart-tool-group grid gap-0.5" :aria-label="group.label">
-          <span class="chart-tool-group-label hidden overflow-hidden text-[color:rgba(203,_213,_225,_0.68)] text-[length:8px] font-extrabold leading-[1] text-center text-ellipsis whitespace-nowrap">{{ group.label }}</span>
-          <button
-            v-for="tool in group.tools"
-            :key="tool.id"
-            class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
-            :class="{ active: activeTool === tool.id }"
-            type="button"
-            :data-testid="'drawing-tool-' + tool.id"
-            :aria-label="tool.label"
-            :aria-pressed="activeTool === tool.id"
-            :title="tool.label"
-            @click="selectTool(tool.id)"
-          >
-            <component :is="tool.icon" :size="16" aria-hidden="true" />
-            <span class="chart-tool-tooltip absolute left-[calc(100%_+_8px)] top-[50%] z-[6] min-w-[max-content] [padding:5px_7px] [border:1px_solid_rgba(148,_163,_184,_0.34)] rounded-[4px] [background:#0f172a] text-[color:#f8fafc] text-[length:11px] font-bold leading-[1] pointer-events-none">{{ tool.label }}</span>
+          <button class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center rounded" type="button"
+            :class="{ active: group.tools.some(tool => tool.id === activeTool) }"
+            :data-testid="'drawing-group-' + group.tools[0].id" :title="group.label + ': ' + groupTool(group).label"
+            :aria-label="group.label + ': ' + groupTool(group).label" :aria-pressed="group.tools.some(tool => tool.id === activeTool)"
+            @click="selectTool(groupTool(group).id)" @contextmenu.prevent="expandToolGroup(group, $event)">
+            <component :is="groupTool(group).icon" :size="20" aria-hidden="true" />
           </button>
+          <button type="button" class="chart-tool-button chart-tool-expand text-[10px]" :aria-label="t('chart.expandTools') + ' ' + group.label" :data-testid="'drawing-expand-' + group.tools[0].id" :aria-expanded="openToolGroup === group.label" @click="expandToolGroup(group, $event)"><ChevronDown :size="12" aria-hidden="true" /></button>
         </div>
 
+        <div class="chart-tool-group chart-tool-group-preferences">
+          <button type="button" class="chart-tool-button" :aria-label="t('chart.style')" :title="t('chart.style')" :aria-pressed="stylePreferencesOpen" @click="stylePreferencesOpen = !stylePreferencesOpen"><SlidersHorizontal :size="20" aria-hidden="true" /></button>
+        </div>
         <div class="chart-tool-group chart-tool-group-actions grid gap-0.5" :aria-label="t('chart.drawingActions')">
           <button
             class="chart-tool-button relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
@@ -1080,18 +1168,33 @@ onBeforeUnmount(() => {
           >
             <Trash2 :size="16" aria-hidden="true" />
           </button>
-          <button
-            class="chart-tool-button chart-tool-clear relative w-7.5 min-h-7 inline-flex items-center justify-center p-0 rounded-[4px] text-[length:11px] font-bold whitespace-nowrap"
-            type="button"
-            data-testid="drawing-clear"
-            :aria-label="t('chart.clearDrawings')"
-            :title="t('chart.clearDrawings')"
-            :disabled="!drawings.length || isLocked"
-            @click="clearDrawings"
-          >
-            <X :size="16" aria-hidden="true" />
-          </button>
+          <button type="button" class="chart-tool-button chart-tool-more" data-testid="drawing-more" :aria-label="t('chart.drawingActions')" :title="t('chart.drawingActions')" :aria-expanded="openToolGroup === '__actions'" @click="expandToolGroup({ label: '__actions', tools: [] }, $event)"><MoreHorizontal :size="16" aria-hidden="true" /></button>
         </div>
+      </div>
+
+      <div v-if="showTools && openToolGroup" class="drawing-tool-menu" :style="{ left: toolMenuPosition.left + 'px', top: toolMenuPosition.top + 'px' }" role="menu" @pointerdown.stop @click.stop @keydown.esc.stop="closeToolMenu(true)">
+        <template v-if="openToolGroup === '__actions'">
+          <strong>{{ t('chart.drawingActions') }}</strong>
+          <button type="button" role="menuitem" @click="stylePreferencesOpen = !stylePreferencesOpen; closeToolMenu()"><SlidersHorizontal :size="16" />{{ t('chart.style') }}</button>
+          <button type="button" role="menuitem" :disabled="!hasSelection || isLocked" @click="deleteSelected(); closeToolMenu()"><Trash2 :size="16" />{{ t('chart.deleteSelected') }}</button>
+          <button type="button" role="menuitem" @click="toggleLock(); closeToolMenu()"><Lock :size="16" />{{ isLocked ? t('chart.unlockDrawing') : t('chart.lockDrawing') }}</button>
+          <button type="button" role="menuitem" data-testid="drawing-clear" :disabled="!drawings.length || isLocked" @click="clearDrawings(); closeToolMenu()"><X :size="16" />{{ t('chart.clearDrawings') }}</button>
+        </template>
+        <template v-for="group in drawingToolGroups" :key="group.label">
+          <template v-if="group.label === openToolGroup">
+            <strong>{{ group.label }}</strong>
+            <button v-for="tool in group.tools" :key="tool.id" type="button" role="menuitem" :data-testid="'drawing-tool-' + tool.id" :aria-label="tool.label" @click="selectTool(tool.id); focusToolMenuOpener()"><component :is="tool.icon" :size="18" aria-hidden="true" />{{ tool.label }}</button>
+          </template>
+        </template>
+      </div>
+      <div v-if="showTools && (hasSelection || stylePreferencesOpen)" class="drawing-properties" role="toolbar" :aria-label="t('chart.style')" @pointerdown.stop @click.stop @keydown.stop>
+        <label>{{ t('chart.color') }} <input v-model="styleDraft.color" data-testid="drawing-color" type="color" :disabled="isLocked" @input="applyDrawingStyle" /></label>
+        <label>{{ t('chart.width') }} <select v-model.number="styleDraft.width" data-testid="drawing-width" :disabled="isLocked" @change="applyDrawingStyle"><option v-for="width in [1,2,3,4,6,8]" :key="width" :value="width">{{ width }}</option></select></label>
+        <label><input v-model="styleDraft.dashed" data-testid="drawing-dashed" type="checkbox" :disabled="isLocked" @change="applyDrawingStyle" /> {{ t('chart.dashed') }}</label>
+        <label>{{ t('chart.fill') }} <input :value="styleDraft.fill ?? '#000000'" data-testid="drawing-fill" type="color" :disabled="isLocked" @input="styleDraft.fill = ($event.target as HTMLInputElement).value; applyDrawingStyle()" /></label>
+        <button type="button" @click="styleDraft.fill = null; applyDrawingStyle()">{{ t('chart.noFill') }}</button>
+        <button type="button" :disabled="!hasSelection || isLocked" @click="deleteSelected">{{ t('chart.deleteSelected') }}</button>
+        <button type="button" @click="toggleLock">{{ isLocked ? t('chart.unlockDrawing') : t('chart.lockDrawing') }}</button>
       </div>
 
       <div
@@ -1129,3 +1232,43 @@ onBeforeUnmount(() => {
     </div>
   </section>
 </template>
+
+<style scoped>
+.chart-stage-tools { container-type:inline-size; --drawing-strip:0px; }
+.chart-stage-properties { --drawing-strip:38px; }
+.chart-stage-tools .price-chart { left:38px; width:calc(100% - 38px); top:calc(var(--chart-control-strip-height) + var(--drawing-strip)); height:auto; bottom:0; }
+.chart-stage-tools .chart-toolbox { width:34px; left:2px; top:calc(var(--chart-control-strip-height) + 2px); bottom:auto; max-height:none; gap:4px; padding:2px; border:1px solid #334155; border-radius:3px; overflow:visible; backdrop-filter:none; box-shadow:none; background:#0b1220; opacity:1; transform:none; }
+.chart-toolbox .chart-tool-group { position:relative; display:flex; flex-direction:row; gap:0; padding:0; border:0; flex-shrink:0; }
+.chart-toolbox .chart-tool-group-primary { margin-bottom:3px; }
+.chart-toolbox .chart-tool-group-actions { flex-direction:column; gap:4px; padding-top:4px; border-top:1px solid #334155; }
+.chart-toolbox .chart-tool-button { flex:none; display:inline-flex; align-items:center; justify-content:center; width:28px; min-width:28px; height:28px; min-height:28px; padding:0; border-radius:3px; }
+.chart-toolbox .chart-tool-expand { position:absolute; right:0; bottom:0; z-index:1; width:11px; min-width:11px; height:11px; min-height:11px; padding:0; border:0; border-radius:2px; background:#0b1220; color:#cbd5e1; }
+.chart-toolbox svg { width:16px; height:16px; }
+.chart-toolbox .chart-tool-expand svg { width:10px; height:10px; }
+.drawing-tool-menu { position:absolute; z-index:9; display:grid; gap:2px; padding:6px; width:min(230px,calc(100% - 16px)); max-height:calc(100% - 48px); overflow:auto; background:#0f172a; color:#dbe4ee; border:1px solid #334155; border-radius:5px; box-shadow:0 8px 24px #0008; }
+.drawing-tool-menu strong { font-size:11px; color:#94a3b8; padding:4px 8px; }
+.drawing-tool-menu button { display:flex; align-items:center; gap:8px; text-align:left; padding:6px 8px; min-height:32px; border-radius:3px; font-size:12px; }
+.drawing-tool-menu button:hover:not(:disabled),.drawing-tool-menu button:focus-visible { background:#334155; outline:1px solid #facc15; }
+.drawing-tool-menu button:disabled { opacity:.4; cursor:not-allowed; }
+.drawing-properties { position:absolute; top:var(--chart-control-strip-height); left:38px; right:0; z-index:5; display:flex; flex-wrap:wrap; align-content:flex-start; align-items:center; gap:2px 8px; height:var(--drawing-strip); overflow:auto; padding:3px 6px; background:#0b1220; color:#dbe4ee; border-bottom:1px solid #334155; font-size:11px; }
+.drawing-properties label { display:flex; align-items:center; gap:4px; min-height:28px; }
+.drawing-properties input[type=color] { width:24px; height:24px; padding:0; }
+.drawing-properties select { background:#0f172a; color:#dbe4ee; padding:3px; }
+.drawing-properties button { min-height:28px; padding:3px; }
+.drawing-properties button:focus-visible,.chart-tool-button:focus-visible { outline:2px solid #facc15; outline-offset:1px; }
+.chart-stage-tools .drawing-hint,.chart-stage-tools .measurement-readout { left:44px; max-width:calc(100% - 52px); }
+@container (max-width:639px) {
+  .chart-stage-tools .chart-toolbox { flex-direction:row; align-items:center; width:max-content; max-width:calc(100% - 4px); left:2px; right:auto; top:32px; bottom:auto; height:34px; gap:4px; overflow:visible; }
+  .chart-toolbox .chart-tool-group-primary { margin-bottom:0; }
+  .chart-toolbox .chart-tool-group-preferences,.chart-toolbox .chart-tool-group-actions > button:not(.chart-tool-more) { display:none; }
+  .chart-toolbox .chart-tool-group-actions { flex-direction:row; border-top:0; border-left:1px solid #334155; padding-top:0; padding-left:4px; }
+  .chart-stage-tools .price-chart { left:0; width:100%; top:66px; }
+  .chart-stage-properties .price-chart { top:108px; }
+  .drawing-properties { left:0; top:66px; height:42px; }
+  .chart-stage-tools .drawing-hint,.chart-stage-tools .measurement-readout { left:6px; max-width:calc(100% - 12px); font-size:11px; bottom:36px; }
+}
+@media (pointer:coarse) {
+  .drawing-tool-menu button { min-height:44px; }
+  .chart-toolbox .chart-tool-expand { width:14px; min-width:14px; height:14px; min-height:14px; }
+}
+</style>

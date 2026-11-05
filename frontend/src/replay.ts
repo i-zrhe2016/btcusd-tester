@@ -61,11 +61,44 @@ export interface ReplayDrawingStyle {
   fill: string | null
 }
 
-export interface ReplayDrawing {
+export interface NativeReplayDrawing {
   id: string
   tool: ReplayDrawingTool
   points: ReplayDrawingPoint[]
   style: ReplayDrawingStyle
+}
+
+export interface PositionReplayDrawing {
+  id: string
+  tool: 'LongPosition' | 'ShortPosition'
+  points: ReplayDrawingPoint[]
+  startTimestamp: number
+  endTimestamp: number
+  entryPrice: number
+  stopPrice: number
+  targetPrice: number
+  style: ReplayDrawingStyle
+}
+
+export type ReplayDrawing = NativeReplayDrawing | PositionReplayDrawing
+
+export function isPositionDrawing(drawing: ReplayDrawing): drawing is PositionReplayDrawing {
+  return drawing.tool === 'LongPosition' || drawing.tool === 'ShortPosition'
+}
+
+export function validPosition(drawing: PositionReplayDrawing): boolean {
+  const values = [drawing.startTimestamp, drawing.endTimestamp, drawing.entryPrice, drawing.stopPrice, drawing.targetPrice]
+  return values.every(Number.isFinite) && drawing.endTimestamp > drawing.startTimestamp
+    && Math.min(drawing.entryPrice, drawing.stopPrice, drawing.targetPrice) > 0
+    && (drawing.tool === 'LongPosition'
+      ? drawing.stopPrice < drawing.entryPrice && drawing.entryPrice < drawing.targetPrice
+      : drawing.targetPrice < drawing.entryPrice && drawing.entryPrice < drawing.stopPrice)
+}
+
+export function positionMetrics(drawing: PositionReplayDrawing) {
+  const risk = Math.abs(drawing.entryPrice - drawing.stopPrice)
+  const reward = Math.abs(drawing.targetPrice - drawing.entryPrice)
+  return { risk, reward, ratio: reward / risk, riskPercent: risk / drawing.entryPrice * 100, rewardPercent: reward / drawing.entryPrice * 100 }
 }
 
 export interface ManualTradeInput {
@@ -646,6 +679,10 @@ export function replayDrawingPointsNeeded(tool: ReplayDrawingTool): number {
 function normalizeReplayDrawing(raw: unknown): ReplayDrawing | null {
   if (!raw || typeof raw !== 'object') return null
   const candidate = raw as Partial<ReplayDrawing>
+  if (candidate.tool === 'LongPosition' || candidate.tool === 'ShortPosition') {
+    const position = { ...candidate, points: [], style: normalizeReplayDrawingStyle(candidate.style) } as PositionReplayDrawing
+    return typeof position.id === 'string' && Boolean(position.id) && validPosition(position) ? position : null
+  }
   if (typeof candidate.id !== 'string' || !candidate.id || !isReplayDrawingTool(candidate.tool)) return null
   const pointsNeeded = replayDrawingPointsNeeded(candidate.tool)
   if (!Array.isArray(candidate.points) || candidate.points.length < pointsNeeded) return null
