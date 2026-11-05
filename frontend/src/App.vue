@@ -16,6 +16,7 @@ import {
 } from '@lucide/vue'
 import BrandMark from './components/BrandMark.vue'
 import ChartLoadState from './components/ChartLoadState.vue'
+import LanguageSwitcher from './components/LanguageSwitcher.vue'
 import TimeframeSwitcher from './components/TimeframeSwitcher.vue'
 import WorkspaceSettings from './components/WorkspaceSettings.vue'
 import { t, timeframeLabel, TIMEFRAMES } from './i18n'
@@ -1343,6 +1344,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="topbar-actions flex items-center">
+        <LanguageSwitcher />
         <button class="topbar-action min-h-8 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[length:12px] font-extrabold whitespace-nowrap" type="button" :aria-label="t('app.settings')" @click="workspaceSettings?.open('settings')"><SlidersHorizontal :size="15" aria-hidden="true" /><span class="topbar-action-label">{{ t('app.settings') }}</span></button>
         <div v-if="activeView === 'projects'" class="service-state flex items-center gap-2 text-[color:var(--text-muted)] text-[length:13px] whitespace-nowrap">
           <span class="status-dot w-2 h-2 rounded-full [background:var(--profit)] [box-shadow:0_0_0_4px_rgba(22,_101,_52,_0.14)]" aria-hidden="true" />
