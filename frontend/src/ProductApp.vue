@@ -144,7 +144,8 @@ async function startCheckout() {
 
 <template>
   <AuthBridge />
-  <div v-if="inWorkspace || isPaymentReturn" style="position: fixed; bottom: 16px; right: 16px; z-index: 201"><LanguageSwitcher :dark="inWorkspace && canUseWorkspace" /></div>
+  <!-- The signed-in workspace keeps its switcher in the top bar; gate pages have no bar. -->
+  <div v-if="isPaymentReturn || (inWorkspace && !canUseWorkspace)" style="position: fixed; top: 16px; right: 16px; z-index: 201"><LanguageSwitcher /></div>
   <div v-if="isPaymentReturn" class="gate">
     <main class="gate-card" aria-live="polite">
       <span class="gate-mark" aria-hidden="true"></span>
