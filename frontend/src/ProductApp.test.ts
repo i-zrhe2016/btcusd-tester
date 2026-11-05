@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { nextTick, type Slots } from 'vue'
 import ProductApp from './ProductApp.vue'
 
 const clerk = vi.hoisted(() => ({
@@ -11,11 +11,14 @@ const clerk = vi.hoisted(() => ({
   openSignUp: vi.fn(),
 }))
 
-vi.mock('@clerk/vue', () => ({
-  useAuth: () => ({ isLoaded: clerk.isLoaded, isSignedIn: clerk.isSignedIn, userId: clerk.userId }),
-  useClerk: () => ({ value: { openSignIn: clerk.openSignIn, openSignUp: clerk.openSignUp } }),
-  UserButton: { name: 'UserButton', render: () => null },
-}))
+vi.mock('@clerk/vue', async () => {
+  const { h } = await import('vue')
+  return {
+    useAuth: () => ({ isLoaded: clerk.isLoaded, isSignedIn: clerk.isSignedIn, userId: clerk.userId }),
+    useClerk: () => ({ value: { openSignIn: clerk.openSignIn, openSignUp: clerk.openSignUp } }),
+    UserButton: { name: 'UserButton', render: () => h('div', { 'data-testid': 'user-button' }) },
+  }
+})
 
 vi.mock('./App.vue', async () => {
   const { h } = await import('vue')
@@ -24,11 +27,11 @@ vi.mock('./App.vue', async () => {
     default: {
       name: 'WorkspaceStub',
       props: ['userId', 'initialView'],
-      setup(props: { userId?: string; initialView?: 'projects' | 'replay' }) {
+      setup(props: { userId?: string; initialView?: 'projects' | 'replay' }, { slots }: { slots: Slots }) {
         return () => h('div', {
           'data-testid': 'workspace',
           'data-initial-view': props.initialView ?? '',
-        })
+        }, slots['topbar-end']?.())
       },
     },
   }
@@ -102,6 +105,17 @@ describe('signed-in landing navigation', () => {
     const workspace = wrapper!.find('[data-testid="workspace"]')
     expect(workspace.exists()).toBe(true)
     expect(workspace.attributes('data-initial-view')).toBe('projects')
+  })
+
+  it('passes the account button into the workspace header', async () => {
+    clerk.isSignedIn.value = true
+    clerk.userId.value = 'user_1'
+    mountApp()
+    await flushPromises()
+
+    await clickText('a', '开始练习')
+
+    expect(wrapper!.find('[data-testid="workspace"] [data-testid="user-button"]').exists()).toBe(true)
   })
 
   it('still opens the sign-in dialog for signed-out visitors', async () => {

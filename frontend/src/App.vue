@@ -192,10 +192,6 @@ const replayStatusLabel = computed(() => {
   if (replayWindowError.value) return t('app.marketFailed')
   return playbackPlaying.value ? t('app.playing') : t('app.paused')
 })
-const appStatusLabel = computed(() => {
-  if (activeView.value === 'replay') return replayStatusLabel.value
-  return t('app.library')
-})
 const activeError = computed(() => {
   if (activeView.value === 'replay') {
     return replayError.value || pageError.value
@@ -1311,10 +1307,10 @@ onBeforeUnmount(() => {
         </span>
       </a>
 
-      <div v-if="activeView === 'projects'" class="mode-switch inline-flex items-center gap-1.5 p-1 [border:1px_solid_var(--border)] rounded-full [background:var(--surface)]" role="tablist" :aria-label="t('app.workspaceMode')">
+      <div v-if="activeView === 'projects'" class="mode-switch inline-flex items-center gap-[2px] p-[3px] [border:1px_solid_var(--border)] rounded-full [background:var(--surface)]" role="tablist" :aria-label="t('app.workspaceMode')">
         <button
           type="button"
-          class="mode-chip min-h-8.5 [padding:0_14px] rounded-full"
+          class="mode-chip min-h-[30px] [padding:0_16px] rounded-full text-[length:12.5px] font-semibold"
           :class="{ active: activeView === 'projects' }"
           :aria-pressed="activeView === 'projects'"
           @click="openProjects"
@@ -1323,7 +1319,7 @@ onBeforeUnmount(() => {
         </button>
         <button
           type="button"
-          class="mode-chip min-h-8.5 [padding:0_14px] rounded-full"
+          class="mode-chip min-h-[30px] [padding:0_16px] rounded-full text-[length:12.5px] font-semibold"
           :aria-pressed="false"
           :disabled="!activeProject"
           @click="openReplay"
@@ -1343,21 +1339,14 @@ onBeforeUnmount(() => {
         <span class="status-chip muted inline-flex items-center rounded-full whitespace-nowrap">{{ positionLabel }}</span>
       </div>
 
-      <div class="topbar-actions flex items-center">
-        <LanguageSwitcher />
-        <button class="topbar-action min-h-8 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[length:12px] font-extrabold whitespace-nowrap" type="button" :aria-label="t('app.settings')" @click="workspaceSettings?.open('settings')"><SlidersHorizontal :size="15" aria-hidden="true" /><span class="topbar-action-label">{{ t('app.settings') }}</span></button>
-        <div v-if="activeView === 'projects'" class="service-state flex items-center gap-2 text-[color:var(--text-muted)] text-[length:13px] whitespace-nowrap">
-          <span class="status-dot w-2 h-2 rounded-full [background:var(--profit)] [box-shadow:0_0_0_4px_rgba(22,_101,_52,_0.14)]" aria-hidden="true" />
-          <span>{{ appStatusLabel }}</span>
-        </div>
-
-        <template v-else>
-          <button class="topbar-action min-h-8 inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] text-[length:12px] font-extrabold whitespace-nowrap" type="button" :aria-label="t('app.library')" @click="openProjects">
+      <div class="topbar-actions flex flex-none items-center">
+        <template v-if="activeView === 'replay'">
+          <button class="topbar-action min-h-9 inline-flex items-center gap-1.5 rounded-[9px] text-[length:12.5px] font-bold whitespace-nowrap" type="button" :aria-label="t('app.library')" @click="openProjects">
             <FolderOpen :size="15" aria-hidden="true" />
             <span class="topbar-action-label">{{ t('app.library') }}</span>
           </button>
           <button
-            class="topbar-icon-button w-8 h-8 inline-grid place-items-center p-0 rounded-[var(--radius-sm)]"
+            class="topbar-icon-button w-9 h-9 inline-grid place-items-center p-0 rounded-[9px]"
             type="button"
             data-testid="replay-fullscreen"
             :aria-label="isReplayFullscreen ? t('app.exitFullscreen') : t('app.fullscreen')"
@@ -1369,6 +1358,12 @@ onBeforeUnmount(() => {
           </button>
         </template>
 
+        <LanguageSwitcher />
+        <button class="topbar-action min-h-9 inline-flex items-center gap-1.5 rounded-[9px] text-[length:12.5px] font-bold whitespace-nowrap" type="button" :aria-label="t('app.settings')" @click="workspaceSettings?.open('settings')"><SlidersHorizontal :size="15" aria-hidden="true" /><span class="topbar-action-label">{{ t('app.settings') }}</span></button>
+
+        <div v-if="$slots['topbar-end']" class="topbar-user">
+          <slot name="topbar-end" />
+        </div>
       </div>
     </header>
 
