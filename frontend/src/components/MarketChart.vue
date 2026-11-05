@@ -438,11 +438,20 @@ function expandToolGroup(group: DrawingToolGroup, event: MouseEvent) {
   const stage = priceContainer.value?.parentElement
   if (!stage) return
   const bounds = stage.getBoundingClientRect(), button = menuOpener.getBoundingClientRect()
-  toolMenuPosition.value = { left: Math.max(8, button.right - bounds.left + 8), top: Math.max(40, button.top - bounds.top) }
+  // Menus open clear of the toolbar rail and the style row; they may only cover the plot.
+  const toolbox = stage.querySelector<HTMLElement>('.chart-toolbox')
+  const styleRow = stage.querySelector<HTMLElement>('.drawing-properties')
+  let minTop = 40
+  if (toolbox && toolbox.offsetHeight <= 40) minTop = Math.max(minTop, toolbox.getBoundingClientRect().bottom - bounds.top + 4)
+  if (styleRow) minTop = Math.max(minTop, styleRow.getBoundingClientRect().bottom - bounds.top + 4)
+  toolMenuPosition.value = { left: Math.max(8, button.right - bounds.left + 8), top: Math.max(minTop, button.top - bounds.top) }
   void nextTick(() => {
     const menu = stage.querySelector<HTMLElement>('.drawing-tool-menu')
     if (!menu) return
-    toolMenuPosition.value = { left: Math.max(8, Math.min(toolMenuPosition.value.left, stage.clientWidth - menu.offsetWidth - 8)), top: Math.max(40, Math.min(toolMenuPosition.value.top, stage.clientHeight - menu.offsetHeight - 8)) }
+    const available = Math.max(120, stage.clientHeight - minTop - 8)
+    if (menu.offsetHeight > available) menu.style.maxHeight = `${available}px`
+    const maxTop = Math.max(minTop, stage.clientHeight - menu.offsetHeight - 8)
+    toolMenuPosition.value = { left: Math.max(8, Math.min(toolMenuPosition.value.left, stage.clientWidth - menu.offsetWidth - 8)), top: Math.max(minTop, Math.min(toolMenuPosition.value.top, maxTop)) }
     menu.querySelector<HTMLButtonElement>('button')?.focus()
   })
 }
@@ -1318,25 +1327,26 @@ onBeforeUnmount(() => {
         <template v-if="openToolGroup === '__actions'">
           <strong>{{ t('chart.drawingActions') }}</strong>
           <button type="button" role="menuitem" @click="stylePreferencesOpen = !stylePreferencesOpen; closeToolMenu()"><SlidersHorizontal :size="16" />{{ t('chart.style') }}</button>
-          <button type="button" role="menuitem" :disabled="!hasSelection || isLocked" @click="deleteSelected(); closeToolMenu()"><Trash2 :size="16" />{{ t('chart.deleteSelected') }}</button>
+          <button type="button" role="menuitem" class="is-danger" :disabled="!hasSelection || isLocked" @click="deleteSelected(); closeToolMenu()"><Trash2 :size="16" />{{ t('chart.deleteSelected') }}</button>
           <button type="button" role="menuitem" @click="toggleLock(); closeToolMenu()"><Lock :size="16" />{{ isLocked ? t('chart.unlockDrawing') : t('chart.lockDrawing') }}</button>
-          <button type="button" role="menuitem" data-testid="drawing-clear" :disabled="!drawings.length || isLocked" @click="clearDrawings(); closeToolMenu()"><X :size="16" />{{ t('chart.clearDrawings') }}</button>
+          <button type="button" role="menuitem" class="is-danger" data-testid="drawing-clear" :disabled="!drawings.length || isLocked" @click="clearDrawings(); closeToolMenu()"><X :size="16" />{{ t('chart.clearDrawings') }}</button>
         </template>
         <template v-for="group in drawingToolGroups" :key="group.label">
           <template v-if="group.label === openToolGroup">
             <strong>{{ group.label }}</strong>
-            <button v-for="tool in group.tools" :key="tool.id" type="button" role="menuitem" :data-testid="'drawing-tool-' + tool.id" :aria-label="tool.label" @click="selectTool(tool.id); focusToolMenuOpener()"><component :is="tool.icon" :size="18" aria-hidden="true" />{{ tool.label }}</button>
+            <button v-for="tool in group.tools" :key="tool.id" type="button" role="menuitem" :class="{ 'is-active': tool.id === activeTool }" :data-testid="'drawing-tool-' + tool.id" :aria-label="tool.label" @click="selectTool(tool.id); focusToolMenuOpener()"><component :is="tool.icon" :size="18" aria-hidden="true" />{{ tool.label }}</button>
           </template>
         </template>
       </div>
       <div v-if="showTools && (hasSelection || stylePreferencesOpen)" class="drawing-properties" role="toolbar" :aria-label="t('chart.style')" @pointerdown.stop @click.stop @keydown.stop>
         <label>{{ t('chart.color') }} <input v-model="styleDraft.color" data-testid="drawing-color" type="color" :disabled="isLocked" @input="applyDrawingStyle" /></label>
         <label>{{ t('chart.width') }} <select v-model.number="styleDraft.width" data-testid="drawing-width" :disabled="isLocked" @change="applyDrawingStyle"><option v-for="width in [1,2,3,4,6,8]" :key="width" :value="width">{{ width }}</option></select></label>
-        <label><input v-model="styleDraft.dashed" data-testid="drawing-dashed" type="checkbox" :disabled="isLocked" @change="applyDrawingStyle" /> {{ t('chart.dashed') }}</label>
-        <label>{{ t('chart.fill') }} <input :value="styleDraft.fill ?? '#000000'" data-testid="drawing-fill" type="color" :disabled="isLocked" @input="styleDraft.fill = ($event.target as HTMLInputElement).value; applyDrawingStyle()" /></label>
-        <button type="button" @click="styleDraft.fill = null; applyDrawingStyle()">{{ t('chart.noFill') }}</button>
-        <button type="button" :disabled="!hasSelection || isLocked" @click="deleteSelected">{{ t('chart.deleteSelected') }}</button>
-        <button type="button" @click="toggleLock">{{ isLocked ? t('chart.unlockDrawing') : t('chart.lockDrawing') }}</button>
+        <label><input v-model="styleDraft.dashed" data-testid="drawing-dashed" type="checkbox" :disabled="isLocked" @change="applyDrawingStyle" />{{ t('chart.dashed') }}</label>
+        <label>{{ t('chart.fill') }} <span class="drawing-properties-swatch" :class="{ 'is-empty': styleDraft.fill == null }"><input :value="styleDraft.fill ?? '#000000'" data-testid="drawing-fill" type="color" :disabled="isLocked" @input="styleDraft.fill = ($event.target as HTMLInputElement).value; applyDrawingStyle()" /></span></label>
+        <button type="button" :aria-pressed="styleDraft.fill == null" @click="styleDraft.fill = null; applyDrawingStyle()">{{ t('chart.noFill') }}</button>
+        <span class="drawing-properties-divider" aria-hidden="true" />
+        <button type="button" class="is-danger" :disabled="!hasSelection || isLocked" @click="deleteSelected">{{ t('chart.deleteSelected') }}</button>
+        <button type="button" :aria-pressed="isLocked" @click="toggleLock">{{ isLocked ? t('chart.unlockDrawing') : t('chart.lockDrawing') }}</button>
       </div>
 
       <div
@@ -1389,15 +1399,37 @@ onBeforeUnmount(() => {
 .chart-toolbox .chart-tool-expand svg { width:10px; height:10px; }
 .drawing-tool-menu { position:absolute; z-index:9; display:grid; gap:2px; padding:6px; width:min(230px,calc(100% - 16px)); max-height:calc(100% - 48px); overflow:auto; background:#0f172a; color:#dbe4ee; border:1px solid #334155; border-radius:5px; box-shadow:0 8px 24px #0008; }
 .drawing-tool-menu strong { font-size:11px; color:#94a3b8; padding:4px 8px; }
-.drawing-tool-menu button { display:flex; align-items:center; gap:8px; text-align:left; padding:6px 8px; min-height:32px; border-radius:3px; font-size:12px; }
-.drawing-tool-menu button:hover:not(:disabled),.drawing-tool-menu button:focus-visible { background:#334155; outline:1px solid #facc15; }
+.drawing-tool-menu button { display:flex; align-items:center; gap:8px; text-align:left; padding:6px 8px; min-height:32px; border:1px solid transparent; border-radius:4px; background:transparent; color:#dbe4ee; font:inherit; font-size:12px; cursor:pointer; transition:background-color 120ms ease,color 120ms ease; }
+.drawing-tool-menu button:hover:not(:disabled),.drawing-tool-menu button:focus-visible { background:#334155; color:#f8fafc; outline:1px solid #facc15; }
+.drawing-tool-menu button.is-active { background:rgba(250,204,21,.08); color:#facc15; }
+.drawing-tool-menu button.is-active svg { color:#facc15; }
+.drawing-tool-menu button.is-danger { color:#fecdd3; }
+.drawing-tool-menu button.is-danger:hover:not(:disabled) { background:rgba(251,113,133,.14); color:#fff1f2; }
 .drawing-tool-menu button:disabled { opacity:.4; cursor:not-allowed; }
-.drawing-properties { position:absolute; top:var(--chart-control-strip-height); left:38px; right:0; z-index:5; display:flex; flex-wrap:wrap; align-content:flex-start; align-items:center; gap:2px 8px; height:var(--drawing-strip); overflow:auto; padding:3px 6px; background:#0b1220; color:#dbe4ee; border-bottom:1px solid #334155; font-size:11px; }
-.drawing-properties label { display:flex; align-items:center; gap:4px; min-height:28px; }
-.drawing-properties input[type=color] { width:24px; height:24px; padding:0; }
-.drawing-properties select { background:#0f172a; color:#dbe4ee; padding:3px; }
-.drawing-properties button { min-height:28px; padding:3px; }
-.drawing-properties button:focus-visible,.chart-tool-button:focus-visible { outline:2px solid #facc15; outline-offset:1px; }
+.drawing-properties { position:absolute; top:var(--chart-control-strip-height); left:38px; right:0; z-index:5; display:flex; flex-wrap:wrap; align-content:center; align-items:center; gap:4px 8px; height:var(--drawing-strip); overflow-x:auto; overflow-y:hidden; padding:0 8px; background:#0b1220; color:#dbe4ee; border-bottom:1px solid #334155; font-size:11px; scrollbar-width:thin; scrollbar-color:#334155 transparent; }
+.drawing-properties > * { flex:0 0 auto; }
+.drawing-properties label { display:inline-flex; align-items:center; gap:6px; height:28px; min-height:0; margin:0; color:#94a3b8; font-size:11px; font-weight:600; letter-spacing:.02em; white-space:nowrap; }
+.drawing-properties input,.drawing-properties select { width:auto; min-height:0; height:26px; margin:0; padding:0; border:1px solid #334155; border-radius:4px; background:#0f172a; color:#dbe4ee; font-size:11px; transition:border-color 140ms ease,background-color 140ms ease; }
+.drawing-properties input[type=color] { width:26px; padding:2px; border-color:#475569; cursor:pointer; }
+.drawing-properties input[type=color]::-webkit-color-swatch-wrapper { padding:0; }
+.drawing-properties input[type=color]::-webkit-color-swatch { border:0; border-radius:2px; }
+.drawing-properties input[type=color]::-moz-color-swatch { border:0; border-radius:2px; }
+.drawing-properties-swatch { position:relative; display:inline-flex; }
+.drawing-properties-swatch.is-empty::after { content:''; position:absolute; inset:3px; border-radius:2px; background:linear-gradient(to top right,transparent calc(50% - .75px),#cbd5e1 calc(50% - .75px),#cbd5e1 calc(50% + .75px),transparent calc(50% + .75px)); pointer-events:none; }
+.drawing-properties input[type=checkbox] { position:relative; width:14px; height:14px; padding:0; border:1px solid #475569; border-radius:2px; background:#0f172a; appearance:none; cursor:pointer; }
+.drawing-properties input[type=checkbox]:checked { border-color:#facc15; background:#facc15; }
+.drawing-properties input[type=checkbox]:checked::after { content:''; position:absolute; left:4px; top:0; width:4px; height:8px; border:solid #17120f; border-width:0 2px 2px 0; transform:rotate(45deg); }
+.drawing-properties select { width:48px; padding:0 16px 0 7px; appearance:none; cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3E%3Cpath d='M1.5 3L4 5.5 6.5 3' fill='none' stroke='%2394a3b8' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 5px center; background-size:8px; }
+.drawing-properties input:hover:not(:disabled),.drawing-properties select:hover:not(:disabled) { border-color:#64748b; }
+.drawing-properties input:disabled,.drawing-properties select:disabled { opacity:.45; cursor:not-allowed; }
+.drawing-properties button { height:26px; min-height:26px; margin:0; padding:0 8px; border:1px solid #334155; border-radius:4px; background:#0f172a; color:#cbd5e1; font-size:11px; font-weight:500; letter-spacing:.01em; white-space:nowrap; cursor:pointer; transition:border-color 140ms ease,background-color 140ms ease,color 140ms ease; }
+.drawing-properties button:hover:not(:disabled) { border-color:rgba(250,204,21,.7); background:rgba(250,204,21,.12); color:#fef3c7; }
+.drawing-properties button[aria-pressed="true"] { border-color:#facc15; background:rgba(250,204,21,.1); color:#facc15; }
+.drawing-properties button:disabled { opacity:.4; cursor:not-allowed; }
+.drawing-properties button.is-danger { border-color:rgba(251,113,133,.35); background:transparent; color:#fecdd3; }
+.drawing-properties button.is-danger:hover:not(:disabled) { border-color:rgba(251,113,133,.75); background:rgba(251,113,133,.14); color:#fff1f2; }
+.drawing-properties-divider { width:1px; height:18px; align-self:center; margin:0 2px 0 auto; background:#334155; }
+.drawing-properties button:focus-visible,.drawing-properties input:focus-visible,.drawing-properties select:focus-visible,.chart-tool-button:focus-visible { outline:2px solid #facc15; outline-offset:1px; }
 .chart-stage-tools .drawing-hint,.chart-stage-tools .measurement-readout { left:44px; max-width:calc(100% - 52px); }
 @container (max-width:639px) {
   .chart-stage-tools .chart-toolbox { flex-direction:row; align-items:center; width:max-content; max-width:calc(100% - 4px); left:2px; right:auto; top:32px; bottom:auto; height:34px; gap:4px; overflow:visible; }
@@ -1405,8 +1437,9 @@ onBeforeUnmount(() => {
   .chart-toolbox .chart-tool-group-preferences,.chart-toolbox .chart-tool-group-actions > button:not(.chart-tool-more) { display:none; }
   .chart-toolbox .chart-tool-group-actions { flex-direction:row; border-top:0; border-left:1px solid #334155; padding-top:0; padding-left:4px; }
   .chart-stage-tools .price-chart { left:0; width:100%; top:66px; }
-  .chart-stage-properties .price-chart { top:108px; }
-  .drawing-properties { left:0; top:66px; height:42px; }
+  .chart-stage-properties .price-chart { top:134px; }
+  .drawing-properties { left:0; top:66px; height:68px; padding:4px 8px; }
+  .drawing-properties-divider { display:none; }
   .chart-stage-tools .drawing-hint,.chart-stage-tools .measurement-readout { left:6px; max-width:calc(100% - 12px); font-size:11px; bottom:36px; }
 }
 @media (pointer:coarse) {
