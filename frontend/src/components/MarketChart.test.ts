@@ -498,6 +498,7 @@ describe('drawing controller integration', () => {
     wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing, planned] } })
     const plugin = mocks.controllers[0].series.attachPrimitive.mock.calls[0][0]
     plugin.selectedId = 'position'; mocks.engines[0].listener(); await nextTick()
+    await wrapper.get('[data-testid="drawing-width-trigger"]').trigger('click')
     await wrapper.get('[data-testid="drawing-width"]').setValue('4')
     const saves = wrapper.emitted('drawings-changed')!
     const styled = saves.at(-1)![0] as ReplayDrawing[]
@@ -508,6 +509,78 @@ describe('drawing controller integration', () => {
     expect(wrapper.emitted('drawings-changed')!.at(-1)![0]).toEqual([drawing])
     expect(styled[1].style.width).toBe(4)
   })
+  it('styles a selected native drawing through the floating style bar', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing, planned] } })
+    const engine = mocks.engines[0]
+    engine.selectedId = 'drawing'; engine.listener(); await nextTick()
+    expect(wrapper.find('[data-testid="drawing-style-bar"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="drawing-color-trigger"]').trigger('click')
+    await wrapper.get('[data-color="#38bdf8"]').trigger('click')
+
+    expect(engine.drawings[0].style.color).toBe('#38bdf8')
+    const saved = wrapper.emitted('drawings-changed')!.at(-1)![0] as ReplayDrawing[]
+    expect(saved.find((item) => item.id === 'drawing')!.style.color).toBe('#38bdf8')
+    expect(planned.style.color).toBe(DEFAULT_REPLAY_DRAWING_STYLE.color)
+  })
+
+  it('edits the default style while nothing is selected', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing] } })
+    const engine = mocks.engines[0]
+    await wrapper.get('[data-testid="drawing-style-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="drawing-width-trigger"]').trigger('click')
+    await wrapper.get('[data-testid="drawing-width"]').setValue('6')
+
+    expect(engine.setDefaultStyle).toHaveBeenLastCalledWith(expect.objectContaining({ width: 6 }))
+    expect(JSON.parse(localStorage.getItem('btcusd.drawing.style.v1') ?? '{}').width).toBe(6)
+  })
+
+  it('remembers recent colors without duplicates', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing] } })
+    const engine = mocks.engines[0]
+    engine.selectedId = 'drawing'; engine.listener(); await nextTick()
+    await wrapper.get('[data-testid="drawing-color-trigger"]').trigger('click')
+    await wrapper.get('[data-color="#38bdf8"]').trigger('click')
+    await wrapper.get('[data-color="#38bdf8"]').trigger('click')
+    await wrapper.get('[data-color="#ffffff"]').trigger('click')
+
+    expect(JSON.parse(localStorage.getItem('btcusd.drawing.recentColors.v1') ?? '[]')).toEqual(['#ffffff', '#38bdf8'])
+    expect(wrapper.findAll('.recent-grid button')).toHaveLength(2)
+  })
+
+  it('disables the floating bar while drawings are locked', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing] } })
+    const engine = mocks.engines[0]
+    await wrapper.get('[data-testid="drawing-style-toggle"]').trigger('click')
+    engine.setLocked(true); await nextTick()
+
+    expect(wrapper.get('[data-testid="drawing-color-trigger"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="drawing-width-trigger"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="drawing-delete-selected"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('closes the color panel on Escape without clearing the selection', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing] } })
+    const engine = mocks.engines[0]
+    engine.selectedId = 'drawing'; engine.listener(); await nextTick()
+    await wrapper.get('[data-testid="drawing-color-trigger"]').trigger('click')
+
+    const hex = wrapper.get('[data-testid="drawing-color"]')
+    hex.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="drawing-color"]').exists()).toBe(false)
+    expect(engine.selectedId).toBe('drawing')
+  })
+
+  it('overlays the style bar without reserving chart height', async () => {
+    wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing] } })
+    const engine = mocks.engines[0]
+    engine.selectedId = 'drawing'; engine.listener(); await nextTick()
+
+    expect(wrapper.get('.chart-stage').classes()).not.toContain('chart-stage-properties')
+    expect(wrapper.find('.drawing-style-bar').exists()).toBe(true)
+  })
+
   it('clears both controllers in a single confirmed save and preserves both on cancellation', async () => {
     wrapper = mount(MarketChart, { props: { snapshot: snapshot(), loading: false, drawings: [drawing, planned] } })
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
