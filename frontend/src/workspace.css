@@ -592,6 +592,81 @@ select {
 .project-form {
   @apply [padding:16px];
 }
+.symbol-field {
+  @apply m-0 min-w-0 p-0 [border:0];
+}
+.symbol-field-head {
+  @apply flex items-baseline justify-between gap-3 mb-[6px]
+    text-[color:var(--text-muted)] text-[length:12px] font-semibold;
+}
+.symbol-quote {
+  @apply text-[color:var(--text-dim)]
+    [font:600_10px/1.4_"Fira_Code",_ui-monospace,_SFMono-Regular,_Consolas,_monospace];
+}
+.symbol-grid {
+  @apply grid grid-cols-[repeat(auto-fill,_minmax(150px,_1fr))] gap-[6px];
+}
+@media (max-width: 640px) {
+  .symbol-grid {
+    @apply grid-cols-[repeat(auto-fill,_minmax(128px,_1fr))];
+  }
+}
+.symbol-option {
+  @apply relative flex min-h-[46px] items-center gap-2 [padding:6px_9px_6px_10px]
+    [border:1px_solid_var(--border)] rounded-[var(--radius)] [background:var(--surface)]
+    text-[color:var(--text)] cursor-pointer select-none;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+.symbol-option:hover {
+  @apply [border-color:var(--border-strong)];
+}
+.symbol-option.selected {
+  @apply [border-color:var(--accent)] [background:var(--accent)] text-[color:var(--accent-ink)];
+}
+.symbol-option.selected:hover {
+  @apply [border-color:var(--accent-strong)] [background:var(--accent-strong)];
+}
+.symbol-option:has(.symbol-radio:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.symbol-copy {
+  @apply grid min-w-0 gap-[1px];
+}
+.symbol-base {
+  @apply text-[length:13px] font-bold leading-[1.2]
+    [font-family:"Fira_Code",_ui-monospace,_SFMono-Regular,_Consolas,_monospace];
+}
+.symbol-name {
+  @apply overflow-hidden text-ellipsis whitespace-nowrap text-[color:var(--text-muted)] text-[length:10.5px] leading-[1.25];
+}
+.symbol-option.selected .symbol-name {
+  color: rgba(255, 255, 255, 0.7);
+}
+.symbol-check {
+  @apply ml-auto flex-none opacity-0;
+  transition: opacity 160ms ease;
+}
+.symbol-option.selected .symbol-check {
+  @apply opacity-100;
+}
+.symbol-radio:focus-visible {
+  outline: none;
+}
+.field-label-line {
+  @apply flex items-baseline justify-between gap-2;
+}
+.field-value {
+  @apply text-[color:var(--text-dim)] text-[length:11px] font-semibold
+    [font-family:"Fira_Code",_ui-monospace,_SFMono-Regular,_Consolas,_monospace]
+    [font-variant-numeric:tabular-nums];
+}
+@media (prefers-reduced-motion: reduce) {
+  .symbol-option,
+  .symbol-check {
+    transition: none;
+  }
+}
 .field-grid.two {
   @apply grid-cols-[repeat(2,_minmax(0,_1fr))];
 }

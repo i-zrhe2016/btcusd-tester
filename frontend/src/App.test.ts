@@ -106,8 +106,8 @@ describe('multi-asset replay', () => {
     expect(wrapper.find('[data-testid="chart-mock"]').text()).toContain('2300')
     ;(wrapper.vm as unknown as { openProjects: () => void }).openProjects()
     await flushPromises()
-    const select = wrapper.findAll('select').find((item) => item.findAll('option').some((option) => option.attributes('value') === 'ETHUSD'))
-    expect(select?.findAll('option').map((option) => option.attributes('value'))).toEqual(['BTCUSD', 'ETHUSD', 'BNBUSD', 'XRPUSD', 'SOLUSD', 'TRXUSD', 'ZECUSD', 'HYPEUSD', 'DOGEUSD', 'XMRUSD'])
+    const radios = wrapper.findAll('input[name="project-symbol"]')
+    expect(radios.map((radio) => radio.attributes('value'))).toEqual(['BTCUSD', 'ETHUSD', 'BNBUSD', 'XRPUSD', 'SOLUSD', 'TRXUSD', 'ZECUSD', 'HYPEUSD', 'DOGEUSD', 'XMRUSD'])
   })
 })
 
@@ -364,6 +364,18 @@ describe('workspace loading', () => {
     await flushPromises()
     expect(wrapper.find('.workspace-projects').exists()).toBe(true)
     expect(wrapper.find('.workspace-replay').exists()).toBe(false)
+  })
+
+  it('offers every replay symbol as a selectable tile instead of a typed code', async () => {
+    wrapper = mount(App)
+    await flushPromises()
+    const radios = wrapper.findAll('input[name="project-symbol"]')
+    expect(radios.map((radio) => radio.attributes('value'))).toEqual(['BTCUSD', 'ETHUSD', 'BNBUSD', 'XRPUSD', 'SOLUSD', 'TRXUSD', 'ZECUSD', 'HYPEUSD', 'DOGEUSD', 'XMRUSD'])
+    expect((radios[0]!.element as HTMLInputElement).checked).toBe(true)
+    expect(wrapper.find('.symbol-field input[type="text"]').exists()).toBe(false)
+    await radios[1]!.setValue()
+    expect(wrapper.find('.symbol-option.selected').text()).toContain('ETH')
+    expect(wrapper.find('.symbol-option.selected').text()).toContain('Ethereum')
   })
 
   it('creates the default project without fetching a snapshot in the library', async () => {
