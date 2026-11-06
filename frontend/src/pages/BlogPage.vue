@@ -83,6 +83,12 @@ watchEffect(() => {
         <a class="blog-text-link" href="/blog">{{ english ? 'Back to articles' : '返回文章列表' }}</a>
       </section>
     </main>
-    <footer class="wrap blog-footer"><a href="/">grailab</a><p>{{ english ? 'Historical market replay & trading practice' : '历史行情回放与交易训练' }}</p></footer>
+    <footer class="wrap blog-footer">
+      <div class="blog-footer-brand">
+        <a href="/">grailab</a>
+        <a href="/privacy" class="blog-footer-link">{{ english ? 'Privacy' : '隐私政策' }}</a>
+      </div>
+      <p>{{ english ? 'Historical market replay & trading practice' : '历史行情回放与交易训练' }}</p>
+    </footer>
   </div>
 </template>

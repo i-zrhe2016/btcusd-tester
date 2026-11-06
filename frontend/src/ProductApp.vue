@@ -357,6 +357,7 @@ async function startCheckout() {
           <a href="#features">{{ t('product.navFeatures') }}</a>
           <a href="#plans">{{ t('product.navPlans') }}</a>
           <a href="/blog">{{ locale === 'en' ? 'Articles' : '文章' }}</a>
+          <a href="/privacy">{{ t('product.privacy') }}</a>
           <a href="#workspace" @click.prevent="enterWorkspace">{{ t('product.enterWorkspace') }}</a>
         </div>
         <p class="footer-note">{{ t('product.footerDisclaimer') }}</p>
