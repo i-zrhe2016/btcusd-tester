@@ -209,6 +209,10 @@ pub struct ReplayProjectRequest {
     pub drawings: Vec<Value>,
     #[serde(default = "empty_indicators")]
     pub indicators: Value,
+    #[serde(default)]
+    pub drawings_updated_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub indicators_updated_at: Option<DateTime<Utc>>,
 }
 
 fn default_replay_speed() -> f64 {
@@ -377,6 +381,8 @@ pub struct ReplayProjectRecord {
     pub trades: Value,
     pub drawings: Value,
     pub indicators: Value,
+    pub drawings_updated_at: DateTime<Utc>,
+    pub indicators_updated_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -402,6 +408,8 @@ mod replay_project_tests {
             indicators: serde_json::json!({
                 "1h": [{"name": "MACD", "params": {"fast": 12, "slow": 26}}],
             }),
+            drawings_updated_at: None,
+            indicators_updated_at: None,
         }
     }
 

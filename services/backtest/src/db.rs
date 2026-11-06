@@ -133,7 +133,8 @@ pub async fn list_replay_projects(
     sqlx::query_as::<_, ReplayProjectRecord>(
         r#"
         SELECT id, name, symbol, timeframe, panes, range_from, range_to, speed,
-               cursor_index, cursor_timestamp, trades, drawings, indicators, created_at, updated_at
+               cursor_index, cursor_timestamp, trades, drawings, indicators,
+               drawings_updated_at, indicators_updated_at, created_at, updated_at
         FROM replay_projects
         WHERE user_id = $1
         ORDER BY updated_at DESC
@@ -157,9 +158,10 @@ pub async fn upsert_replay_project(
         r#"
         INSERT INTO replay_projects (
             user_id, id, name, symbol, timeframe, panes, range_from, range_to,
-            speed, cursor_index, cursor_timestamp, trades, drawings, indicators
+            speed, cursor_index, cursor_timestamp, trades, drawings, indicators,
+            drawings_updated_at, indicators_updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         ON CONFLICT (user_id, id) DO UPDATE SET
             name = EXCLUDED.name,
             symbol = EXCLUDED.symbol,
@@ -170,12 +172,45 @@ pub async fn upsert_replay_project(
             speed = EXCLUDED.speed,
             cursor_index = EXCLUDED.cursor_index,
             cursor_timestamp = EXCLUDED.cursor_timestamp,
-            trades = EXCLUDED.trades,
-            drawings = EXCLUDED.drawings,
-            indicators = EXCLUDED.indicators,
+            -- Trades are append-only and identified by id. Unioning them means a
+            -- stale cursor write from the other device cannot erase a trade.
+            trades = CASE
+                WHEN replay_projects.symbol = EXCLUDED.symbol
+                 AND replay_projects.range_from = EXCLUDED.range_from
+                 AND replay_projects.range_to = EXCLUDED.range_to
+                THEN (
+                    SELECT COALESCE(jsonb_agg(item), '[]'::jsonb)
+                    FROM (
+                        SELECT DISTINCT ON (element->>'id') element AS item
+                        FROM jsonb_array_elements(replay_projects.trades || EXCLUDED.trades) AS element
+                    ) AS merged_trades
+                )
+                ELSE EXCLUDED.trades
+            END,
+            -- Collections carry their own clock so playback ticks cannot regress
+            -- newer drawings or indicator selections written by the other device.
+            drawings = CASE
+                WHEN COALESCE(EXCLUDED.drawings_updated_at, now()) >= replay_projects.drawings_updated_at
+                THEN EXCLUDED.drawings
+                ELSE replay_projects.drawings
+            END,
+            indicators = CASE
+                WHEN COALESCE(EXCLUDED.indicators_updated_at, now()) >= replay_projects.indicators_updated_at
+                THEN EXCLUDED.indicators
+                ELSE replay_projects.indicators
+            END,
+            drawings_updated_at = GREATEST(
+                replay_projects.drawings_updated_at,
+                COALESCE(EXCLUDED.drawings_updated_at, now())
+            ),
+            indicators_updated_at = GREATEST(
+                replay_projects.indicators_updated_at,
+                COALESCE(EXCLUDED.indicators_updated_at, now())
+            ),
             updated_at = now()
         RETURNING id, name, symbol, timeframe, panes, range_from, range_to, speed,
-                  cursor_index, cursor_timestamp, trades, drawings, indicators, created_at, updated_at
+                  cursor_index, cursor_timestamp, trades, drawings, indicators,
+                  drawings_updated_at, indicators_updated_at, created_at, updated_at
         "#,
     )
     .bind(user_id)
@@ -192,6 +227,8 @@ pub async fn upsert_replay_project(
     .bind(trades)
     .bind(drawings)
     .bind(project.indicators.clone())
+    .bind(project.drawings_updated_at)
+    .bind(project.indicators_updated_at)
     .fetch_one(pool)
     .await
 }

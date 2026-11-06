@@ -505,15 +505,19 @@ describe('per-user project data', () => {
       side: 'buy', action: 'open-long', price: 100, quantity: 1, realizedPnl: null,
       createdAt: '2026-01-01T00:00:00.000Z',
     }
+    const sharedAt = new Date(Date.now() + 1000).toISOString()
     vi.mocked(listProjects).mockResolvedValue([{
       ...project,
       trades: [webTrade],
-      updatedAt: new Date(Date.now() + 1000).toISOString(),
+      indicators: { '1m': [{ name: 'SMA', params: { length: 20 } }] },
+      indicatorsUpdatedAt: sharedAt,
+      updatedAt: sharedAt,
     }])
 
     window.dispatchEvent(new Event('focus'))
     await flushPromises()
     expect(savedProjects()).toContain('web-trade')
+    expect(savedProjects()).toContain('SMA')
   })
 
   it('keeps trades made here when the server copy is still stale', async () => {
