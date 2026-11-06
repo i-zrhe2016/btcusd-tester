@@ -49,6 +49,8 @@ services:
     environment:
       MARKET_DATA_BIND: 0.0.0.0:8081
       MARKET_DATA_PARQUET: ${MARKET_DATA_PARQUET:-/data/btcusd_1m.parquet}
+      MARKET_DATA_LIVE_DIR: ${MARKET_DATA_LIVE_DIR:-/data/live}
+      MARKET_DATA_RELOAD_SECONDS: ${MARKET_DATA_RELOAD_SECONDS:-5}
       RUST_LOG: ${RUST_LOG:-info}
     volumes:
       - type: bind
@@ -71,6 +73,40 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # Keeps the latest completed minutes for all ten USD markets current. The
+  # market-data service overlays these files on the full Parquet history.
+  live-sync:
+    image: python:3.12-slim
+    command:
+      - python
+      - -I
+      - -B
+      - /scripts/sync_live_market.py
+      - --output
+      - /live
+      - --interval
+      - ${MARKET_LIVE_INTERVAL:-60}
+      - --retain-minutes
+      - ${MARKET_LIVE_RETAIN_MINUTES:-4320}
+    volumes:
+      - type: bind
+        source: ./scripts/sync_live_market.py
+        target: /scripts/sync_live_market.py
+        read_only: true
+      - type: bind
+        source: ./data/market/live
+        target: /live
+    networks:
+      - public
+    cpus: "${LIVE_SYNC_CPUS:-0.25}"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging: *default-logging
 
   backtest:
     build:

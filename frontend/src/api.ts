@@ -1,4 +1,5 @@
 import { markRaw } from 'vue'
+import { normalizeSymbol } from './symbols'
 import { getAuthToken } from './auth'
 import { t } from './i18n'
 import type { ReplayProject } from './replay'
@@ -88,8 +89,18 @@ export function createCheckout(): Promise<{ checkoutUrl: string }> {
   return requestJson('/api/payments/checkout', { method: 'POST' })
 }
 
-export function getMarketMetadata(): Promise<MarketMetadata> {
-  return requestJson('/api/market/meta')
+export function getMarketMetadata(symbol = 'BTCUSD', options: { fresh?: boolean } = {}): Promise<MarketMetadata> {
+  const normalized = normalizeSymbol(symbol)
+  return requestJson<MarketMetadata>(
+    `/api/market/meta?${new URLSearchParams({ symbol: normalized })}`,
+    options.fresh ? { cache: 'no-store' } : undefined,
+  )
+    .then((metadata) => {
+      if (normalizeSymbol(metadata.symbol) !== normalized) {
+        throw new Error(`Market metadata symbol mismatch: expected ${normalized}, received ${metadata.symbol}`)
+      }
+      return metadata
+    })
 }
 
 const snapshotCache = new Map<string, { snapshot: MarketSnapshot; expiresAt: number }>()
@@ -98,14 +109,16 @@ const SNAPSHOT_CACHE_LIMIT = 24
 const SNAPSHOT_CACHE_TTL = 5 * 60 * 1000
 
 export function getMarketSnapshot(params: {
+  symbol?: string
   timeframe: string
   from: number
   to: number
   limit?: number
   lengths: [number, number, number]
+  fresh?: boolean
 }): Promise<MarketSnapshot> {
   const query = new URLSearchParams({
-    symbol: 'BTCUSD',
+    symbol: normalizeSymbol(params.symbol ?? 'BTCUSD'),
     timeframe: params.timeframe,
     from: String(params.from),
     to: String(params.to),
@@ -113,18 +126,23 @@ export function getMarketSnapshot(params: {
     lengths: params.lengths.join(','),
   })
   const key = query.toString()
-  const cached = snapshotCache.get(key)
-  if (cached && cached.expiresAt > Date.now()) {
-    snapshotCache.delete(key)
-    snapshotCache.set(key, cached)
-    return Promise.resolve(cached.snapshot)
+  if (!params.fresh) {
+    const cached = snapshotCache.get(key)
+    if (cached && cached.expiresAt > Date.now()) {
+      snapshotCache.delete(key)
+      snapshotCache.set(key, cached)
+      return Promise.resolve(cached.snapshot)
+    }
+    const pending = pendingSnapshots.get(key)
+    if (pending) return pending
   }
   snapshotCache.delete(key)
-  const pending = pendingSnapshots.get(key)
-  if (pending) return pending
 
   const request = requestJson<MarketSnapshot>(`/api/market/snapshot?${query}`)
     .then((snapshot) => {
+      if (normalizeSymbol(snapshot.symbol) !== query.get('symbol')) {
+        throw new Error(`Market data symbol mismatch: expected ${query.get('symbol')}, received ${snapshot.symbol}`)
+      }
       // Snapshots are replaced as a whole; keep candle reads out of Vue's deep proxy.
       markRaw(snapshot)
       snapshotCache.set(key, { snapshot, expiresAt: Date.now() + SNAPSHOT_CACHE_TTL })

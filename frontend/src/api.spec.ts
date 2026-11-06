@@ -5,12 +5,36 @@ const params = { timeframe: '1h', from: 0, to: 36000, lengths: [30, 120, 840] as
 const snapshot: MarketSnapshot = { symbol: 'BTCUSD', timeframe: '1h', source: 'test', candles: [
   { timestamp: 0, open: 10, high: 12, low: 9, close: 11, volume: 1 },
 ] }
-const response = (value = snapshot) => ({ ok: true, json: async () => value })
+const response = (value: unknown = snapshot) => ({ ok: true, json: async () => value })
 
 beforeEach(() => { vi.resetModules(); vi.useFakeTimers(); vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response())) })
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
 describe('market snapshot reuse', () => {
+  it('isolates symbols and normalizes aliases in requests and cache keys', async () => {
+    const { getMarketSnapshot, getMarketMetadata } = await import('./api')
+    const btc = await getMarketSnapshot({ ...params, symbol: 'btc-usd' })
+    const eth = { ...snapshot, symbol: 'ETHUSD', candles: [{ ...snapshot.candles[0]!, close: 2300 }] }
+    vi.mocked(fetch).mockResolvedValueOnce(response(eth) as Response)
+    expect(await getMarketSnapshot({ ...params, symbol: 'ETHUSD' })).toEqual(eth)
+    expect(await getMarketSnapshot({ ...params, symbol: 'BTCUSD' })).toBe(btc)
+    const urls = vi.mocked(fetch).mock.calls.map(([url]) => String(url))
+    expect(urls).toHaveLength(2)
+    expect(new URL(urls[0]!, 'http://localhost').searchParams.get('symbol')).toBe('BTCUSD')
+    expect(new URL(urls[1]!, 'http://localhost').searchParams.get('symbol')).toBe('ETHUSD')
+    vi.mocked(fetch).mockResolvedValueOnce(response(eth) as Response)
+    await getMarketMetadata('eth-usd')
+    expect(fetch).toHaveBeenLastCalledWith('/api/market/meta?symbol=ETHUSD', expect.anything())
+  })
+
+  it('rejects another market in successful snapshot and metadata responses', async () => {
+    const { getMarketSnapshot, getMarketMetadata } = await import('./api')
+    await expect(getMarketSnapshot({ ...params, symbol: 'ETHUSD' })).rejects.toThrow('expected ETHUSD, received BTCUSD')
+    await expect(getMarketMetadata('ETHUSD')).rejects.toThrow('expected ETHUSD, received BTCUSD')
+    vi.mocked(fetch).mockResolvedValueOnce(response({ ...snapshot, symbol: 'ETHUSD' }) as Response)
+    expect((await getMarketSnapshot({ ...params, symbol: 'ETHUSD' })).symbol).toBe('ETHUSD')
+  })
+
   it('shares concurrent requests and serves the same candles when switching back', async () => {
     const { getMarketSnapshot } = await import('./api')
     const first = getMarketSnapshot(params)
@@ -68,6 +92,25 @@ describe('market snapshot reuse', () => {
     vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'))
     await expect(getMarketSnapshot({ ...params, from: 60 })).rejects.toThrow('Failed to fetch')
     expect(await getMarketSnapshot({ ...params, from: 60 })).toEqual(snapshot)
+  })
+
+  it('bypasses cached snapshots and metadata for live polls', async () => {
+    const { getMarketSnapshot, getMarketMetadata } = await import('./api')
+    await getMarketSnapshot(params)
+    const changed = { ...snapshot, candles: [{ ...snapshot.candles[0]!, close: 25 }] }
+    vi.mocked(fetch).mockResolvedValueOnce(response(changed) as Response)
+    expect(await getMarketSnapshot({ ...params, fresh: true })).toEqual(changed)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    // The fresh response also refreshes the cache for ordinary reads.
+    expect(await getMarketSnapshot(params)).toEqual(changed)
+    expect(fetch).toHaveBeenCalledTimes(2)
+    const metadata = {
+      symbol: 'BTCUSD', base_timeframe: '1m', source: 'Parquet', candle_count: 1,
+      first_timestamp: 0, last_timestamp: 60, supported_timeframes: ['1m'],
+    }
+    vi.mocked(fetch).mockResolvedValueOnce(response(metadata) as Response)
+    await getMarketMetadata('BTCUSD', { fresh: true })
+    expect(fetch).toHaveBeenLastCalledWith('/api/market/meta?symbol=BTCUSD', expect.objectContaining({ cache: 'no-store' }))
   })
 
   it('evicts the least recently used snapshot at capacity', async () => {

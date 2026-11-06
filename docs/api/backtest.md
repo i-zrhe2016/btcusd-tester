@@ -125,7 +125,7 @@ M1 只提供 `stoch-cross-long`：
 
 ### PUT `/api/projects/{id}`
 
-以路径 ID 为准执行用户内的插入或更新（`ON CONFLICT (user_id, id)`），返回同结构记录；`created_at` 保留，`updated_at` 刷新为服务端时间。校验规则：ID 为 `1..128` 位字母、数字、`-`、`_`；名称 `1..120` 字符；仅 `BTCUSD`；周期属于复盘支持的 11 个周期；`panes` 为 `1..4` 个受支持周期；`from < to`；速度 `0.25..8`；游标时间必须落在项目范围内；交易最多 10,000 条、绘图最多 5,000 条；单个项目请求体上限 768 KB（Nginx 总上限 1 MB）。
+以路径 ID 为准执行用户内的插入或更新（`ON CONFLICT (user_id, id)`），返回同结构记录；`created_at` 保留，`updated_at` 刷新为服务端时间。校验规则：ID 为 `1..128` 位字母、数字、`-`、`_`；名称 `1..120` 字符；品种属于支持的十种 USD 加密货币市场（`BTCUSD, ETHUSD, BNBUSD, XRPUSD, SOLUSD, TRXUSD, ZECUSD, HYPEUSD, DOGEUSD, XMRUSD`，接受大小写不敏感的带连字符别名）；周期属于复盘支持的 11 个周期；`panes` 为 `1..4` 个受支持周期；`from < to`；速度 `0.25..8`；游标时间必须落在项目范围内；交易最多 10,000 条、绘图最多 5,000 条；单个项目请求体上限 768 KB（Nginx 总上限 1 MB）。
 
 跨设备并发写入时，服务端按字段保留较新的副本：`trades` 在品种和时间范围相同时按交易 `id` 取并集，因此播放游标引发的旧写入不会抹掉另一设备新增的买卖记录；`drawings` 和 `indicators` 分别与客户端时钟 `drawingsUpdatedAt`、`indicatorsUpdatedAt` 比较，旧时钟的请求不会覆盖较新集合。两个时钟缺省时按服务端当前时间处理，响应始终返回服务端保存的时钟值。
 

@@ -135,6 +135,18 @@ select {
 .console-strip .pane-count-control {
   @apply order-1;
 }
+.console-strip .console-live-button {
+  @apply order-2;
+}
+.console-live-button.live-active {
+  @apply [color:var(--text)] [border-color:var(--accent)]!;
+}
+.console-live-status {
+  @apply max-w-[280px] overflow-hidden text-ellipsis whitespace-nowrap;
+}
+.console-live-status.is-error {
+  @apply [color:var(--danger)];
+}
 .console-strip .console-history-button,
 .console-strip .console-history-error {
   @apply order-2;

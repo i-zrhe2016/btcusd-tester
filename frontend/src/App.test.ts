@@ -68,6 +68,49 @@ beforeEach(() => {
 })
 afterEach(() => { wrapper?.unmount(); wrapper = undefined })
 
+describe('multi-asset replay', () => {
+  it('discards metadata arriving after switching back to BTC', async () => {
+    const btc = stored('replay')
+    const eth = { ...btc, id: 'eth', symbol: 'ETHUSD', name: 'ETH replay' }
+    saveReplayProjects([btc, eth])
+    const lateMetadata = deferred<MarketMetadata>()
+    vi.mocked(getMarketMetadata).mockImplementation((symbol) => symbol === 'ETHUSD' ? lateMetadata.promise : Promise.resolve(market))
+    wrapper = mount(App)
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { selectProject: (id: string) => void }
+    vm.selectProject('eth')
+    await flushPromises()
+    expect(getMarketMetadata).toHaveBeenCalledWith('ETHUSD')
+    vm.selectProject(btc.id)
+    await flushPromises()
+    lateMetadata.resolve({ ...market, symbol: 'ETHUSD', first_timestamp: market.last_timestamp + 600, last_timestamp: market.last_timestamp + 1200 })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="chart-mock"]').text()).toContain('BTCUSD')
+    expect(vi.mocked(getMarketSnapshot).mock.calls.every(([query]) => query.symbol === 'BTCUSD')).toBe(true)
+    expect(loadReplayProjects().find((project) => project.id === btc.id)?.from).toBe(btc.from)
+  })
+
+  it('offers ten markets and sends ETH to the main chart and every pane', async () => {
+    const ethMarket = { ...market, symbol: 'ETHUSD', last_timestamp: market.first_timestamp + 20000 * 60 }
+    const project = { ...createSeedReplayProject(ethMarket), id: 'eth', panes: ['1m', '5m'] }
+    saveReplayProjects([project])
+    saveActiveReplayProjectId(project.id)
+    localStorage.setItem('btcusd.workspace.view.v2', 'replay')
+    vi.mocked(getMarketMetadata).mockResolvedValue(ethMarket)
+    vi.mocked(getMarketSnapshot).mockImplementation(async (query) => ({ ...snapshot(query.timeframe, query.from), symbol: query.symbol!, candles: [{ ...snapshot().candles[0]!, timestamp: query.from, close: 2300 }] }))
+    wrapper = mount(App)
+    await flushPromises()
+    expect(getMarketMetadata).toHaveBeenCalledWith('ETHUSD')
+    expect(vi.mocked(getMarketSnapshot).mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(vi.mocked(getMarketSnapshot).mock.calls.every(([query]) => query.symbol === 'ETHUSD')).toBe(true)
+    expect(wrapper.find('[data-testid="chart-mock"]').text()).toContain('2300')
+    ;(wrapper.vm as unknown as { openProjects: () => void }).openProjects()
+    await flushPromises()
+    const radios = wrapper.findAll('input[name="project-symbol"]')
+    expect(radios.map((radio) => radio.attributes('value'))).toEqual(['BTCUSD', 'ETHUSD', 'BNBUSD', 'XRPUSD', 'SOLUSD', 'TRXUSD', 'ZECUSD', 'HYPEUSD', 'DOGEUSD', 'XMRUSD'])
+  })
+})
+
 describe('multi-timeframe replay synchronization', () => {
   const start = Math.floor(market.first_timestamp / 300) * 300
   const extended = { ...market, first_timestamp: start, last_timestamp: start + 20_000 * 60 }

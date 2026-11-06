@@ -17,6 +17,15 @@
 3. 执行 `docker compose restart market-data`，等待健康检查通过。
 4. 访问 `/api/market/meta`，再用一个历史 `from`/`to` 窗口验证返回非空 K 线。
 5. 保留 `.parquet.previous`，出现异常时恢复它并重启行情服务。
+6. 完整历史发布后无需重启：`market-data` 会在 `MARKET_DATA_RELOAD_SECONDS` 内热加载新文件。
+
+## 实时尾窗
+
+1. 查看 `docker compose logs --tail=50 live-sync`，正常日志包含 `live_published` 或 `live_unchanged`；任一币失败会写 `live_failed` 并在下一轮重试。
+2. 检查 `data/market/live/*.live.json` 的 `last_timestamp` 是否落在最近几分钟，然后请求 `/api/market/meta?symbol=BTCUSD`，确认 `last_timestamp` 与之对应。
+3. 复盘页点击状态栏「实时」应跳到最新已收盘 K 线；此后每 15 秒轮询一次元数据，有新 K 线时自动追加。
+4. 尾窗为空的币种仍可使用完整历史复盘；`market-data` 日志会写 `ignoring invalid live market window`，按 [实时行情尾窗](../data/live-market.md) 检查 JSON 和文件权限。
+5. 若停机超过 12 小时，Kraken `OHLC` 只能补齐最近 720 分钟；更早缺口用完整同步修复。
 
 ## 日志
 
