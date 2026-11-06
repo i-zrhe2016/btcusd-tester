@@ -105,16 +105,17 @@ const lastClose = computed(() => visible.value.length ? visible.value[visible.va
 const lastCloseY = computed(() => (lastClose.value === null ? 0 : yFor(lastClose.value)))
 const priceTagY = computed(() => Math.min(plot.value.y + plot.value.height - 10, Math.max(plot.value.y + 10, lastCloseY.value)))
 
+const TRADE_GAP = 6
 const tradeMarks = computed(() => PREVIEW_TRADES
   .filter((trade) => trade.index < cursor.value)
   .map((trade) => {
     const candle = series.value[trade.index]
     const buy = trade.side === 'buy'
-    const y = buy ? yFor(candle.h) - 15 : yFor(candle.l) + 15
+    const y = buy ? yFor(candle.h) - TRADE_GAP : yFor(candle.l) + TRADE_GAP
     return {
       ...trade,
       x: xFor(trade.index),
-      y: Math.min(size.value.height - PADDING.bottom - 6, Math.max(PADDING.top + 6, y)),
+      y: Math.min(plot.value.y + plot.value.height - 4, Math.max(plot.value.y + 4, y)),
       buy,
     }
   }))
@@ -306,7 +307,12 @@ onBeforeUnmount(() => {
 
         <g v-for="mark in tradeMarks" :key="mark.label" class="trade" :class="mark.buy ? 'buy' : 'sell'">
           <circle :cx="mark.x" :cy="mark.y" r="3.5" />
-          <text :x="mark.x" :y="mark.buy ? mark.y - 9 : mark.y + 16" :class="mark.buy ? 'above' : 'below'">{{ mark.label }}</text>
+          <text
+            :x="mark.x"
+            :y="mark.buy ? mark.y - 8 : mark.y + 12"
+            :class="mark.buy ? 'above' : 'below'"
+            text-anchor="middle"
+          >{{ mark.label }}</text>
         </g>
       </svg>
     </div>
