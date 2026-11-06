@@ -86,6 +86,7 @@ watchEffect(() => {
     <footer class="wrap blog-footer">
       <div class="blog-footer-brand">
         <a href="/">grailab</a>
+        <a href="/terms" class="blog-footer-link">{{ english ? 'Terms' : '服务条款' }}</a>
         <a href="/privacy" class="blog-footer-link">{{ english ? 'Privacy' : '隐私政策' }}</a>
       </div>
       <p>{{ english ? 'Historical market replay & trading practice' : '历史行情回放与交易训练' }}</p>
