@@ -95,6 +95,7 @@ const zh = {
   'payment.error': '暂时无法确认付款，请稍后重试。',
   'payment.signIn': '请登录付款时使用的账户以查看结果。',
   'payment.retry': '重新确认',
+  'product.privacy': '隐私政策',
   'product.footerDisclaimer': '仅用于模拟交易训练，不构成投资建议。',
 
   // Account dialog
@@ -531,6 +532,7 @@ const en: Record<MessageKey, Message> = {
   'payment.error': 'We could not confirm your payment. Please try again later.',
   'payment.signIn': 'Sign in with the account you used to pay to see the result.',
   'payment.retry': 'Check again',
+  'product.privacy': 'Privacy',
   'product.footerDisclaimer': 'For simulated trading practice only. Not investment advice.',
 
   'auth.close': 'Close',
