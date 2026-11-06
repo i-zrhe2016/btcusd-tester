@@ -1,24 +1,9 @@
-import { clerkPlugin, updateClerkOptions } from '@clerk/vue'
-import { enUS, zhCN } from '@clerk/localizations'
-import { watch } from 'vue'
-import { locale } from './i18n'
 import { createApp } from 'vue'
-import AuthBridge from './components/AuthBridge.vue'
-import App from './ProductApp.vue'
-import AuthVerification from './components/AuthVerification.vue'
 import './styles.css'
 
-const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-if (!PUBLISHABLE_KEY) {
-  throw new Error('Missing VITE_CLERK_PUBLISHABLE_KEY. Set it in frontend/.env.local for local development or pass it as a Docker build arg.')
+// Public reading pages should load without waiting for the account service.
+if (window.location.pathname === '/blog' || window.location.pathname.startsWith('/blog/')) {
+  import('./pages/BlogPage.vue').then(({ default: BlogPage }) => createApp(BlogPage).mount('#app'))
+} else {
+  void import('./bootstrap')
 }
-
-const app = createApp(window.location.pathname === '/auth/verify' ? AuthVerification : App)
-
-app.use(clerkPlugin, {
-  publishableKey: PUBLISHABLE_KEY,
-  localization: locale.value === 'zh' ? zhCN : enUS,
-})
-watch(locale, value => updateClerkOptions({ localization: value === 'zh' ? zhCN : enUS }))
-app.component('AuthBridge', AuthBridge)
-app.mount('#app')
