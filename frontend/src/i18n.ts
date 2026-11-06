@@ -9,6 +9,8 @@ const zh = {
   // Shared
   'common.retry': '重试',
   'common.close': '关闭',
+  'common.cancel': '取消',
+  'common.delete': '删除',
 
   // Document
   'meta.title': 'grailab · 历史行情回放与交易训练 | 加密货币交易模拟器',
@@ -203,6 +205,10 @@ const zh = {
   'app.current': '当前',
   'app.saved': '已保存',
   'app.projectMeta': '游标 {cursor} · 交易 {trades} · 绘图 {drawings} · {speed}',
+  'app.deleteProject': '删除项目 {name}',
+  'app.deleteProjectTitle': '删除“{name}”？',
+  'app.deleteProjectWarning': '交易记录和绘图会一并删除，无法恢复。',
+  'app.deleteProjectFailed': '删除失败，项目已恢复。',
   'app.noProjects': '暂无项目。填写左侧表单后会直接打开全屏 K 线复盘窗口。',
   'app.replayTitle': '{name} 复盘',
   'app.mainPane': '主屏',
@@ -449,6 +455,8 @@ export type MessageKey = keyof typeof zh
 const en: Record<MessageKey, Message> = {
   'common.retry': 'Retry',
   'common.close': 'Close',
+  'common.cancel': 'Cancel',
+  'common.delete': 'Delete',
 
   'meta.title': 'grailab · Market replay and trading practice | Crypto Trading Simulator',
   'meta.description': 'Crypto trading simulator for historical market replay and paper trading. grailab: replay years of price history, practise trading in a realistic workflow, and fit far more repetitions into less time.',
@@ -638,6 +646,10 @@ const en: Record<MessageKey, Message> = {
   'app.current': 'Current',
   'app.saved': 'Saved',
   'app.projectMeta': 'Cursor {cursor} · Trades {trades} · Drawings {drawings} · {speed}',
+  'app.deleteProject': 'Delete project {name}',
+  'app.deleteProjectTitle': 'Delete "{name}"?',
+  'app.deleteProjectWarning': 'Its trades and drawings are deleted with it. This cannot be undone.',
+  'app.deleteProjectFailed': 'Delete failed; the project was restored.',
   'app.noProjects': 'No projects yet. Fill in the form on the left to open the full-screen replay window.',
   'app.replayTitle': '{name} replay',
   'app.mainPane': 'Main',

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import {
   FolderOpen,
   FolderPlus,
@@ -10,6 +10,7 @@ import {
   RefreshCw,
   ServerCog,
   SlidersHorizontal,
+  Trash2,
   TrendingDown,
   TrendingUp,
   X,
@@ -59,7 +60,7 @@ const MarketChart = defineAsyncComponent({
   delay: 0,
   timeout: 30_000,
 })
-import { getMarketMetadata, getMarketSnapshot, listProjects, saveProject } from './api'
+import { deleteProject as deleteRemoteProject, getMarketMetadata, getMarketSnapshot, listProjects, saveProject } from './api'
 import { fromUtcInput, formatDuration, formatNumber, formatUtc, toUtcInput } from './format'
 import {
   applyManualTrade,
@@ -150,6 +151,8 @@ const projectError = ref('')
 const syncError = ref('')
 const legacyImportCandidates = ref<ReplayProject[] | null>(null)
 const importBusy = ref(false)
+// A card swaps to its inline confirmation instead of raising a browser dialog.
+const pendingDeleteId = ref('')
 const activeView = ref<AppView>('projects')
 const playbackPlaying = ref(false)
 const isReplayFullscreen = ref(false)
@@ -915,6 +918,7 @@ function saveActiveProject() {
 function selectProject(projectId: string) {
   const storedProject = projects.value.find((item) => item.id === projectId)
   if (!storedProject) return
+  pendingDeleteId.value = ''
   flushPendingProjectSync()
   const { project, changed } = alignProjectToMarket(storedProject)
   projectError.value = ''
@@ -924,6 +928,58 @@ function selectProject(projectId: string) {
   playbackPlaying.value = false
   openReplay()
   if (changed) setNotice(`${marketAlignmentNotice(project)}${t('app.staleTradesCleared')}`)
+}
+
+function requestProjectDelete(projectId: string) {
+  pendingDeleteId.value = projectId
+  // The delete control unmounts with the card's normal state, so move focus
+  // onto the confirmation instead of letting it fall back to the document.
+  void nextTick(() => document.getElementById(`project-confirm-cancel-${projectId}`)?.focus())
+}
+
+function cancelProjectDelete() {
+  const projectId = pendingDeleteId.value
+  pendingDeleteId.value = ''
+  if (!projectId) return
+  void nextTick(() => document.getElementById(`project-select-${projectId}`)?.focus())
+}
+
+async function deleteSavedProject(projectId: string) {
+  const project = projects.value.find((item) => item.id === projectId)
+  if (!project) return
+  pendingDeleteId.value = ''
+  projectError.value = ''
+  // Drop any queued write first so a delayed sync cannot recreate the project.
+  const pendingTimer = projectSyncTimers.get(projectId)
+  if (pendingTimer !== undefined) window.clearTimeout(pendingTimer)
+  projectSyncTimers.delete(projectId)
+  projectSyncQueuedAt.delete(projectId)
+  pendingProjectSaves.delete(projectId)
+  const remaining = projects.value.filter((item) => item.id !== projectId)
+  const wasActive = projectId === activeProjectId.value
+  projects.value = remaining
+  if (wasActive) {
+    const next = remaining[0]
+    activeProjectId.value = next?.id ?? ''
+    if (next) syncDraftFromProject(next)
+    else openProjects()
+  }
+  persistProjectsState()
+  if (!hasStorageUser()) return
+  try {
+    await deleteRemoteProject(projectId)
+    syncError.value = ''
+  } catch {
+    // The server still owns the project; restore it so a later refresh cannot
+    // bring back a delete the user was told had gone through.
+    projects.value = [project, ...projects.value.filter((item) => item.id !== projectId)]
+    if (wasActive) {
+      activeProjectId.value = project.id
+      syncDraftFromProject(project)
+    }
+    persistProjectsState()
+    syncError.value = t('app.deleteProjectFailed')
+  }
 }
 
 function mergeMarketSnapshots(current: MarketSnapshot, incoming: MarketSnapshot): MarketSnapshot {
@@ -1281,6 +1337,7 @@ function tradeActionLabel(action: ManualTradeAction | undefined): string {
 watch(activeView, (value) => {
   saveAppView(value)
   mobileConsoleOpen.value = false
+  pendingDeleteId.value = ''
   if (value !== 'replay') {
     playbackPlaying.value = false
   }
@@ -1584,23 +1641,64 @@ onBeforeUnmount(() => {
             </div>
 
             <div v-if="projects.length" class="project-list grid">
-              <button
+              <div
                 v-for="project in projects"
                 :key="project.id"
-                type="button"
-                class="project-item grid gap-1 w-full rounded-[var(--radius)] cursor-pointer"
-                :class="{ active: project.id === activeProjectId }"
-                @click="selectProject(project.id)"
+                class="project-item w-full rounded-[var(--radius)]"
+                :class="{ active: project.id === activeProjectId, confirming: pendingDeleteId === project.id }"
               >
-                <div class="project-item-head flex items-center justify-between gap-2.5">
-                  <strong>{{ project.name }}</strong>
-                  <span class="status-pill inline-flex items-center justify-center min-h-6 [padding:0_8px] rounded-full text-[length:11px] whitespace-nowrap" :data-status="project.id === activeProjectId ? 'running' : 'idle'">
-                    {{ project.id === activeProjectId ? t('app.current') : t('app.saved') }}
-                  </span>
+                <div
+                  v-if="pendingDeleteId === project.id"
+                  class="project-confirm"
+                  @keydown.esc="cancelProjectDelete"
+                >
+                  <p class="project-confirm-title">{{ t('app.deleteProjectTitle', { name: project.name }) }}</p>
+                  <p class="project-confirm-body">{{ t('app.deleteProjectWarning') }}</p>
+                  <div class="project-confirm-actions">
+                    <button
+                      :id="`project-confirm-cancel-${project.id}`"
+                      type="button"
+                      class="project-confirm-button project-confirm-cancel"
+                      @click="cancelProjectDelete"
+                    >
+                      {{ t('common.cancel') }}
+                    </button>
+                    <button
+                      type="button"
+                      class="project-confirm-button project-confirm-delete"
+                      @click="deleteSavedProject(project.id)"
+                    >
+                      {{ t('common.delete') }}
+                    </button>
+                  </div>
                 </div>
-                <span>{{ timeframeLabels[project.timeframe] ?? project.timeframe }} · {{ projectRangeLabel(project) }}</span>
-                <span>{{ t('app.projectMeta', { cursor: project.cursorIndex + 1, trades: project.trades.length, drawings: project.drawings.length, speed: speedToText(project.speed) }) }}</span>
-              </button>
+                <template v-else>
+                  <button
+                    :id="`project-select-${project.id}`"
+                    type="button"
+                    class="project-select"
+                    @click="selectProject(project.id)"
+                  >
+                    <div class="project-item-head flex items-center justify-between gap-2.5">
+                      <strong>{{ project.name }}</strong>
+                      <span class="status-pill inline-flex items-center justify-center min-h-6 [padding:0_8px] rounded-full text-[length:11px] whitespace-nowrap" :data-status="project.id === activeProjectId ? 'running' : 'idle'">
+                        {{ project.id === activeProjectId ? t('app.current') : t('app.saved') }}
+                      </span>
+                    </div>
+                    <span>{{ timeframeLabels[project.timeframe] ?? project.timeframe }} · {{ projectRangeLabel(project) }}</span>
+                    <span>{{ t('app.projectMeta', { cursor: project.cursorIndex + 1, trades: project.trades.length, drawings: project.drawings.length, speed: speedToText(project.speed) }) }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="project-delete"
+                    :aria-label="t('app.deleteProject', { name: project.name })"
+                    :title="t('app.deleteProject', { name: project.name })"
+                    @click="requestProjectDelete(project.id)"
+                  >
+                    <Trash2 :size="15" aria-hidden="true" />
+                  </button>
+                </template>
+              </div>
             </div>
             <p v-else class="history-empty">{{ t('app.noProjects') }}</p>
           </section>

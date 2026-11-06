@@ -118,7 +118,7 @@ select {
   @apply grid-cols-[minmax(360px,_480px)_minmax(0,_1fr)];
 }
 .project-item {
-  @apply p-3;
+  @apply relative p-0;
 }
 .replay-console {
   @apply h-14 min-h-14 [padding:6px_14px];
@@ -602,8 +602,53 @@ select {
 .project-item strong {
   @apply max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap text-[length:13px] leading-[1.35];
 }
-.project-item > span {
+.project-select {
+  @apply grid gap-1 w-full cursor-pointer text-left [padding:12px_48px_12px_12px]
+    [border:0] [background:transparent] text-[color:inherit];
+}
+/* The icon stays quiet; the hit area is the full 44px the card can give it. */
+.project-delete {
+  @apply absolute top-1 right-1 inline-grid place-items-center w-11 h-11 cursor-pointer
+    rounded-[var(--radius-sm)] [border:0] [background:transparent] text-[color:var(--text-dim)];
+  transition: color 160ms ease, background-color 160ms ease;
+}
+.project-delete:hover {
+  @apply [background:var(--surface-2)] text-[color:var(--danger)];
+}
+.project-select > span {
   @apply text-[color:var(--text-dim)] text-[length:11px] leading-[1.45] [overflow-wrap:anywhere];
+}
+.project-item.confirming {
+  @apply [border-color:rgba(153,_27,_27,_0.35)];
+}
+.project-confirm {
+  @apply grid gap-1 [padding:12px];
+}
+.project-confirm-title {
+  @apply text-[color:var(--text)] text-[length:13px] font-semibold leading-[1.4] [overflow-wrap:anywhere];
+}
+.project-confirm-body {
+  @apply text-[color:var(--text-dim)] text-[length:11.5px] leading-[1.5];
+}
+.project-confirm-actions {
+  @apply flex justify-end gap-2 [margin-top:4px];
+}
+.project-confirm-button {
+  @apply min-h-11 [padding:0_14px] cursor-pointer rounded-[var(--radius-sm)]
+    [border:1px_solid_var(--border)] text-[length:12.5px] font-bold;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+.project-confirm-cancel {
+  @apply [background:var(--surface)] text-[color:var(--text-muted)];
+}
+.project-confirm-cancel:hover {
+  @apply [background:var(--surface-2)] [border-color:var(--border-strong)];
+}
+.project-confirm-delete {
+  @apply [border-color:rgba(153,_27,_27,_0.45)] [background:var(--surface)] text-[color:var(--danger)];
+}
+.project-confirm-delete:hover {
+  @apply [background:var(--danger)] [border-color:var(--danger)] text-[color:#fff];
 }
 .primary-button,
 .secondary-button,
@@ -963,7 +1008,10 @@ select {
   .transport-bar {
     @apply rounded-[var(--radius)];
   }
-  .project-item {
+  .project-select {
+    @apply [padding:10px_48px_10px_10px];
+  }
+  .project-confirm {
     @apply [padding:10px];
   }
   .project-item strong {
