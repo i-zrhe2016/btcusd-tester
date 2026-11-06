@@ -74,6 +74,7 @@ import {
   normalizeReplayProjectList,
   assignReplayPaneTimeframe,
   loadReplayProjects,
+  mergeReplayProjectLists,
   nextReplayPaneTimeframe,
   nextReplayWindowStart,
   normalizeReplayPanes,
@@ -333,6 +334,70 @@ async function flushProjectSync(id: string, keepalive = false) {
 
 function flushPendingProjectSync(keepalive = false) {
   for (const id of [...pendingProjectSaves.keys()]) void flushProjectSync(id, keepalive)
+}
+
+// Web and phone can be open at the same time. Refreshing the server copy keeps
+// both sides converging on the same manual trades while each device keeps its
+// own playback position.
+const PROJECT_REFRESH_INTERVAL = 15_000
+let projectRefreshTimer: number | null = null
+let projectRefreshInFlight = false
+
+function projectSyncSignature(project: ReplayProject): string {
+  // The server owns updated_at, so it must not decide whether a push is needed.
+  const { updatedAt: _updatedAt, ...rest } = project
+  return JSON.stringify(rest)
+}
+
+function applyServerProjects(remote: ReplayProject[]) {
+  const remoteById = new Map(remote.map((project) => [project.id, project]))
+  const merged = mergeReplayProjectLists(projects.value, remote, {
+    // Never let a poll move the device the user is actively replaying, and keep
+    // edits that are still queued locally from being overwritten by an older copy.
+    preferLocal: (id) => id === activeProjectId.value || pendingProjectSaves.has(id),
+  })
+  projects.value = merged
+  saveReplayProjects(merged)
+  for (const project of merged) {
+    const serverCopy = remoteById.get(project.id)
+    if (!serverCopy || projectSyncSignature(project) !== projectSyncSignature(serverCopy)) {
+      queueProjectSync(project)
+    }
+  }
+}
+
+async function refreshServerProjects() {
+  if (!hasStorageUser() || disposed || projectRefreshInFlight) return
+  projectRefreshInFlight = true
+  try {
+    const remote = normalizeReplayProjectList(await listProjects())
+    if (disposed) return
+    applyServerProjects(remote)
+    syncError.value = ''
+  } catch {
+    // Offline or the service is unavailable: keep the local cache for this user.
+  } finally {
+    projectRefreshInFlight = false
+  }
+}
+
+function startProjectRefresh() {
+  stopProjectRefresh()
+  if (disposed || !hasStorageUser()) return
+  projectRefreshTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible') void refreshServerProjects()
+  }, PROJECT_REFRESH_INTERVAL)
+}
+
+function stopProjectRefresh() {
+  if (projectRefreshTimer !== null) {
+    window.clearInterval(projectRefreshTimer)
+    projectRefreshTimer = null
+  }
+}
+
+function handleWindowFocus() {
+  void refreshServerProjects()
 }
 
 function updateProject(project: ReplayProject) {
@@ -1074,12 +1139,16 @@ async function restoreServerProjects(requestId: number) {
   if (legacy.length) legacyImportCandidates.value = legacy
 
   if (remote.length) {
-    projects.value = remote
     const storedActive = loadActiveReplayProjectId()
-    const active = remote.find((project) => project.id === storedActive) ?? remote[0]
+    const preferred = remote.find((project) => project.id === storedActive) ?? remote[0]
+    if (preferred) activeProjectId.value = preferred.id
+    // Union with the local cache instead of replacing it so a project opened on
+    // this device never loses trades that were made here but not yet uploaded.
+    applyServerProjects(remote)
+    const active = projects.value.find((project) => project.id === activeProjectId.value)
+      ?? projects.value[0]
     activeProjectId.value = active?.id ?? ''
     saveActiveReplayProjectId(activeProjectId.value)
-    saveReplayProjects(remote)
     if (active) syncDraftFromProject(active)
   } else if (projects.value.length) {
     // The server has no copy yet; this scoped cache belongs to this user.
@@ -1252,7 +1321,12 @@ function flushOnPageHide() {
 }
 
 function handleVisibilityChange() {
-  if (document.visibilityState === 'hidden') flushPendingProjectSync(true)
+  if (document.visibilityState === 'hidden') {
+    flushPendingProjectSync(true)
+  } else {
+    // A phone returning to the app picks up trades made on the web immediately.
+    void refreshServerProjects()
+  }
 }
 
 onMounted(() => {
@@ -1260,7 +1334,8 @@ onMounted(() => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('keydown', handleReplayShortcut)
   window.addEventListener('pagehide', flushOnPageHide)
-  void initialize()
+  window.addEventListener('focus', handleWindowFocus)
+  void initialize().finally(startProjectRefresh)
 })
 
 onBeforeUnmount(() => {
@@ -1268,11 +1343,13 @@ onBeforeUnmount(() => {
   initializationId += 1
   snapshotRequestId += 1
   clearPlaybackTimer()
+  stopProjectRefresh()
   flushPendingProjectSync(true)
   document.removeEventListener('fullscreenchange', syncReplayFullscreen)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('keydown', handleReplayShortcut)
   window.removeEventListener('pagehide', flushOnPageHide)
+  window.removeEventListener('focus', handleWindowFocus)
 })
 </script>
 

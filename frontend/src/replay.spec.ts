@@ -6,6 +6,8 @@ import {
   draftFromProject,
   loadReplayProjects,
   manualTradeMarker,
+  mergeReplayProject,
+  mergeReplayProjectLists,
   nextReplayWindowStart,
   normalizeReplayProject,
   normalizeSpeed,
@@ -815,5 +817,95 @@ describe('replay multi-timeframe panes', () => {
 
     storage.setItem('btcusd.replay.projects.v2', JSON.stringify([{ ...project, panes: undefined }]))
     expect(loadReplayProjects(storage).map((stored) => stored.panes)).toEqual([['1h']])
+  })
+})
+
+describe('cross-device project merge', () => {
+  function project() {
+    return createReplayProjectFromDraft({
+      name: 'Shared replay',
+      symbol: 'BTCUSD',
+      timeframe: '1h',
+      fromInput: '2026-08-27T00:00',
+      toInput: '2026-08-27T06:00',
+      speed: 1,
+    })
+  }
+
+  function trade(id: string, timestamp: number, createdAt: string): ManualTrade {
+    return {
+      id,
+      candleIndex: 0,
+      timestamp,
+      side: 'buy',
+      action: 'open-long',
+      price: 100,
+      quantity: 1,
+      realizedPnl: null,
+      createdAt,
+    }
+  }
+
+  it('unions trades made on the web and the phone instead of replacing them', () => {
+    const shared = project()
+    const web = {
+      ...shared,
+      trades: [trade('web-1', 1_000, '2026-08-27T01:00:00Z')],
+      updatedAt: '2026-08-27T01:00:00Z',
+    }
+    const phone = {
+      ...shared,
+      trades: [trade('phone-1', 2_000, '2026-08-27T02:00:00Z')],
+      updatedAt: '2026-08-27T02:00:00Z',
+    }
+
+    expect(mergeReplayProject(web, phone).trades.map((item) => item.id))
+      .toEqual(['web-1', 'phone-1'])
+    // Whichever copy is preferred, neither device's trade is dropped.
+    expect(mergeReplayProject(web, phone, { preferLocal: true }).trades.map((item) => item.id))
+      .toEqual(['web-1', 'phone-1'])
+  })
+
+  it('keeps the active device playback position while adopting newer remote fields', () => {
+    const shared = project()
+    const local = { ...shared, cursorIndex: 3, updatedAt: '2026-08-27T01:00:00Z' }
+    const remote = { ...shared, cursorIndex: 99, name: 'Renamed on phone', updatedAt: '2026-08-27T02:00:00Z' }
+
+    expect(mergeReplayProject(local, remote)).toMatchObject({ cursorIndex: 99, name: 'Renamed on phone' })
+    expect(mergeReplayProject(local, remote, { preferLocal: true }))
+      .toMatchObject({ cursorIndex: 3, name: 'Shared replay' })
+  })
+
+  it('does not resurrect trades after a project range reset', () => {
+    const shared = project()
+    const remote = {
+      ...shared,
+      trades: [trade('old-1', 1_000, '2026-08-27T01:00:00Z')],
+      updatedAt: '2026-08-27T01:00:00Z',
+    }
+    // A range change clears trades and drawings on purpose; unioning the old
+    // range's trades back in would undo that reset.
+    const reset = {
+      ...shared,
+      from: shared.from + 3_600,
+      to: shared.to + 3_600,
+      trades: [],
+      updatedAt: '2026-08-27T02:00:00Z',
+    }
+
+    expect(mergeReplayProject(reset, remote).trades).toEqual([])
+    expect(mergeReplayProject(remote, reset)).toBe(reset)
+  })
+
+  it('merges project lists by id and keeps projects that only exist locally', () => {
+    const shared = project()
+    const local = { ...shared, trades: [trade('local-1', 1_000, '2026-08-27T01:00:00Z')] }
+    const remote = { ...shared, trades: [trade('remote-1', 2_000, '2026-08-27T02:00:00Z')] }
+    const localOnly = { ...shared, id: 'local-only', name: 'Draft project' }
+
+    const merged = mergeReplayProjectLists([local, localOnly], [remote])
+    expect(merged.map((item) => item.id)).toEqual(expect.arrayContaining(['local-only', shared.id]))
+    expect(merged.find((item) => item.id === shared.id)?.trades.map((item) => item.id))
+      .toEqual(['local-1', 'remote-1'])
   })
 })

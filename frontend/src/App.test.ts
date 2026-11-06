@@ -3,7 +3,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, nextTick, onMounted, onUnmounted } from 'vue'
 import App from './App.vue'
 import { getMarketMetadata, getMarketSnapshot, listProjects, saveProject } from './api'
-import { createSeedReplayProject, loadReplayProjects, replayWindowRange, saveActiveReplayProjectId, saveReplayProjects, timeframeStepSeconds } from './replay'
+import { createSeedReplayProject, loadReplayProjects, replayWindowRange, saveActiveReplayProjectId, saveReplayProjects, timeframeStepSeconds, type ManualTrade } from './replay'
 import type { MarketMetadata, MarketSnapshot } from './types'
 
 const chartLife = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }))
@@ -493,5 +493,45 @@ describe('per-user project data', () => {
   function savedProjects() {
     return localStorage.getItem('btcusd.replay.projects.v2.u.user_alice') ?? ''
   }
+
+  it('picks up trades made on another device when the app regains focus', async () => {
+    const project = { ...createSeedReplayProject(market), id: 'shared-project', name: 'Shared' }
+    vi.mocked(listProjects).mockResolvedValue([project])
+    wrapper = mount(App, { props: { userId: 'user_alice' } })
+    await flushPromises()
+
+    const webTrade: ManualTrade = {
+      id: 'web-trade', candleIndex: 3, timestamp: market.first_timestamp + 180,
+      side: 'buy', action: 'open-long', price: 100, quantity: 1, realizedPnl: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+    vi.mocked(listProjects).mockResolvedValue([{
+      ...project,
+      trades: [webTrade],
+      updatedAt: new Date(Date.now() + 1000).toISOString(),
+    }])
+
+    window.dispatchEvent(new Event('focus'))
+    await flushPromises()
+    expect(savedProjects()).toContain('web-trade')
+  })
+
+  it('keeps trades made here when the server copy is still stale', async () => {
+    const project = { ...createSeedReplayProject(market), id: 'shared-project', name: 'Shared' }
+    const phoneTrade: ManualTrade = {
+      id: 'phone-trade', candleIndex: 4, timestamp: market.first_timestamp + 240,
+      side: 'sell', action: 'open-short', price: 101, quantity: 1, realizedPnl: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }
+    localStorage.setItem(
+      'btcusd.replay.projects.v2.u.user_alice',
+      JSON.stringify([{ ...project, trades: [phoneTrade] }]),
+    )
+    vi.mocked(listProjects).mockResolvedValue([project])
+
+    wrapper = mount(App, { props: { userId: 'user_alice' } })
+    await flushPromises()
+    expect(savedProjects()).toContain('phone-trade')
+  })
 })
 
