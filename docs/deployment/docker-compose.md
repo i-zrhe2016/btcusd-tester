@@ -14,7 +14,8 @@
 ## Compose 资源
 
 - `web` 构建 Vue 静态文件并运行 Nginx，默认映射 `80:80` 和 `443:443`。
-- `market-data` 只读挂载 `./data/market:/data:ro`。
+- `market-data` 只读挂载 `./data/market:/data:ro`，并自动热加载 Parquet 与 `live/` 尾窗的变化。
+- `live-sync` 以 `python:3.12-slim` 运行 `scripts/sync_live_market.py`，通过公网网络每 60 秒更新 `./data/market/live`，尾窗由 `market-data` 合并。
 - `backtest` 通过 `DATABASE_URL` 和 `MARKET_DATA_URL` 访问内部依赖。
 - `postgres` 使用命名 volume，固定主版本，启用健康检查。
 - `web` 同时加入公网入口 bridge 和私有后端 bridge；其他容器只加入私有后端 bridge。
@@ -38,6 +39,11 @@
 | `DATABASE_URL` | backtest | 由 Compose 从上述变量构造 |
 | `MARKET_DATA_URL` | backtest | `http://market-data:8081` |
 | `MARKET_DATA_PARQUET` | market-data | `/data/btcusd_1m.parquet` |
+| `MARKET_DATA_LIVE_DIR` | market-data | 实时尾窗目录，默认 Parquet 同级的 `live/` |
+| `MARKET_DATA_RELOAD_SECONDS` | market-data | 文件变化检查间隔，默认 `5` |
+| `MARKET_LIVE_INTERVAL` | live-sync | 实时尾窗抓取间隔，默认 `60` 秒 |
+| `MARKET_LIVE_RETAIN_MINUTES` | live-sync | 每币保留的最近分钟数，默认 `4320` |
+| `LIVE_SYNC_CPUS` | live-sync | 默认 `0.25` |
 | `RUST_LOG` | Rust 服务 | 默认 `info` |
 `.env.example` 只能包含无敏感默认值；生产 `.env` 权限设为 `0600` 并排除版本控制。
 CPU 配额由 Docker Compose 的 `cpus` 字段下发到容器，可按服务器规格在 `.env` 中调高或调低。

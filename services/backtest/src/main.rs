@@ -1,3 +1,5 @@
+#[path = "../../crypto_symbols.rs"]
+mod symbols;
 mod auth;
 mod config;
 mod db;

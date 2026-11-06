@@ -60,10 +60,8 @@ impl BacktestRequest {
         if self.name.trim().is_empty() || self.name.chars().count() > 120 {
             return Err("name must contain between 1 and 120 characters".to_owned());
         }
-        if !self.symbol.eq_ignore_ascii_case("BTCUSD")
-            && !self.symbol.eq_ignore_ascii_case("BTC-USD")
-        {
-            return Err("only BTCUSD is supported".to_owned());
+        if crate::symbols::normalize(&self.symbol).is_none() {
+            return Err("unsupported USD cryptocurrency market".to_owned());
         }
         if !["1m", "15m", "30m", "1h", "2h", "4h", "1d", "1w", "1M"]
             .contains(&self.timeframe.as_str())
@@ -315,10 +313,8 @@ impl ReplayProjectRequest {
         if self.name.trim().is_empty() || self.name.chars().count() > 120 {
             return Err("name must contain between 1 and 120 characters".to_owned());
         }
-        if !self.symbol.eq_ignore_ascii_case("BTCUSD")
-            && !self.symbol.eq_ignore_ascii_case("BTC-USD")
-        {
-            return Err("only BTCUSD is supported".to_owned());
+        if crate::symbols::normalize(&self.symbol).is_none() {
+            return Err("unsupported USD cryptocurrency market".to_owned());
         }
         if !REPLAY_TIMEFRAMES.contains(&self.timeframe.as_str()) {
             return Err("timeframe is not supported".to_owned());
@@ -537,6 +533,18 @@ mod replay_project_tests {
             drawings_updated_at: None,
             indicators_updated_at: None,
         }
+    }
+
+    #[test]
+    fn accepts_ten_markets_and_rejects_unknown_symbols() {
+        for symbol in crate::symbols::SYMBOLS {
+            let mut project = valid_project();
+            project.symbol = symbol.to_owned();
+            assert!(project.validate().is_ok(), "{symbol}");
+        }
+        let mut project = valid_project();
+        project.symbol = "BTCUSDT".to_owned();
+        assert_eq!(project.validate().unwrap_err(), "unsupported USD cryptocurrency market");
     }
 
     #[test]

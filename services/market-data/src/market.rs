@@ -9,13 +9,8 @@ use crate::{
 const MAX_CANDLES: usize = 5_000;
 
 pub fn snapshot(all_candles: &[Candle], query: SnapshotQuery) -> Result<MarketSnapshot, ApiError> {
-    if !query.symbol.eq_ignore_ascii_case("BTCUSD")
-        && !query.symbol.eq_ignore_ascii_case("BTC-USD")
-    {
-        return Err(ApiError::BadRequest(
-            "only BTCUSD is available in this deployment".to_owned(),
-        ));
-    }
+    let symbol = crate::symbols::normalize(&query.symbol)
+        .ok_or_else(|| ApiError::BadRequest(format!("unsupported USD market {}", query.symbol)))?;
     let timeframe = Timeframe::parse(&query.timeframe).ok_or_else(|| {
         ApiError::BadRequest(format!("unsupported timeframe {}", query.timeframe))
     })?;
@@ -45,7 +40,7 @@ pub fn snapshot(all_candles: &[Candle], query: SnapshotQuery) -> Result<MarketSn
     let stochastic = calculate_stochastic(&candles, lengths);
 
     Ok(MarketSnapshot {
-        symbol: "BTCUSD".to_owned(),
+        symbol: symbol.to_owned(),
         timeframe: timeframe.as_str().to_owned(),
         source: "Parquet",
         candles,

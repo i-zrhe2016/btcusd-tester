@@ -13,10 +13,10 @@
 | Rust/Cargo | 编译并运行两个 Axum 服务 | 使用当前稳定版；容器构建以 `rust:1.88-slim-bookworm` 为基线 |
 | Node.js/npm | 安装前端依赖并运行 Vite | 使用 Node 24 或与前端 Dockerfile 一致的主版本 |
 | Docker | 启动本地 PostgreSQL | 只用于开发数据库 |
-| BTCUSD Parquet | 行情服务启动数据源 | 符合 [Parquet 行情数据规范](../data/parquet.md) |
+| 十币 USD Parquet | 行情服务启动数据源 | 按 [十币 1 分钟历史同步](../data/history-sync.md) 生成；格式符合 [Parquet 行情数据规范](../data/parquet.md) |
 | curl | 健康检查 | 系统包管理器安装即可 |
 
-行情服务在监听端口前会读取 Parquet。没有 `btcusd_1m.parquet` 时，前端可以启动，但行情和回测闭环无法完成。
+行情服务在监听端口前会读取 Parquet。`btcusd_1m.parquet` 缺失时服务无法启动；其余九币缺失时服务仍可启动，但对应品种请求返回 503。十币完整 1 分钟历史包含 BTC，通过 [十币 1 分钟历史同步](../data/history-sync.md) 下载并校验，不要用几天的小样本替代或覆盖正式历史。
 
 ## 目录约定
 

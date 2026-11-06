@@ -1,4 +1,5 @@
 import type { Candle, MarketMetadata } from './types'
+import { normalizeSymbol, isSupportedSymbol } from './symbols'
 import { fromUtcInput, toUtcInput, formatUtc } from './format'
 import { t } from './i18n'
 import { browserStorage, scopedStorageKey } from './userStorage'
@@ -317,6 +318,43 @@ export function timeframeStepSeconds(timeframe: string): number {
   }
 }
 
+/**
+ * Exclusive end of the range covered by completed candles only. Kraken (and
+ * therefore the live window) publishes whole minutes; the replay clock never
+ * rests on the candle that is still forming.
+ */
+export function latestCompletedEnd(
+  market: Pick<MarketMetadata, 'last_timestamp' | 'base_timeframe'>,
+  timeframe: string,
+): number {
+  const completedThrough = market.last_timestamp + timeframeStepSeconds(market.base_timeframe)
+  if (!Number.isFinite(completedThrough)) return 0
+  if (timeframe === '1M') {
+    const lastCompleted = new Date((completedThrough - 1) * 1000)
+    return Date.UTC(lastCompleted.getUTCFullYear(), lastCompleted.getUTCMonth(), 1) / 1000
+  }
+  if (timeframe === '1w') {
+    const mondayOffset = 3 * 24 * 60 * 60
+    const week = 7 * 24 * 60 * 60
+    return Math.floor((completedThrough + mondayOffset) / week) * week - mondayOffset
+  }
+  const step = timeframeStepSeconds(timeframe)
+  return Math.floor(completedThrough / step) * step
+}
+
+/** Open time of the newest closed candle ending at `latestCompletedEnd`. */
+export function latestCompletedCandleStart(
+  market: Pick<MarketMetadata, 'last_timestamp' | 'base_timeframe'>,
+  timeframe: string,
+): number {
+  const end = latestCompletedEnd(market, timeframe)
+  if (timeframe === '1M') {
+    const monthStart = new Date(end * 1000)
+    return Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() - 1, 1) / 1000
+  }
+  return end - timeframeStepSeconds(timeframe)
+}
+
 export function replayWindowEnd(from: number, to: number, timeframe: string): number {
   return Math.min(to, from + (timeframeStepSeconds(timeframe) * REPLAY_PAGE_SIZE))
 }
@@ -476,6 +514,7 @@ export function replayUnloadedTimestamps(
 }
 
 export function reconcileReplayProject(project: ReplayProject, market: MarketMetadata): ReplayProject {
+  if (normalizeSymbol(project.symbol) !== normalizeSymbol(market.symbol)) return project
   const baseStep = timeframeStepSeconds(market.base_timeframe)
   const availableStart = market.first_timestamp
   const availableEnd = market.last_timestamp + baseStep
@@ -544,7 +583,8 @@ export function createReplayProjectFromDraft(
   existing?: ReplayProject,
 ): ReplayProject {
   const name = draft.name.trim()
-  const symbol = draft.symbol.trim().toUpperCase() || 'BTCUSD'
+  const symbol = normalizeSymbol(draft.symbol) || 'BTCUSD'
+  if (!isSupportedSymbol(symbol)) throw new Error('Unsupported cryptocurrency market')
   const timeframe = draft.timeframe.trim() || '1m'
   const from = fromUtcInput(draft.fromInput)
   const to = fromUtcInput(draft.toInput)
@@ -563,7 +603,7 @@ export function createReplayProjectFromDraft(
   const timestamp = nowIso()
   const keepExistingState = Boolean(
     existing &&
-    existing.symbol === symbol,
+    normalizeSymbol(existing.symbol) === symbol,
   )
 
   return {
@@ -945,7 +985,7 @@ export function mergeReplayProject(
   // merge shared state while both copies still describe the same market range.
   const sharedRange = local.from === remote.from
     && local.to === remote.to
-    && local.symbol === remote.symbol
+    && normalizeSymbol(local.symbol) === normalizeSymbol(remote.symbol)
   if (!sharedRange) return base
 
   const trades = mergeManualTradeLists(base.trades, other.trades)

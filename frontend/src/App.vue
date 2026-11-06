@@ -8,6 +8,7 @@ import {
   Minimize2,
   Pause,
   Play,
+  Radio,
   RefreshCw,
   ServerCog,
   SlidersHorizontal,
@@ -62,6 +63,7 @@ const MarketChart = defineAsyncComponent({
   timeout: 30_000,
 })
 import { deleteProject as deleteRemoteProject, getMarketMetadata, getMarketSnapshot, listProjects, saveProject } from './api'
+import { CRYPTO_MARKETS, normalizeSymbol } from './symbols'
 import { fromUtcInput, formatDuration, formatNumber, formatUtc, toUtcInput } from './format'
 import {
   applyManualTrade,
@@ -72,6 +74,8 @@ import {
   clearLegacyReplayProjects,
   draftFromProject,
   loadActiveReplayProjectId,
+  latestCompletedCandleStart,
+  latestCompletedEnd,
   loadLegacyReplayProjects,
   normalizeReplayProjectList,
   assignReplayPaneTimeframe,
@@ -168,6 +172,17 @@ let initializationId = 0
 let localStateRestored = false
 let disposed = false
 let playbackTimer: number | null = null
+
+// Live replay follows newly closed 1-minute candles from /api/market/meta.
+const LIVE_POLL_MS = 15_000
+const liveFollowing = ref(false)
+const liveUpdating = ref(false)
+const liveUpdatedAt = ref<number | null>(null)
+const liveError = ref('')
+let livePollTimer: number | null = null
+// Set when playback reaches the newest loaded candle during live follow, so
+// the next poll can resume instead of treating it as a manual pause.
+let liveAutoPaused = false
 
 const activeProject = computed(() => projects.value.find((project) => project.id === activeProjectId.value) ?? null)
 const totalReplayCandles = computed(() => replaySnapshot.value?.candles.length ?? 0)
@@ -496,6 +511,9 @@ function clearPlaybackTimer() {
 function pausePlayback() {
   if (playbackPlaying.value) flushPendingProjectSync()
   playbackPlaying.value = false
+  // A manual pause must not be undone by the live poll; the playback timer
+  // re-arms this flag when it pauses because it reached the newest candle.
+  liveAutoPaused = false
 }
 
 function syncReplayFullscreen() {
@@ -620,6 +638,7 @@ async function loadReplayPane(pane: ReplayPaneState, project: ReplayProject, anc
   let loaded = false
   try {
     const snapshot = await getMarketSnapshot({
+      symbol: project.symbol,
       timeframe: pane.timeframe,
       from: range.from,
       to: range.to,
@@ -650,6 +669,8 @@ async function refreshReplayPaneForming(
   pane: ReplayPaneState,
   clockTimestamp: number,
 ): Promise<void> {
+  const project = activeProject.value
+  if (!project) return
   const candles = pane.snapshot?.candles ?? []
   if (!candles.length) return
 
@@ -675,6 +696,7 @@ async function refreshReplayPaneForming(
   const requestId = ++pane.formingRequestId
   try {
     const snapshot = await getMarketSnapshot({
+      symbol: project.symbol,
       timeframe: pane.timeframe,
       from: bucket,
       to: clockTimestamp,
@@ -777,7 +799,7 @@ function openReplay() {
 }
 
 function replayProjectKey(project: ReplayProject): string {
-  return JSON.stringify([project.id, project.timeframe, project.from, project.to])
+  return JSON.stringify([project.id, project.symbol, project.timeframe, project.from, project.to])
 }
 
 function ensureReplaySnapshot(force = false) {
@@ -1017,7 +1039,7 @@ async function loadReplayHistory() {
   replayHistoryError.value = ''
   try {
     const page = await getMarketSnapshot({
-      timeframe: project.timeframe, from, to: before, limit: 501, lengths: replayLengths,
+      symbol: project.symbol, timeframe: project.timeframe, from, to: before, limit: 501, lengths: replayLengths,
     })
     if (requestId !== snapshotRequestId || !replaySnapshot.value) return
     const timestamp = currentCandle.value?.timestamp
@@ -1064,7 +1086,7 @@ function jumpToCandle() {
 
 async function loadReplaySnapshot(
   project: ReplayProject,
-  options: { cursorTimestamp?: number; notice?: string } = {},
+  options: { cursorTimestamp?: number; notice?: string; fresh?: boolean } = {},
 ) {
   snapshotProjectKey = replayProjectKey(project)
   const requestId = ++snapshotRequestId
@@ -1090,6 +1112,15 @@ async function loadReplaySnapshot(
   replayHistoryError.value = ''
 
   try {
+    if (!metadata.value || normalizeSymbol(metadata.value.symbol) !== normalizeSymbol(project.symbol)) {
+      const market = await getMarketMetadata(project.symbol)
+      if (disposed || requestId !== snapshotRequestId) return
+      metadata.value = market
+      const aligned = alignProjectToMarket(project)
+      project = aligned.project
+      snapshotProjectKey = replayProjectKey(project)
+      if (aligned.changed) syncDraftFromProject(project)
+    }
     const step = timeframeStepSeconds(project.timeframe)
     const requestedCursorTimestamp = options.cursorTimestamp ?? project.cursorTimestamp
     const hasCursorTimestamp = typeof requestedCursorTimestamp === 'number' && Number.isFinite(requestedCursorTimestamp)
@@ -1098,11 +1129,13 @@ async function loadReplaySnapshot(
       : null
     const windowRange = replayWindowRange(boundedCursorTimestamp ?? project.from, project)
     const snapshot = await getMarketSnapshot({
+      symbol: project.symbol,
       timeframe: project.timeframe,
       from: windowRange.from,
       to: windowRange.to,
       limit: windowRange.limit,
       lengths: replayLengths,
+      fresh: options.fresh,
     })
     if (requestId !== snapshotRequestId) return
     replayHistoryBefore.value = windowRange.from > project.from ? windowRange.from : null
@@ -1151,11 +1184,13 @@ async function loadMoreReplay() {
 
   try {
     const snapshot = await getMarketSnapshot({
+      symbol: project.symbol,
       timeframe: project.timeframe,
       from,
       to: requestedTo,
       limit: REPLAY_PAGE_SIZE,
       lengths: replayLengths,
+      fresh: liveFollowing.value,
     })
     if (requestId !== snapshotRequestId || activeProject.value?.id !== projectId) return
     const currentSnapshot = replaySnapshot.value
@@ -1172,14 +1207,18 @@ async function loadMoreReplay() {
     )
     const nextFrom = nextReplayRequestFrom(mergedSnapshot, project, requestedTo)
     if (!hasNewCandles || (nextFrom !== null && nextFrom <= from)) {
-      replayWindowError.value = t('app.noNewCandles')
+      // Kraken omits minutes without trades; in live follow a gap is expected
+      // and must not flash a blocking error every cycle.
+      if (!liveFollowing.value) replayWindowError.value = t('app.noNewCandles')
       if (playbackPlaying.value) pausePlayback()
       return
     }
     replaySnapshot.value = mergedSnapshot
     replayNextFrom.value = nextFrom
     replayWindowError.value = ''
-    setNotice(t('app.moreLoaded', { count: snapshot.candles.length, timeframe: project.timeframe }))
+    if (!liveFollowing.value) {
+      setNotice(t('app.moreLoaded', { count: snapshot.candles.length, timeframe: project.timeframe }))
+    }
   } catch (caught) {
     if (requestId === snapshotRequestId && activeProject.value?.id === projectId) {
       replayWindowError.value = caught instanceof Error ? caught.message : t('app.moreFailed')
@@ -1190,6 +1229,116 @@ async function loadMoreReplay() {
       replayWindowLoading.value = false
     }
   }
+}
+
+function clearLivePoll() {
+  if (livePollTimer !== null) {
+    window.clearInterval(livePollTimer)
+    livePollTimer = null
+  }
+}
+
+function stopLiveFollowing() {
+  if (!liveFollowing.value) return
+  liveFollowing.value = false
+  liveAutoPaused = false
+  liveUpdating.value = false
+  liveError.value = ''
+  clearLivePoll()
+}
+
+function startLivePoll() {
+  clearLivePoll()
+  livePollTimer = window.setInterval(() => { void refreshLive() }, LIVE_POLL_MS)
+}
+
+const liveStatusLabel = computed(() => {
+  if (!liveFollowing.value) return ''
+  if (liveError.value) return liveError.value
+  if (liveUpdatedAt.value === null) return t('app.liveStarting')
+  return t('app.liveUpdated', { time: `${new Date(liveUpdatedAt.value).toISOString().slice(11, 19)} UTC` })
+})
+
+// Follow the newest closed candle: extend the project end, fetch the missing
+// tail when the user is at the end, and resume playback after data arrives.
+async function refreshLive(options: { jump?: boolean } = {}) {
+  const project = activeProject.value
+  if (!liveFollowing.value || !project || activeView.value !== 'replay' || liveUpdating.value) return
+  const projectId = project.id
+  liveUpdating.value = true
+  try {
+    const market = await getMarketMetadata(project.symbol, { fresh: true })
+    if (!liveFollowing.value || activeProject.value?.id !== projectId || activeView.value !== 'replay') return
+    metadata.value = market
+    liveUpdatedAt.value = Date.now()
+    liveError.value = ''
+    const end = latestCompletedEnd(market, project.timeframe)
+    if (!Number.isFinite(end) || end <= project.from) {
+      liveError.value = t('app.liveNoData')
+      return
+    }
+    const current = activeProject.value
+    if (!current || current.id !== projectId) return
+    const newestExpected = latestCompletedCandleStart(market, current.timeframe)
+    const loadedLast = replaySnapshot.value?.candles.at(-1)?.timestamp
+    if (!options.jump && loadedLast !== undefined && newestExpected <= loadedLast) return
+
+    const updated = end > current.to
+      ? { ...current, to: end, updatedAt: new Date().toISOString() }
+      : current
+    if (updated !== current) updateProject(updated)
+
+    const wasAtEnd = totalReplayCandles.value > 0 && activePlaybackIndex.value >= totalReplayCandles.value - 1
+    if (options.jump) {
+      liveAutoPaused = false
+      await loadReplaySnapshot(updated, {
+        cursorTimestamp: newestExpected,
+        fresh: true,
+        notice: t('app.liveLoaded'),
+      })
+      return
+    }
+    if (!wasAtEnd && !liveAutoPaused) return
+
+    // Load every missing page so a tab left open for hours catches up without
+    // leaving the cursor on an old candle. The bound prevents a runaway loop.
+    const beforeTotal = totalReplayCandles.value
+    replayWindowError.value = ''
+    if (replaySnapshot.value) {
+      replayNextFrom.value = nextReplayRequestFrom(replaySnapshot.value, updated, updated.to)
+    }
+    for (let page = 0; replayNextFrom.value !== null && page < 40; page += 1) {
+      if (replayLoading.value || replayWindowLoading.value) break
+      await loadMoreReplay()
+      if (totalReplayCandles.value === beforeTotal) break
+    }
+    if (totalReplayCandles.value > beforeTotal) {
+      setPlaybackCursor(totalReplayCandles.value - 1, false)
+      if (liveAutoPaused) {
+        liveAutoPaused = false
+        playbackPlaying.value = true
+      }
+    }
+  } catch (caught) {
+    liveError.value = caught instanceof Error ? caught.message : t('app.liveFailed')
+  } finally {
+    liveUpdating.value = false
+  }
+}
+
+async function toggleLiveFollowing() {
+  if (liveFollowing.value) {
+    stopLiveFollowing()
+    setNotice(t('app.liveStopped'))
+    return
+  }
+  if (!activeProject.value || activeView.value !== 'replay') return
+  liveFollowing.value = true
+  liveAutoPaused = false
+  liveError.value = ''
+  liveUpdatedAt.value = null
+  startLivePoll()
+  await refreshLive({ jump: true })
 }
 
 async function uploadLocalProjects(list: ReplayProject[]) {
@@ -1298,7 +1447,7 @@ async function initialize() {
   await restoreServerProjects(requestId)
   if (disposed || requestId !== initializationId) return
   try {
-    const market = await getMarketMetadata()
+    const market = await getMarketMetadata(activeProject.value?.symbol ?? 'BTCUSD')
     if (disposed || requestId !== initializationId) return
     metadata.value = market
     if (!projects.value.length) {
@@ -1340,9 +1489,22 @@ watch(activeView, (value) => {
   mobileConsoleOpen.value = false
   pendingDeleteId.value = ''
   if (value !== 'replay') {
-    playbackPlaying.value = false
+    pausePlayback()
   }
 })
+
+// Live follow belongs to one replay session: switching project, symbol or
+// timeframe leaves the extended range in place but stops the polling.
+watch(
+  [
+    () => activeProject.value?.id ?? '',
+    () => activeProject.value?.symbol ?? '',
+    () => activeProject.value?.timeframe ?? '',
+  ],
+  () => {
+    if (liveFollowing.value) stopLiveFollowing()
+  },
+)
 
 watch([playbackPlaying, () => activeProject.value?.speed, () => activeProjectId.value, () => totalReplayCandles.value], () => {
   clearPlaybackTimer()
@@ -1374,6 +1536,8 @@ watch([playbackPlaying, () => activeProject.value?.speed, () => activeProjectId.
         return
       }
       pausePlayback()
+      // In live follow, the next poll resumes once a new candle lands.
+      liveAutoPaused = liveFollowing.value
       return
     }
     setPlaybackCursor(nextIndex, false)
@@ -1420,6 +1584,7 @@ onBeforeUnmount(() => {
   disposed = true
   initializationId += 1
   snapshotRequestId += 1
+  clearLivePoll()
   clearPlaybackTimer()
   stopProjectRefresh()
   flushPendingProjectSync(true)
@@ -1589,7 +1754,11 @@ onBeforeUnmount(() => {
               <div class="field-grid two grid gap-2.5">
                 <label>
                   {{ t('app.symbol') }}
-                  <input v-model="projectDraft.symbol" type="text" autocomplete="off" />
+                  <select v-model="projectDraft.symbol">
+                    <option v-for="market in CRYPTO_MARKETS" :key="market.symbol" :value="market.symbol">
+                      {{ market.symbol.replace('USD', '') }} / USD · {{ market.name }}
+                    </option>
+                  </select>
                 </label>
                 <label>
                   {{ t('app.timeframe') }}
@@ -1816,6 +1985,26 @@ onBeforeUnmount(() => {
                 </select>
               </label>
 
+              <button
+                class="topbar-action console-live-button inline-flex items-center gap-1.5 shrink-0 whitespace-nowrap"
+                type="button"
+                data-testid="replay-live"
+                :class="{ 'live-active': liveFollowing }"
+                :aria-pressed="liveFollowing"
+                :aria-label="t('app.liveTitle')"
+                :title="t('app.liveTitle')"
+                :disabled="!activeProject || replayLoading"
+                @click="toggleLiveFollowing"
+              >
+                <Radio :size="14" aria-hidden="true" />
+                <span>{{ liveFollowing ? t('app.liveOn') : t('app.live') }}</span>
+                <span
+                  v-if="liveFollowing"
+                  class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"
+                  :class="{ 'animate-pulse': liveUpdating }"
+                  aria-hidden="true"
+                />
+              </button>
               <button v-if="replayHistoryBefore !== null" class="text-button console-history-button font-bold" type="button" :disabled="replayHistoryLoading || replayLoading" data-testid="load-replay-history" @click="loadReplayHistory">
                 {{ replayHistoryLoading ? t('app.loadingHistory') : replayHistoryError ? t('app.retryHistory') : t('app.loadEarlier') }}
               </button>
@@ -1838,6 +2027,13 @@ onBeforeUnmount(() => {
               <button class="topbar-action console-help-button shrink-0 whitespace-nowrap" type="button" @click="workspaceSettings?.open('help')">{{ t('app.help') }}</button>
 
               <div class="console-quick-stats gap-2 min-w-0" :aria-label="t('app.replayAux')">
+                <span
+                  v-if="liveFollowing"
+                  class="console-stat console-live-status"
+                  :class="{ 'is-error': Boolean(liveError) }"
+                  data-testid="replay-live-status"
+                  role="status"
+                >{{ liveStatusLabel }}</span>
                 <span class="console-stat">{{ currentTimeLabel }}</span>
                 <button
                   class="topbar-icon-button console-fullscreen-button w-8 h-8 inline-grid place-items-center p-0 rounded-[var(--radius-sm)] flex-none"

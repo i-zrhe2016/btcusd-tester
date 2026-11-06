@@ -8,6 +8,8 @@ import {
   manualTradeMarker,
   mergeReplayProject,
   mergeReplayProjectLists,
+  latestCompletedCandleStart,
+  latestCompletedEnd,
   nextReplayWindowStart,
   normalizeReplayProject,
   normalizeSpeed,
@@ -978,5 +980,37 @@ describe('cross-device project merge', () => {
     expect(merged.map((item) => item.id)).toEqual(expect.arrayContaining(['local-only', shared.id]))
     expect(merged.find((item) => item.id === shared.id)?.trades.map((item) => item.id))
       .toEqual(['local-1', 'remote-1'])
+  })
+})
+
+describe('live replay range', () => {
+  const market = (last: number) => ({ last_timestamp: last, base_timeframe: '1m' })
+
+  it('ends on the latest completed candle for minute-based timeframes', () => {
+    expect(latestCompletedEnd(market(1_200), '1m')).toBe(1_260)
+    expect(latestCompletedEnd(market(1_200), '5m')).toBe(1_200)
+    expect(latestCompletedEnd(market(1_200), '15m')).toBe(900)
+    expect(latestCompletedEnd(market(3_659), '1h')).toBe(3_600)
+  })
+
+  it('does not include a forming candle at an exact boundary', () => {
+    // 20:00:00 is the close of the 19:59 candle; the 20:00 1m candle has not closed.
+    expect(latestCompletedEnd(market(1_200 + 59), '1m')).toBe(1_260)
+    expect(latestCompletedEnd(market(3_600), '1h')).toBe(3_600)
+  })
+
+  it('aligns weeks to Monday and months to the month start', () => {
+    const monday = Date.UTC(2024, 0, 1) / 1000
+    expect(latestCompletedEnd(market(monday + 3 * 86_400 + 3_600 - 60), '1w')).toBe(monday)
+    const marchFifth = Date.UTC(2024, 2, 5) / 1000
+    expect(latestCompletedEnd(market(marchFifth - 60), '1M')).toBe(Date.UTC(2024, 2, 1) / 1000)
+  })
+
+  it('lands on the start of the newest closed candle, including calendar months', () => {
+    expect(latestCompletedCandleStart(market(7_199), '1h')).toBe(3_600)
+    const marchFifth = Date.UTC(2024, 2, 5) / 1000
+    expect(latestCompletedCandleStart(market(marchFifth - 60), '1M')).toBe(Date.UTC(2024, 1, 1) / 1000)
+    const monday = Date.UTC(2024, 0, 1) / 1000
+    expect(latestCompletedCandleStart(market(monday + 3 * 86_400 - 60), '1w')).toBe(monday - 7 * 86_400)
   })
 })

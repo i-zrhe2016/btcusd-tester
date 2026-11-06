@@ -6,6 +6,7 @@ RUN apt-get update \
 COPY Cargo.toml Cargo.lock ./
 COPY services/market-data services/market-data
 COPY services/backtest services/backtest
+COPY services/crypto_symbols.rs services/crypto_symbols.rs
 RUN cargo build --locked --release -p backtest-service
 
 FROM debian:bookworm-slim AS runtime

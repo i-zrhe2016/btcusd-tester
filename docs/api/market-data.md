@@ -5,8 +5,13 @@
 - 公网前缀：`/api/market`
 - 内容类型：`application/json`
 - 时间：Unix UTC 秒，范围为左闭右开 `[from, to)`。
-- 唯一支持的品种：`BTCUSD`，同时接受输入别名 `BTC-USD`。
+- 支持品种：`BTCUSD, ETHUSD, BNBUSD, XRPUSD, SOLUSD, TRXUSD, ZECUSD, HYPEUSD, DOGEUSD, XMRUSD`，接受大小写不敏感的 `BTC-USD` 等带连字符别名。USD 与 USDT 不互为别名。
+- 品种目录采用实施时查询的 [CoinGecko 市值排名](https://www.coingecko.com/)，按用户选择排除稳定币、质押/锚定衍生币及缺少公开交易 K 线的资产。它是静态快照，不代表实时自动调整排名。
+- 各币种分别使用 `btcusd_1m.parquet`、`ethusd_1m.parquet` 等独立文件，位于 `MARKET_DATA_PARQUET` 指定 BTC 文件的同一目录。现有 Compose 已挂载整个目录，无需为每个文件增加挂载。
+- BTC 文件仍为启动必需；缺失的其他币种不会回退到 BTC，而是返回 HTTP 503、`code: market_data_unavailable` 和包含待安装文件名的 `message`。安装真实 USD 历史文件后重启行情服务。切勿把 USDT 行情文件重命名为 USD。
 - 支持周期：`1m, 5m, 15m, 30m, 1h, 2h, 3h, 4h, 1d, 1w, 1M`。
+- 服务把 `MARKET_DATA_LIVE_DIR` 下的实时尾窗（见 [实时行情尾窗](../data/live-market.md)）叠加到完整 Parquet 历史之上：同 timestamp 以尾窗为准，尾窗缺失的完整历史分钟保留。文件变化会在 `MARKET_DATA_RELOAD_SECONDS`（默认 5 秒）内自动热加载，不需要重启服务。
+- 复盘页轮询 `/api/market/meta` 判断最新已收盘分钟，因此响应不应被代理或浏览器缓存；前端实时轮询使用 `cache: 'no-store'` 读取元数据，并跳过本地快照缓存。
 
 错误格式：
 
@@ -19,7 +24,7 @@
 
 ## GET `/api/market/meta`
 
-返回当前数据集信息，供页面初始化时间范围。
+返回指定币种的数据集信息，供页面初始化时间范围。可选查询参数 `symbol`，默认 `BTCUSD`；例如 `/api/market/meta?symbol=ETHUSD`。不同币种独立计算历史覆盖范围。
 
 ```json
 {
@@ -39,7 +44,7 @@
 
 | 参数 | 必填 | 默认值 | 规则 |
 | --- | --- | --- | --- |
-| `symbol` | 否 | `BTCUSD` | 仅 BTCUSD |
+| `symbol` | 否 | `BTCUSD` | 上述十种 USD 品种之一；对应历史文件必须已安装 |
 | `timeframe` | 否 | `1h` | 使用支持周期之一，大小写敏感 |
 | `from` | 否 | 数据开始 | Unix 秒 |
 | `to` | 否 | 数据结束后 | Unix 秒且大于 `from` |
