@@ -135,6 +135,11 @@ export interface ReplayProject {
   drawings: ReplayDrawing[]
   // Classic chart indicators, keyed by timeframe.
   indicators: ReplayIndicatorState
+  // Shared-data clocks. Project playback moves updatedAt every tick, so a
+  // separate timestamp per collection is what lets another device tell whether
+  // its drawings or indicators are newer than the copy in the server.
+  drawingsUpdatedAt?: string
+  indicatorsUpdatedAt?: string
   createdAt: string
   updatedAt: string
 }
@@ -492,6 +497,7 @@ export function reconcileReplayProject(project: ReplayProject, market: MarketMet
   const to = hasOverlap ? boundedTo : availableEnd
 
   if (from === project.from && to === project.to) return project
+  const timestamp = nowIso()
   return {
     ...project,
     from,
@@ -500,7 +506,8 @@ export function reconcileReplayProject(project: ReplayProject, market: MarketMet
     cursorTimestamp: undefined,
     trades: [],
     drawings: [],
-    updatedAt: nowIso(),
+    drawingsUpdatedAt: timestamp,
+    updatedAt: timestamp,
   }
 }
 
@@ -578,6 +585,8 @@ export function createReplayProjectFromDraft(
     trades: keepExistingState ? existing?.trades ?? [] : [],
     drawings: keepExistingState ? existing?.drawings ?? [] : [],
     indicators: keepExistingState ? normalizeReplayIndicators(existing?.indicators) : {},
+    drawingsUpdatedAt: keepExistingState ? existing?.drawingsUpdatedAt ?? timestamp : timestamp,
+    indicatorsUpdatedAt: keepExistingState ? existing?.indicatorsUpdatedAt ?? timestamp : timestamp,
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp,
   }
@@ -617,6 +626,12 @@ export function normalizeReplayProject(raw: unknown, allowDrawings = true): Repl
     : []
   const createdAt = typeof candidate.createdAt === 'string' ? candidate.createdAt : nowIso()
   const updatedAt = typeof candidate.updatedAt === 'string' ? candidate.updatedAt : createdAt
+  const drawingsUpdatedAt = typeof candidate.drawingsUpdatedAt === 'string'
+    ? candidate.drawingsUpdatedAt
+    : updatedAt
+  const indicatorsUpdatedAt = typeof candidate.indicatorsUpdatedAt === 'string'
+    ? candidate.indicatorsUpdatedAt
+    : updatedAt
 
   return {
     id: candidate.id,
@@ -632,6 +647,8 @@ export function normalizeReplayProject(raw: unknown, allowDrawings = true): Repl
     trades,
     drawings,
     indicators: normalizeReplayIndicators(candidate.indicators),
+    drawingsUpdatedAt,
+    indicatorsUpdatedAt,
     createdAt,
     updatedAt,
   }
@@ -914,8 +931,9 @@ export function sortReplayProjects(projects: ReplayProject[]): ReplayProject[] {
 // Two devices can replay the same project at the same time. Manual trades are
 // append-only and carry a stable id, so copies are unioned instead of replaced:
 // a slower device must never erase a trade the other device already recorded.
-// Drawings and every other field follow the newest copy because drawings can be
-// deleted and a union would resurrect them.
+// Drawings and indicators have their own clocks because playback moves the
+// project updatedAt every tick; the newer collection wins as a whole so that
+// deletions made on one device are not resurrected by a stale copy.
 export function mergeReplayProject(
   local: ReplayProject,
   remote: ReplayProject,
@@ -924,13 +942,38 @@ export function mergeReplayProject(
   const base = options.preferLocal || !projectIsNewer(remote, local) ? local : remote
   const other = base === local ? remote : local
   // A range or symbol change deliberately resets trades and drawings, so only
-  // union trade history while both copies still describe the same market range.
+  // merge shared state while both copies still describe the same market range.
   const sharedRange = local.from === remote.from
     && local.to === remote.to
     && local.symbol === remote.symbol
   if (!sharedRange) return base
+
   const trades = mergeManualTradeLists(base.trades, other.trades)
-  return trades === base.trades ? base : { ...base, trades }
+  const drawingsOwner = isFieldNewer(remote, local, 'drawings') ? remote : local
+  const indicatorsOwner = isFieldNewer(remote, local, 'indicators') ? remote : local
+  const changed = trades !== base.trades
+    || drawingsOwner.drawings !== base.drawings
+    || indicatorsOwner.indicators !== base.indicators
+  if (!changed) return base
+  return {
+    ...base,
+    trades,
+    drawings: drawingsOwner.drawings,
+    indicators: indicatorsOwner.indicators,
+    drawingsUpdatedAt: fieldUpdatedAt(drawingsOwner, 'drawings'),
+    indicatorsUpdatedAt: fieldUpdatedAt(indicatorsOwner, 'indicators'),
+  }
+}
+
+type SharedField = 'drawings' | 'indicators'
+
+function fieldUpdatedAt(project: ReplayProject, field: SharedField): string {
+  const value = field === 'drawings' ? project.drawingsUpdatedAt : project.indicatorsUpdatedAt
+  return value ?? project.updatedAt
+}
+
+function isFieldNewer(candidate: ReplayProject, reference: ReplayProject, field: SharedField): boolean {
+  return fieldUpdatedAt(candidate, field) > fieldUpdatedAt(reference, field)
 }
 
 export function mergeReplayProjectLists(

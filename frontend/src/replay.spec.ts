@@ -876,6 +876,77 @@ describe('cross-device project merge', () => {
       .toMatchObject({ cursorIndex: 3, name: 'Shared replay' })
   })
 
+  it('adopts newer drawings and indicators even when the local project clock is newer', () => {
+    const shared = project()
+    const webDrawing: ReplayDrawing = {
+      id: 'web-drawing',
+      tool: 'TrendLine',
+      points: [
+        { timestamp: shared.from + 60, price: 100 },
+        { timestamp: shared.from + 300, price: 110 },
+      ],
+      style: { color: '#facc15', width: 2, dashed: false, fill: null },
+    }
+    const webIndicators = { '1h': [{ name: 'MACD', params: { fast: 12 } }] }
+    const web = {
+      ...shared,
+      drawings: [webDrawing],
+      drawingsUpdatedAt: '2026-08-27T02:00:00Z',
+      indicators: webIndicators,
+      indicatorsUpdatedAt: '2026-08-27T02:00:00Z',
+      // Playback ran later on the phone; updatedAt alone must not hide web data.
+      updatedAt: '2026-08-27T01:00:00Z',
+    }
+    const phone = {
+      ...shared,
+      drawings: [],
+      drawingsUpdatedAt: '2026-08-27T01:00:00Z',
+      indicators: {},
+      indicatorsUpdatedAt: '2026-08-27T01:00:00Z',
+      cursorIndex: 42,
+      updatedAt: '2026-08-27T03:00:00Z',
+    }
+
+    const merged = mergeReplayProject(phone, web)
+    expect(merged.drawings).toEqual([webDrawing])
+    expect(merged.indicators).toEqual(webIndicators)
+    expect(merged.drawingsUpdatedAt).toBe('2026-08-27T02:00:00Z')
+    expect(merged.cursorIndex).toBe(42)
+  })
+
+  it('honors drawing and indicator deletions with a newer collection clock', () => {
+    const shared = project()
+    const older = {
+      ...shared,
+      drawings: [{
+        id: 'old-drawing',
+        tool: 'TrendLine' as const,
+        points: [
+          { timestamp: shared.from + 60, price: 100 },
+          { timestamp: shared.from + 300, price: 110 },
+        ],
+        style: { color: '#facc15', width: 2, dashed: false, fill: null },
+      }],
+      drawingsUpdatedAt: '2026-08-27T01:00:00Z',
+      indicators: { '1h': [{ name: 'MACD', params: {} }] },
+      indicatorsUpdatedAt: '2026-08-27T01:00:00Z',
+      updatedAt: '2026-08-27T01:00:00Z',
+    }
+    const cleared = {
+      ...shared,
+      drawings: [],
+      drawingsUpdatedAt: '2026-08-27T02:00:00Z',
+      indicators: {},
+      indicatorsUpdatedAt: '2026-08-27T02:00:00Z',
+      updatedAt: '2026-08-27T02:00:00Z',
+    }
+
+    expect(mergeReplayProject(cleared, older).drawings).toEqual([])
+    expect(mergeReplayProject(cleared, older).indicators).toEqual({})
+    expect(mergeReplayProject(older, cleared).drawings).toEqual([])
+    expect(mergeReplayProject(older, cleared).indicators).toEqual({})
+  })
+
   it('does not resurrect trades after a project range reset', () => {
     const shared = project()
     const remote = {

@@ -256,10 +256,12 @@ function setNotice(message: string) {
 function updateProjectDrawings(drawings: ReplayDrawing[]) {
   const project = activeProject.value
   if (!project) return
+  const timestamp = new Date().toISOString()
   updateProject({
     ...project,
     drawings,
-    updatedAt: new Date().toISOString(),
+    drawingsUpdatedAt: timestamp,
+    updatedAt: timestamp,
   })
   setNotice(t('app.drawingsSaved'))
 }
@@ -272,10 +274,12 @@ function updateProjectIndicators(payload: { timeframe: string; indicators: Repla
   const indicators = { ...project.indicators }
   if (payload.indicators.length) indicators[payload.timeframe] = payload.indicators
   else delete indicators[payload.timeframe]
+  const timestamp = new Date().toISOString()
   updateProject({
     ...project,
     indicators,
-    updatedAt: new Date().toISOString(),
+    indicatorsUpdatedAt: timestamp,
+    updatedAt: timestamp,
   })
 }
 
@@ -349,12 +353,28 @@ function projectSyncSignature(project: ReplayProject): string {
   return JSON.stringify(rest)
 }
 
-function applyServerProjects(remote: ReplayProject[]) {
+function applyServerProjects(remote: ReplayProject[], options: { preservePlayback?: boolean } = {}) {
   const remoteById = new Map(remote.map((project) => [project.id, project]))
+  const localById = new Map(projects.value.map((project) => [project.id, project]))
   const merged = mergeReplayProjectLists(projects.value, remote, {
-    // Never let a poll move the device the user is actively replaying, and keep
-    // edits that are still queued locally from being overwritten by an older copy.
-    preferLocal: (id) => id === activeProjectId.value || pendingProjectSaves.has(id),
+    // Edits still queued for upload must not be overwritten by an older copy.
+    preferLocal: (id) => pendingProjectSaves.has(id),
+  }).map((project) => {
+    const local = localById.get(project.id)
+    if (!options.preservePlayback || !local || project.id !== activeProjectId.value) return project
+    // Shared data (trades, drawings, indicators) follows the merge, but a poll
+    // must never move the playback position of the device the user is watching.
+    if (local.cursorIndex === project.cursorIndex
+      && local.cursorTimestamp === project.cursorTimestamp
+      && local.speed === project.speed) {
+      return project
+    }
+    return {
+      ...project,
+      cursorIndex: local.cursorIndex,
+      cursorTimestamp: local.cursorTimestamp,
+      speed: local.speed,
+    }
   })
   projects.value = merged
   saveReplayProjects(merged)
@@ -372,7 +392,7 @@ async function refreshServerProjects() {
   try {
     const remote = normalizeReplayProjectList(await listProjects())
     if (disposed) return
-    applyServerProjects(remote)
+    applyServerProjects(remote, { preservePlayback: true })
     syncError.value = ''
   } catch {
     // Offline or the service is unavailable: keep the local cache for this user.
