@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h, nextTick, onMounted, onUnmounted } from 'vue'
 import App from './App.vue'
-import { getMarketMetadata, getMarketSnapshot, listProjects, saveProject } from './api'
+import { deleteProject, getMarketMetadata, getMarketSnapshot, listProjects, saveProject } from './api'
 import { createSeedReplayProject, loadReplayProjects, replayWindowRange, saveActiveReplayProjectId, saveReplayProjects, timeframeStepSeconds, type ManualTrade } from './replay'
 import type { MarketMetadata, MarketSnapshot } from './types'
 
@@ -366,7 +366,7 @@ describe('workspace loading', () => {
     await flushPromises()
     expect(wrapper.find('.workspace-projects').exists()).toBe(true)
     expect(getMarketSnapshot).not.toHaveBeenCalled()
-    await wrapper.find('.project-item').trigger('click')
+    await wrapper.find('.project-select').trigger('click')
     await flushPromises()
     expect(getMarketSnapshot).toHaveBeenCalledTimes(1)
   })
@@ -536,6 +536,82 @@ describe('per-user project data', () => {
     wrapper = mount(App, { props: { userId: 'user_alice' } })
     await flushPromises()
     expect(savedProjects()).toContain('phone-trade')
+  })
+
+  it('deletes a saved project after inline confirmation and keeps the remaining ones', async () => {
+    const keep = { ...createSeedReplayProject(market), id: 'keep-project', name: '保留项目' }
+    const drop = { ...createSeedReplayProject(market), id: 'drop-project', name: '删除项目' }
+    vi.mocked(listProjects).mockResolvedValue([drop, keep])
+    vi.mocked(deleteProject).mockResolvedValue(undefined)
+    wrapper = mount(App, { props: { userId: 'user_alice' }, attachTo: document.body })
+    await flushPromises()
+    await wrapper.find('.project-delete').trigger('click')
+    await nextTick()
+    expect(wrapper.find('.project-item.confirming').text()).toContain('删除“删除项目”？')
+    expect(document.activeElement?.classList.contains('project-confirm-cancel')).toBe(true)
+    expect(deleteProject).not.toHaveBeenCalled()
+    await wrapper.find('.project-confirm-delete').trigger('click')
+    await flushPromises()
+    expect(deleteProject).toHaveBeenCalledWith('drop-project')
+    expect(wrapper.text()).not.toContain('删除项目')
+    expect(wrapper.text()).toContain('保留项目')
+    expect(savedProjects()).not.toContain('drop-project')
+  })
+
+  it('keeps the project when deletion is cancelled', async () => {
+    const project = { ...createSeedReplayProject(market), id: 'kept-project', name: '取消删除' }
+    vi.mocked(listProjects).mockResolvedValue([project])
+    wrapper = mount(App, { props: { userId: 'user_alice' }, attachTo: document.body })
+    await flushPromises()
+    await wrapper.find('.project-delete').trigger('click')
+    await nextTick()
+    await wrapper.find('.project-confirm-cancel').trigger('click')
+    await nextTick()
+    expect(deleteProject).not.toHaveBeenCalled()
+    expect(wrapper.find('.project-item.confirming').exists()).toBe(false)
+    expect(wrapper.text()).toContain('取消删除')
+    expect(document.activeElement?.classList.contains('project-select')).toBe(true)
+  })
+
+  it('cancels the inline confirmation with Escape', async () => {
+    const project = { ...createSeedReplayProject(market), id: 'kept-project', name: '键盘取消' }
+    vi.mocked(listProjects).mockResolvedValue([project])
+    wrapper = mount(App, { props: { userId: 'user_alice' } })
+    await flushPromises()
+    await wrapper.find('.project-delete').trigger('click')
+    await nextTick()
+    await wrapper.find('.project-confirm').trigger('keydown', { key: 'Escape' })
+    await nextTick()
+    expect(wrapper.find('.project-item.confirming').exists()).toBe(false)
+    expect(deleteProject).not.toHaveBeenCalled()
+  })
+
+  it('restores the project when the server delete fails', async () => {
+    const project = { ...createSeedReplayProject(market), id: 'offline-project', name: '离线项目' }
+    vi.mocked(listProjects).mockResolvedValue([project])
+    vi.mocked(deleteProject).mockRejectedValue(new Error('offline'))
+    wrapper = mount(App, { props: { userId: 'user_alice' } })
+    await flushPromises()
+    await wrapper.find('.project-delete').trigger('click')
+    await nextTick()
+    await wrapper.find('.project-confirm-delete').trigger('click')
+    await flushPromises()
+    expect(deleteProject).toHaveBeenCalledWith('offline-project')
+    expect(wrapper.text()).toContain('离线项目')
+    expect(wrapper.text()).toContain('删除失败，项目已恢复。')
+    expect(savedProjects()).toContain('offline-project')
+  })
+
+  it('deletes projects locally without a server call when signed out', async () => {
+    stored()
+    wrapper = mount(App)
+    await flushPromises()
+    await wrapper.find('.project-delete').trigger('click')
+    await nextTick()
+    await wrapper.find('.project-confirm-delete').trigger('click')
+    await flushPromises()
+    expect(deleteProject).not.toHaveBeenCalled()
+    expect(wrapper.find('.project-item').exists()).toBe(false)
   })
 })
 
