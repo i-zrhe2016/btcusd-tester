@@ -911,6 +911,61 @@ export function sortReplayProjects(projects: ReplayProject[]): ReplayProject[] {
   })
 }
 
+// Two devices can replay the same project at the same time. Manual trades are
+// append-only and carry a stable id, so copies are unioned instead of replaced:
+// a slower device must never erase a trade the other device already recorded.
+// Drawings and every other field follow the newest copy because drawings can be
+// deleted and a union would resurrect them.
+export function mergeReplayProject(
+  local: ReplayProject,
+  remote: ReplayProject,
+  options: { preferLocal?: boolean } = {},
+): ReplayProject {
+  const base = options.preferLocal || !projectIsNewer(remote, local) ? local : remote
+  const other = base === local ? remote : local
+  // A range or symbol change deliberately resets trades and drawings, so only
+  // union trade history while both copies still describe the same market range.
+  const sharedRange = local.from === remote.from
+    && local.to === remote.to
+    && local.symbol === remote.symbol
+  if (!sharedRange) return base
+  const trades = mergeManualTradeLists(base.trades, other.trades)
+  return trades === base.trades ? base : { ...base, trades }
+}
+
+export function mergeReplayProjectLists(
+  local: ReplayProject[],
+  remote: ReplayProject[],
+  options: { preferLocal?: (projectId: string) => boolean } = {},
+): ReplayProject[] {
+  const merged = new Map(local.map((project) => [project.id, project]))
+  for (const remoteProject of remote) {
+    const localProject = merged.get(remoteProject.id)
+    merged.set(
+      remoteProject.id,
+      localProject
+        ? mergeReplayProject(localProject, remoteProject, {
+          preferLocal: options.preferLocal?.(remoteProject.id) ?? false,
+        })
+        : remoteProject,
+    )
+  }
+  return sortReplayProjects([...merged.values()])
+}
+
+function projectIsNewer(candidate: ReplayProject, reference: ReplayProject): boolean {
+  const updated = candidate.updatedAt.localeCompare(reference.updatedAt)
+  if (updated !== 0) return updated > 0
+  return candidate.createdAt.localeCompare(reference.createdAt) > 0
+}
+
+function mergeManualTradeLists(base: ManualTrade[], other: ManualTrade[]): ManualTrade[] {
+  const known = new Set(base.map((trade) => trade.id))
+  const extras = other.filter((trade) => !known.has(trade.id))
+  if (!extras.length) return base
+  return sortManualTrades([...base, ...extras])
+}
+
 export function loadReplayProjects(storage: StorageLike | null = defaultStorage()): ReplayProject[] {
   if (!storage) return []
   const current = readStoredReplayProjects(storage, scopedStorageKey(PROJECTS_KEY), true)
