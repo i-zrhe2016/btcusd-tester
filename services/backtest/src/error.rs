@@ -11,7 +11,7 @@ pub enum ApiError {
     Unauthorized,
     #[error("invalid request: {0}")]
     BadRequest(String),
-    #[error("backtest {0} was not found")]
+    #[error("resource {0} was not found")]
     NotFound(String),
     #[error("market data request failed: {0}")]
     MarketData(String),

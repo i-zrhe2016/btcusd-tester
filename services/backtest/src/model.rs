@@ -387,6 +387,132 @@ pub struct ReplayProjectRecord {
     pub updated_at: DateTime<Utc>,
 }
 
+pub const FEEDBACK_CATEGORIES: [&str; 3] = ["bug", "idea", "other"];
+pub const MAX_FEEDBACK_TITLE_CHARS: usize = 120;
+pub const MAX_FEEDBACK_BODY_CHARS: usize = 4000;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FeedbackThreadRequest {
+    pub title: String,
+    pub body: String,
+    #[serde(default = "default_feedback_category")]
+    pub category: String,
+}
+
+fn default_feedback_category() -> String {
+    "bug".to_owned()
+}
+
+impl FeedbackThreadRequest {
+    pub fn validate(&self) -> Result<(), String> {
+        let title = self.title.trim();
+        if title.is_empty() || self.title.chars().count() > MAX_FEEDBACK_TITLE_CHARS {
+            return Err(format!(
+                "title must contain between 1 and {MAX_FEEDBACK_TITLE_CHARS} characters"
+            ));
+        }
+        if title.chars().any(|c| c == '\n' || c == '\r') {
+            return Err("title must be a single line".to_owned());
+        }
+        if !FEEDBACK_CATEGORIES.contains(&self.category.as_str()) {
+            return Err("category is not supported".to_owned());
+        }
+        validate_feedback_body(&self.body)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct FeedbackMessageRequest {
+    pub body: String,
+}
+
+impl FeedbackMessageRequest {
+    pub fn validate(&self) -> Result<(), String> {
+        validate_feedback_body(&self.body)
+    }
+}
+
+fn validate_feedback_body(body: &str) -> Result<(), String> {
+    if body.trim().is_empty() || body.chars().count() > MAX_FEEDBACK_BODY_CHARS {
+        return Err(format!(
+            "body must contain between 1 and {MAX_FEEDBACK_BODY_CHARS} characters"
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct FeedbackThreadRecord {
+    pub id: Uuid,
+    pub title: String,
+    pub category: String,
+    pub status: String,
+    pub author_code: String,
+    pub mine: bool,
+    pub message_count: i64,
+    pub last_body: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct FeedbackMessageRecord {
+    pub id: Uuid,
+    pub author: String,
+    pub body: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeedbackThreadDetail {
+    pub thread: FeedbackThreadRecord,
+    pub messages: Vec<FeedbackMessageRecord>,
+}
+
+#[cfg(test)]
+mod feedback_tests {
+    use super::*;
+
+    fn thread(title: &str, body: &str, category: &str) -> FeedbackThreadRequest {
+        FeedbackThreadRequest {
+            title: title.to_owned(),
+            body: body.to_owned(),
+            category: category.to_owned(),
+        }
+    }
+
+    #[test]
+    fn accepts_a_normal_bug_report() {
+        assert!(thread("图表卡住", "切换到 5 分钟周期后不再播放。", "bug")
+            .validate()
+            .is_ok());
+    }
+
+    #[test]
+    fn rejects_empty_or_oversized_fields() {
+        assert!(thread("   ", "body", "bug").validate().is_err());
+        assert!(thread("title", " \n ", "idea").validate().is_err());
+        assert!(thread(&"t".repeat(MAX_FEEDBACK_TITLE_CHARS + 1), "body", "bug")
+            .validate()
+            .is_err());
+        assert!(thread("title", &"b".repeat(MAX_FEEDBACK_BODY_CHARS + 1), "bug")
+            .validate()
+            .is_err());
+        assert!(thread("two\nlines", "body", "bug").validate().is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_categories() {
+        assert!(thread("title", "body", "praise").validate().is_err());
+        for category in FEEDBACK_CATEGORIES {
+            assert!(thread("title", "body", category).validate().is_ok());
+        }
+    }
+}
+
 #[cfg(test)]
 mod replay_project_tests {
     use super::*;

@@ -3,7 +3,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::model::{
-    BacktestRecord, ReplayProjectRecord, ReplayProjectRequest, StrategyConfigRecord,
+    BacktestRecord, FeedbackMessageRecord, FeedbackThreadRecord, FeedbackThreadRequest,
+    ReplayProjectRecord, ReplayProjectRequest, StrategyConfigRecord,
 };
 
 pub async fn insert_backtest(
@@ -244,6 +245,142 @@ pub async fn delete_replay_project(
         .execute(pool)
         .await?;
     Ok(result.rows_affected())
+}
+
+const FEEDBACK_THREAD_SELECT: &str = r#"
+    SELECT t.id, t.title, t.category, t.status,
+           COALESCE(right(u.clerk_user_id, 4), left(t.user_id::text, 4)) AS author_code,
+           (t.user_id = $1) AS mine,
+           stats.message_count,
+           COALESCE(stats.last_body, '') AS last_body,
+           t.created_at, t.updated_at
+    FROM feedback_threads t
+    JOIN users u ON u.id = t.user_id
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*) AS message_count,
+               (ARRAY_AGG(m.body ORDER BY m.created_at DESC, m.id DESC))[1] AS last_body
+        FROM feedback_messages m
+        WHERE m.thread_id = t.id
+    ) stats ON TRUE
+"#;
+
+pub async fn list_feedback_threads(
+    pool: &PgPool,
+    viewer_id: Uuid,
+    limit: i64,
+) -> Result<Vec<FeedbackThreadRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FeedbackThreadRecord>(&format!(
+        "{FEEDBACK_THREAD_SELECT} ORDER BY t.updated_at DESC LIMIT $2"
+    ))
+    .bind(viewer_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}
+
+async fn find_feedback_thread_in<'e, E>(
+    executor: E,
+    viewer_id: Uuid,
+    thread_id: Uuid,
+) -> Result<Option<FeedbackThreadRecord>, sqlx::Error>
+where
+    E: sqlx::PgExecutor<'e>,
+{
+    sqlx::query_as::<_, FeedbackThreadRecord>(&format!(
+        "{FEEDBACK_THREAD_SELECT} WHERE t.id = $2"
+    ))
+    .bind(viewer_id)
+    .bind(thread_id)
+    .fetch_optional(executor)
+    .await
+}
+
+pub async fn find_feedback_thread(
+    pool: &PgPool,
+    viewer_id: Uuid,
+    thread_id: Uuid,
+) -> Result<Option<FeedbackThreadRecord>, sqlx::Error> {
+    find_feedback_thread_in(pool, viewer_id, thread_id).await
+}
+
+pub async fn create_feedback_thread(
+    pool: &PgPool,
+    user_id: Uuid,
+    request: &FeedbackThreadRequest,
+) -> Result<FeedbackThreadRecord, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let id: Uuid = sqlx::query_scalar(
+        "INSERT INTO feedback_threads (user_id, title, category) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(user_id)
+    .bind(request.title.trim())
+    .bind(&request.category)
+    .fetch_one(&mut *tx)
+    .await?;
+    sqlx::query("INSERT INTO feedback_messages (thread_id, author, body) VALUES ($1, 'user', $2)")
+        .bind(id)
+        .bind(request.body.trim())
+        .execute(&mut *tx)
+        .await?;
+    let record = find_feedback_thread_in(&mut *tx, user_id, id)
+        .await?
+        .ok_or(sqlx::Error::RowNotFound)?;
+    tx.commit().await?;
+    Ok(record)
+}
+
+pub async fn list_feedback_messages(
+    pool: &PgPool,
+    thread_id: Uuid,
+) -> Result<Vec<FeedbackMessageRecord>, sqlx::Error> {
+    sqlx::query_as::<_, FeedbackMessageRecord>(
+        r#"
+        SELECT id, author, body, created_at
+        FROM feedback_messages
+        WHERE thread_id = $1
+        ORDER BY created_at ASC, id ASC
+        "#,
+    )
+    .bind(thread_id)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn add_feedback_message(
+    pool: &PgPool,
+    user_id: Uuid,
+    thread_id: Uuid,
+    body: &str,
+) -> Result<Option<FeedbackMessageRecord>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    let owned: Option<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM feedback_threads WHERE id = $1 AND user_id = $2 FOR UPDATE",
+    )
+    .bind(thread_id)
+    .bind(user_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+    if owned.is_none() {
+        tx.rollback().await?;
+        return Ok(None);
+    }
+    let message = sqlx::query_as::<_, FeedbackMessageRecord>(
+        r#"
+        INSERT INTO feedback_messages (thread_id, author, body)
+        VALUES ($1, 'user', $2)
+        RETURNING id, author, body, created_at
+        "#,
+    )
+    .bind(thread_id)
+    .bind(body.trim())
+    .fetch_one(&mut *tx)
+    .await?;
+    sqlx::query("UPDATE feedback_threads SET updated_at = now() WHERE id = $1")
+        .bind(thread_id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(Some(message))
 }
 
 pub async fn resolve_clerk_user(pool: &PgPool, clerk_user_id: &str) -> Result<Uuid, sqlx::Error> {

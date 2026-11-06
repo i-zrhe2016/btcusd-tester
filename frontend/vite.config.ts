@@ -47,6 +47,10 @@ export default defineConfig(async () => {
           target: backtestAvailable ? 'http://127.0.0.1:8082' : apiGatewayTarget,
           secure: false,
         },
+        '/api/feedback': {
+          target: backtestAvailable ? 'http://127.0.0.1:8082' : apiGatewayTarget,
+          secure: false,
+        },
       },
     },
     test: {
