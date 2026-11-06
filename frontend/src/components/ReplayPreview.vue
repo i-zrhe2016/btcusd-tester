@@ -105,17 +105,16 @@ const lastClose = computed(() => visible.value.length ? visible.value[visible.va
 const lastCloseY = computed(() => (lastClose.value === null ? 0 : yFor(lastClose.value)))
 const priceTagY = computed(() => Math.min(plot.value.y + plot.value.height - 10, Math.max(plot.value.y + 10, lastCloseY.value)))
 
-const TRADE_GAP = 6
 const tradeMarks = computed(() => PREVIEW_TRADES
   .filter((trade) => trade.index < cursor.value)
   .map((trade) => {
     const candle = series.value[trade.index]
     const buy = trade.side === 'buy'
-    const y = buy ? yFor(candle.h) - TRADE_GAP : yFor(candle.l) + TRADE_GAP
+    const y = buy ? yFor(candle.h) : yFor(candle.l)
     return {
       ...trade,
       x: xFor(trade.index),
-      y: Math.min(plot.value.y + plot.value.height - 4, Math.max(plot.value.y + 4, y)),
+      y,
       buy,
     }
   }))
