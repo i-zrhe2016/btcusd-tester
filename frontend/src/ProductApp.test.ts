@@ -94,13 +94,13 @@ describe('signed-in landing navigation', () => {
     expect(workspace.attributes('data-initial-view')).toBe('projects')
   })
 
-  it('opens the project library when a signed-in user clicks 开始练习', async () => {
+  it('opens the project library when a signed-in user clicks 开始模拟交易', async () => {
     clerk.isSignedIn.value = true
     clerk.userId.value = 'user_1'
     mountApp()
     await flushPromises()
 
-    await clickText('a', '开始练习')
+    await clickText('a', '开始模拟交易')
 
     const workspace = wrapper!.find('[data-testid="workspace"]')
     expect(workspace.exists()).toBe(true)
@@ -113,7 +113,7 @@ describe('signed-in landing navigation', () => {
     mountApp()
     await flushPromises()
 
-    await clickText('a', '开始练习')
+    await clickText('a', '开始模拟交易')
 
     expect(wrapper!.find('[data-testid="workspace"] [data-testid="user-button"]').exists()).toBe(true)
   })
