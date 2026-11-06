@@ -3,6 +3,12 @@ import { getAuthToken } from './auth'
 import { t } from './i18n'
 import type { ReplayProject } from './replay'
 import type {
+  FeedbackDraft,
+  FeedbackMessage,
+  FeedbackThread,
+  FeedbackThreadDetail,
+} from './feedback'
+import type {
   MarketMetadata,
   MarketSnapshot,
 } from './types'
@@ -50,6 +56,28 @@ export function saveProject(project: ReplayProject, options: { keepalive?: boole
 
 export function deleteProject(id: string): Promise<void> {
   return requestJson<void>(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export function listFeedback(): Promise<FeedbackThread[]> {
+  return requestJson<FeedbackThread[]>('/api/feedback')
+}
+
+export function createFeedback(draft: FeedbackDraft): Promise<FeedbackThread> {
+  return requestJson<FeedbackThread>('/api/feedback', {
+    method: 'POST',
+    body: JSON.stringify(draft),
+  })
+}
+
+export function getFeedback(id: string): Promise<FeedbackThreadDetail> {
+  return requestJson<FeedbackThreadDetail>(`/api/feedback/${encodeURIComponent(id)}`)
+}
+
+export function replyFeedback(id: string, body: string): Promise<FeedbackMessage> {
+  return requestJson<FeedbackMessage>(`/api/feedback/${encodeURIComponent(id)}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  })
 }
 
 export function getPaymentStatus(order: string): Promise<{ status: 'paid' | 'pending' }> {

@@ -135,6 +135,49 @@ M1 只提供 `stoch-cross-long`：
 
 删除当前用户的项目并返回 `204`；不存在或属于其他用户时同样返回 `204`，避免泄露项目是否存在。
 
+## 反馈
+
+反馈区 (`/feedback`) 的接口同样要求 Clerk Bearer JWT。所有登录用户可以读取完整反馈列表与每条对话；只有提交者可以向自己的反馈追加消息，服务端以认证用户校验所有权。
+
+### GET `/api/feedback?limit=50`
+
+按 `updated_at` 倒序返回全部反馈（`limit` 限制在 `1..100`）。`authorCode` 取自 Clerk subject 的后 4 位，用于匿名区分提交者；`mine` 表示当前用户是否为提交者。
+
+```json
+[{
+  "id": "3f2a1c4e-8b7d-4a61-9c2e-51d0b8f4a712",
+  "title": "切换到 5 分钟周期后回放停在原地",
+  "category": "bug",
+  "status": "in_progress",
+  "authorCode": "a7c2",
+  "mine": true,
+  "messageCount": 3,
+  "lastBody": "清空缓存并重新载入项目后恢复正常……",
+  "createdAt": "2026-11-05T08:12:00Z",
+  "updatedAt": "2026-11-06T03:41:00Z"
+}]
+```
+
+### POST `/api/feedback`
+
+```json
+{ "title": "切换到 5 分钟周期后回放停在原地", "body": "复现步骤……", "category": "bug" }
+```
+
+`title` 为单行 `1..120` 字符；`body` 为 `1..4000` 字符；`category` 取 `bug`、`idea`、`other`，缺省为 `bug`。创建线程与首条消息在同一事务内完成，返回 `201` 与列表同结构记录。
+
+### GET `/api/feedback/{id}`
+
+返回 `{ thread, messages }`。`messages` 按时间正序，`author` 为 `user` 或 `team`（开发者回复由运维写入）。不存在时返回 `404`。
+
+### POST `/api/feedback/{id}/messages`
+
+```json
+{ "body": "补充信息……" }
+```
+
+仅提交者可追加，返回 `201` 与消息记录；线程不存在或不属于当前用户时返回 `404`。状态 `open/in_progress/resolved` 由运维更新，前端只展示。
+
 ## 失败语义
 
 - 写入初始记录后，状态立即为 `running`。

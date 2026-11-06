@@ -8,14 +8,15 @@ mod model;
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
     http::{header, HeaderValue, Method, StatusCode},
-    routing::{get, put},
+    routing::{get, post, put},
     Extension, Json, Router,
 };
 use config::Config;
 use error::ApiError;
 use model::{
-    BacktestRecord, BacktestRequest, MarketSnapshot, ReplayProjectRecord, ReplayProjectRequest,
-    StrategyConfigRecord, StrategyConfigRequest,
+    BacktestRecord, BacktestRequest, FeedbackMessageRecord, FeedbackMessageRequest,
+    FeedbackThreadDetail, FeedbackThreadRecord, FeedbackThreadRequest, MarketSnapshot,
+    ReplayProjectRecord, ReplayProjectRequest, StrategyConfigRecord, StrategyConfigRequest,
 };
 use serde::Deserialize;
 use sqlx::{postgres::PgPoolOptions, PgPool};
@@ -81,6 +82,9 @@ fn router(state: AppState) -> Router {
         .route("/api/configs", get(list_configs).post(create_config))
         .route("/api/projects", get(list_projects))
         .route("/api/projects/{id}", put(upsert_project).delete(delete_project))
+        .route("/api/feedback", get(list_feedback).post(create_feedback))
+        .route("/api/feedback/{id}", get(get_feedback))
+        .route("/api/feedback/{id}/messages", post(reply_feedback))
         .layer(DefaultBodyLimit::max(1024 * 1024))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), auth::authenticate));
     Router::new()
@@ -230,6 +234,54 @@ async fn delete_project(
     }
     db::delete_replay_project(&state.pool, user_id, &id).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn list_feedback(
+    Extension(user_id): Extension<Uuid>,
+    State(state): State<AppState>,
+    Query(query): Query<ListQuery>,
+) -> Result<Json<Vec<FeedbackThreadRecord>>, ApiError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 100);
+    Ok(Json(
+        db::list_feedback_threads(&state.pool, user_id, limit).await?,
+    ))
+}
+
+async fn create_feedback(
+    Extension(user_id): Extension<Uuid>,
+    State(state): State<AppState>,
+    Json(request): Json<FeedbackThreadRequest>,
+) -> Result<(StatusCode, Json<FeedbackThreadRecord>), ApiError> {
+    request.validate().map_err(ApiError::BadRequest)?;
+    let record = db::create_feedback_thread(&state.pool, user_id, &request).await?;
+    Ok((StatusCode::CREATED, Json(record)))
+}
+
+async fn get_feedback(
+    Extension(user_id): Extension<Uuid>,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<FeedbackThreadDetail>, ApiError> {
+    let thread = db::find_feedback_thread(&state.pool, user_id, id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound(id.to_string()))?;
+    let messages = db::list_feedback_messages(&state.pool, id).await?;
+    Ok(Json(FeedbackThreadDetail { thread, messages }))
+}
+
+async fn reply_feedback(
+    Extension(user_id): Extension<Uuid>,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Json(request): Json<FeedbackMessageRequest>,
+) -> Result<(StatusCode, Json<FeedbackMessageRecord>), ApiError> {
+    request.validate().map_err(ApiError::BadRequest)?;
+    // Only the author may append to a thread; hiding other threads' reply form
+    // is a convenience, this check is the boundary.
+    match db::add_feedback_message(&state.pool, user_id, id, &request.body).await? {
+        Some(message) => Ok((StatusCode::CREATED, Json(message))),
+        None => Err(ApiError::NotFound(id.to_string())),
+    }
 }
 
 async fn shutdown_signal() {

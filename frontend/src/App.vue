@@ -4,6 +4,7 @@ import {
   FolderOpen,
   FolderPlus,
   Maximize2,
+  MessageSquare,
   Minimize2,
   Pause,
   Play,
@@ -1517,6 +1518,10 @@ onBeforeUnmount(() => {
         </template>
 
         <LanguageSwitcher />
+        <a class="topbar-action min-h-9 inline-flex items-center gap-1.5 rounded-[9px] text-[length:12.5px] font-bold whitespace-nowrap" href="/feedback" :aria-label="t('feedback.nav')">
+          <MessageSquare :size="15" aria-hidden="true" />
+          <span class="topbar-action-label">{{ t('feedback.nav') }}</span>
+        </a>
         <button class="topbar-action min-h-9 inline-flex items-center gap-1.5 rounded-[9px] text-[length:12.5px] font-bold whitespace-nowrap" type="button" :aria-label="t('app.settings')" @click="workspaceSettings?.open('settings')"><SlidersHorizontal :size="15" aria-hidden="true" /><span class="topbar-action-label">{{ t('app.settings') }}</span></button>
 
         <div v-if="$slots['topbar-end']" class="topbar-user">

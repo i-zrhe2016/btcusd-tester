@@ -24,7 +24,8 @@
 
 @layer base {
   .landing,
-  .gate {
+  .gate,
+  .feedback {
     --paper: #faf7f2;
     --paper-soft: #f3ece2;
     --paper-raise: #fffdf9;
@@ -52,12 +53,14 @@
   }
 
   body:has(.landing),
-  body:has(.gate) {
+  body:has(.gate),
+  body:has(.feedback) {
     background: #faf7f2;
   }
 
   body:has(.landing) .skip-link,
-  body:has(.gate) .skip-link {
+  body:has(.gate) .skip-link,
+  body:has(.feedback) .skip-link {
     background: #342b25;
     color: #faf7f2;
   }
@@ -76,7 +79,8 @@
   }
 
   .landing :focus-visible,
-  .gate :focus-visible {
+  .gate :focus-visible,
+  .feedback :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
   }

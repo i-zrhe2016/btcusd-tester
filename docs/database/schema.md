@@ -67,6 +67,29 @@ M1 迁移写入固定本地访客。邮箱 `guest@local.invalid` 不用于登录
 
 索引 `(user_id, updated_at DESC)` 支持项目库列表。所有读写都以认证中间件解析出的 `user_id` 过滤；联合主键允许不同用户的客户端 ID 相同而互不影响。单项目请求体上限为 1 MB（Nginx）并在应用层再次限制为 768 KB。
 
+## `feedback_threads` / `feedback_messages`
+
+反馈区数据（迁移 `0005_feedback.sql`）。线程对所有登录用户可见，只有作者可以追加消息；开发者回复以 `author = 'team'` 由运维写入。
+
+| `feedback_threads` | 类型 | 约束 |
+| --- | --- | --- |
+| `id` | UUID | 主键 |
+| `user_id` | UUID | 外键到 `users`，级联删除 |
+| `title` | TEXT | `1..120` 字符，单行 |
+| `category` | TEXT | `bug/idea/other` |
+| `status` | TEXT | `open/in_progress/resolved` |
+| `created_at` / `updated_at` | TIMESTAMPTZ | 非空；追加消息刷新 `updated_at` |
+
+| `feedback_messages` | 类型 | 约束 |
+| --- | --- | --- |
+| `id` | UUID | 主键 |
+| `thread_id` | UUID | 外键到 `feedback_threads`，级联删除 |
+| `author` | TEXT | `user/team` |
+| `body` | TEXT | `1..4000` 字符 |
+| `created_at` | TIMESTAMPTZ | 非空 |
+
+索引 `feedback_threads(updated_at DESC)` 支持列表，`feedback_messages(thread_id, created_at)` 支持对话读取。`author_code` 不落库，读取时取 Clerk subject 后 4 位。
+
 ## 所有权与迁移
 
 - 只有回测服务运行 SQL 迁移并访问这些表。
