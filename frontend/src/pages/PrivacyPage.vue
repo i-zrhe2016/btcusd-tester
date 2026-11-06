@@ -83,6 +83,7 @@ onBeforeUnmount(() => {
         <nav class="privacy-nav" :aria-label="copy.nav.label">
           <a href="/">{{ copy.nav.home }}</a>
           <a href="/blog">{{ copy.nav.articles }}</a>
+          <a href="/terms">{{ locale === 'zh' ? '服务条款' : 'Terms' }}</a>
           <a href="/privacy" aria-current="page">{{ copy.nav.privacy }}</a>
         </nav>
         <LanguageSwitcher />
@@ -212,6 +213,7 @@ onBeforeUnmount(() => {
         <div class="footer-links">
           <a href="/">{{ copy.footer.home }}</a>
           <a href="/blog">{{ copy.footer.articles }}</a>
+          <a href="/terms">{{ locale === 'zh' ? '服务条款' : 'Terms' }}</a>
           <a href="/privacy" aria-current="page">{{ copy.footer.privacy }}</a>
           <a :href="`mailto:${PRIVACY_EMAIL}`">{{ copy.footer.contact }}</a>
         </div>

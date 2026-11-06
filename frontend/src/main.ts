@@ -7,6 +7,8 @@ if (path === '/blog' || path.startsWith('/blog/')) {
   import('./pages/BlogPage.vue').then(({ default: BlogPage }) => createApp(BlogPage).mount('#app'))
 } else if (path === '/privacy') {
   import('./pages/PrivacyPage.vue').then(({ default: PrivacyPage }) => createApp(PrivacyPage).mount('#app'))
+} else if (path === '/terms') {
+  import('./pages/TermsPage.vue').then(({ default: TermsPage }) => createApp(TermsPage).mount('#app'))
 } else {
   void import('./bootstrap')
 }
