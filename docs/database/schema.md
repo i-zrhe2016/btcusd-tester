@@ -69,7 +69,7 @@ M1 迁移写入固定本地访客。邮箱 `guest@local.invalid` 不用于登录
 
 ## `feedback_threads` / `feedback_messages`
 
-反馈区数据（迁移 `0005_feedback.sql`）。线程对所有登录用户可见，只有作者可以追加消息；开发者回复以 `author = 'team'` 由运维写入。
+反馈区数据（迁移 `0006_feedback.sql`）。线程对所有登录用户可见，只有作者可以追加消息；开发者回复以 `author = 'team'` 由运维写入。
 
 | `feedback_threads` | 类型 | 约束 |
 | --- | --- | --- |
