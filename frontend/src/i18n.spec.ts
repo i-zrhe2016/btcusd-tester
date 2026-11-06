@@ -31,7 +31,7 @@ describe('Chinese and English support', () => {
     setLocale('en')
     expect(locale.value).toBe('en')
     expect(document.documentElement.lang).toBe('en')
-    expect(document.title).toBe('Crypto Trading Simulator with Market Replay | grailab')
+    expect(document.title).toBe('grailab · Market replay and trading practice | Crypto Trading Simulator')
     expect(t('app.paneN', { n: 2 })).toBe('Pane 2')
     expect(timeframeLabel('1h')).toBe('1h')
   })
