@@ -104,11 +104,14 @@ class DeploymentTests(unittest.TestCase):
         self.assertFalse((self.root / "commands").exists())
 
     def test_workflow_rejects_missing_or_stale_revision(self):
-        workflow = (DEPLOYMENT.parent / ".github/workflows/ci-cd.yml").read_text()
-        command = textwrap.dedent(workflow.split("      - name: Deploy and verify\n        run: |\n", 1)[1])
+        command = (DEPLOYMENT / "deploy-ci.sh").read_text()
+        self.env.update(GITHUB_RUN_ID="123", GITHUB_RUN_ATTEMPT="1")
+        self.tool("sleep", "exit 0")
+        self.tool("timeout", 'shift; exec "$@"')
         self.tool("tailscale", '''
             case "$*" in
               *'cat /opt/btcusd-tester/.deployed-revision'*) printf '%s' "${TEST_REVISION:-}" ;;
+              *'if test -f '*) printf '0\\n' ;;
             esac
         ''')
         for revision in ("", "b" * 40, REVISION):
@@ -120,6 +123,99 @@ class DeploymentTests(unittest.TestCase):
                 else:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn("Deployment revision mismatch", result.stderr)
+
+    def run_ci(self, scenario):
+        self.env.update(GITHUB_RUN_ID="123", GITHUB_RUN_ATTEMPT="1",
+                        TEST_SCENARIO=scenario, TEST_COUNTER=str(self.root / "counter"))
+        self.tool("sleep", "exit 0")
+        self.tool("timeout", 'shift; exec "$@"')
+        self.tool("tailscale", '''
+            printf '%s\\n' "$*" >> "$TEST_LOG"
+            case "$*" in
+              *'systemd-run '*)
+                if [ "$TEST_SCENARIO" = start_disconnect ] && ! test -f "$TEST_COUNTER"; then
+                  touch "$TEST_COUNTER"; exit 255
+                fi ;;
+              *'if test -f '*)
+                if [ "$TEST_SCENARIO" = status_disconnect ] && ! test -f "$TEST_COUNTER"; then
+                  touch "$TEST_COUNTER"; exit 255
+                fi
+                if [ "$TEST_SCENARIO" = failure ]; then printf '42\\n'; else printf '0\\n'; fi ;;
+              *'cat /opt/btcusd-tester/.deployed-revision'*) printf '%s\\n' "$GITHUB_SHA" ;;
+              *'output.log'*) printf 'remote build diagnostic\\n' ;;
+            esac
+        ''')
+        command = (DEPLOYMENT / "deploy-ci.sh").read_text()
+        if scenario == "timeout":
+            command = command.replace("SECONDS + 1800", "SECONDS - 1")
+        return subprocess.run(["bash", "-e", "-c", command], env=self.env,
+                              capture_output=True, text=True, timeout=15)
+
+    def test_ci_recovers_disconnect_during_start_and_status(self):
+        for scenario in ("start_disconnect", "status_disconnect"):
+            with self.subTest(scenario=scenario):
+                (self.root / "counter").unlink(missing_ok=True)
+                result = self.run_ci(scenario)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"Verified deployment {REVISION}", result.stdout)
+                self.assertIn("remote build diagnostic", result.stdout)
+                self.assertIn("reconnecting", result.stderr)
+
+    def test_ci_reports_remote_failure_with_diagnostics(self):
+        result = self.run_ci("failure")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Remote deployment failed (exit code 42)", result.stderr)
+        self.assertIn("remote build diagnostic", result.stdout)
+        self.assertNotIn("Verified deployment", result.stdout)
+
+    def test_remote_start_is_idempotent_after_lost_acknowledgement(self):
+        state = self.root / "remote-state"
+        self.env.update(GITHUB_RUN_ID="123", GITHUB_RUN_ATTEMPT="1",
+                        TEST_STATE=str(state), TEST_COUNTER=str(self.root / "unit-loaded"))
+        self.tool("timeout", 'shift; exec "$@"')
+        self.tool("sleep", "exit 0")
+        self.tool("systemctl", '''
+            if test -f "$TEST_COUNTER"; then printf 'loaded\\n'; else printf 'not-found\\n'; fi
+        ''')
+        self.tool("systemd-run", '''
+            touch "$TEST_COUNTER"
+            printf 'started\\n' >> "$TEST_LOG"
+            while [ "$1" != /bin/bash ]; do shift; done
+            "$@"
+        ''')
+        self.tool("tar", '''
+            printf 'printf "build finished\\\\n"; exit 0\\n'
+        ''')
+        self.tool("tailscale", '''
+            command=$3
+            case "$command" in
+              'cat /opt/btcusd-tester/.deployed-revision') printf '%s\\n' "$GITHUB_SHA" ;;
+              *)
+                bash -c "$command"
+                case "$command" in
+                  *systemd-run*)
+                    if ! test -f "$TEST_STATE/ack-lost"; then
+                      touch "$TEST_STATE/ack-lost"; exit 255
+                    fi ;;
+                esac ;;
+            esac
+        ''')
+        command = (DEPLOYMENT / "deploy-ci.sh").read_text()
+        command = command.replace('/var/log/btcusd-deploy/$run', str(state))
+        result = subprocess.run(["bash", "-e", "-c", command], env=self.env,
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "commands").read_text(), "started\n")
+        self.assertEqual((state / "exit-code").read_text(), "0\n")
+        self.assertEqual((state / "output.log").read_text(), "build finished\n")
+        self.assertIn(f"Verified deployment {REVISION}", result.stdout)
+
+    def test_ci_timeout_reports_remote_task_and_log_location(self):
+        result = self.run_ci("timeout")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("remote task may still be running", result.stderr)
+        self.assertIn("btcusd-deploy-123-1", result.stderr)
+        self.assertIn("/var/log/btcusd-deploy/123-1/output.log", result.stderr)
 
 
 if __name__ == "__main__":
