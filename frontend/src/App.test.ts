@@ -323,6 +323,18 @@ describe('workspace loading', () => {
     expect(wrapper.find('.workspace-replay').exists()).toBe(false)
   })
 
+  it('offers every replay symbol as a selectable tile instead of a typed code', async () => {
+    wrapper = mount(App)
+    await flushPromises()
+    const radios = wrapper.findAll('input[name="project-symbol"]')
+    expect(radios.map((radio) => radio.attributes('value'))).toEqual(['BTCUSD', 'ETHUSD', 'BNBUSD', 'XRPUSD', 'SOLUSD', 'TRXUSD', 'ZECUSD', 'HYPEUSD', 'DOGEUSD', 'XMRUSD'])
+    expect((radios[0]!.element as HTMLInputElement).checked).toBe(true)
+    expect(wrapper.find('.symbol-field input[type="text"]').exists()).toBe(false)
+    await radios[1]!.setValue()
+    expect(wrapper.find('.symbol-option.selected').text()).toContain('ETH')
+    expect(wrapper.find('.symbol-option.selected').text()).toContain('Ethereum')
+  })
+
   it('creates the default project without fetching a snapshot in the library', async () => {
     wrapper = mount(App)
     await flushPromises()

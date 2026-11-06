@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import {
+  Check,
   FolderOpen,
   FolderPlus,
   Maximize2,
@@ -23,6 +24,7 @@ import TimeframeSwitcher from './components/TimeframeSwitcher.vue'
 import UtcDateTimePicker from './components/UtcDateTimePicker.vue'
 import WorkspaceSettings from './components/WorkspaceSettings.vue'
 import { t, timeframeLabel, TIMEFRAMES } from './i18n'
+import { CRYPTO_MARKETS } from './symbols'
 import { loadShortcuts, shortcutActions, shortcutStorageKey, type ShortcutBindings } from './shortcuts'
 import { hasStorageUser, scopedStorageKey, setStorageUser } from './userStorage'
 import { stochVisibilityKey } from './stoch'
@@ -1586,19 +1588,32 @@ onBeforeUnmount(() => {
                 {{ t('app.projectName') }}
                 <input v-model="projectDraft.name" type="text" maxlength="120" autocomplete="off" />
               </label>
-              <div class="field-grid two grid gap-2.5">
-                <label>
-                  {{ t('app.symbol') }}
-                  <input v-model="projectDraft.symbol" type="text" autocomplete="off" />
-                </label>
-                <label>
-                  {{ t('app.timeframe') }}
-                  <select v-model="projectDraft.timeframe">
-                    <option v-for="timeframe in timeframeOptions" :key="timeframe" :value="timeframe">
-                      {{ timeframeLabels[timeframe] ?? timeframe }}
-                    </option>
-                  </select>
-                </label>
+              <div class="symbol-field" role="radiogroup" aria-labelledby="project-symbol-label">
+                <div class="symbol-field-head">
+                  <span id="project-symbol-label">{{ t('app.symbol') }}</span>
+                  <span class="symbol-quote">{{ t('app.symbolQuote') }}</span>
+                </div>
+                <div class="symbol-grid">
+                  <label
+                    v-for="market in CRYPTO_MARKETS"
+                    :key="market.symbol"
+                    class="symbol-option"
+                    :class="{ selected: projectDraft.symbol === market.symbol }"
+                  >
+                    <input
+                      v-model="projectDraft.symbol"
+                      class="symbol-radio sr-only"
+                      type="radio"
+                      name="project-symbol"
+                      :value="market.symbol"
+                    />
+                    <span class="symbol-copy">
+                      <span class="symbol-base">{{ market.symbol.replace('USD', '') }}</span>
+                      <span class="symbol-name">{{ market.name }}</span>
+                    </span>
+                    <Check class="symbol-check" :size="14" :stroke-width="2.6" aria-hidden="true" />
+                  </label>
+                </div>
               </div>
               <div class="field-grid two grid gap-2.5">
                 <label>
@@ -1611,15 +1626,22 @@ onBeforeUnmount(() => {
                 </label>
               </div>
               <p v-if="projectRangeDuration" class="m-0 -mt-1 text-[color:var(--text-dim)] text-[length:11px] leading-[1.4] [font-variant-numeric:tabular-nums]">{{ projectRangeDuration }}</p>
-              <div class="field-grid two speed-field grid gap-2.5 items-end">
+              <div class="field-grid two grid gap-2.5">
                 <label>
-                  {{ t('app.playbackSpeed') }}
+                  {{ t('app.timeframe') }}
+                  <select v-model="projectDraft.timeframe">
+                    <option v-for="timeframe in timeframeOptions" :key="timeframe" :value="timeframe">
+                      {{ timeframeLabels[timeframe] ?? timeframe }}
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  <span class="field-label-line">
+                    <span>{{ t('app.playbackSpeed') }}</span>
+                    <span class="field-value">{{ speedToText(projectDraft.speed) }}</span>
+                  </span>
                   <input v-model.number="projectDraft.speed" type="number" min="0.25" max="8" step="0.25" />
                 </label>
-                <div class="speed-hint min-h-10.5 inline-flex items-center gap-2.5 [padding:0_12px] [border:1px_solid_var(--border)] rounded-[var(--radius)] [background:var(--surface-2)] text-[color:var(--text-muted)] text-[length:12px]">
-                  <span class="speed-icon w-7 h-7 grid place-items-center rounded-[var(--radius-sm)] [background:#ecfeff] text-[color:var(--info)] flex-none"><SlidersHorizontal :size="18" aria-hidden="true" /></span>
-                  <span>{{ speedToText(projectDraft.speed) }}</span>
-                </div>
               </div>
               <p class="form-error min-h-4.5 m-0 text-[color:#fecdd3] text-[length:12px] leading-[1.4]" :class="{ invisible: !projectFormError }" role="alert">{{ projectFormError || ' ' }}</p>
               <p v-if="projectError" class="form-error min-h-4.5 m-0 text-[color:#fecdd3] text-[length:12px] leading-[1.4]" role="alert">{{ projectError }}</p>
