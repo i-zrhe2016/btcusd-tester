@@ -2,6 +2,7 @@ import { createConnection } from 'node:net'
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+import { blogPlugin } from './blog-plugin'
 
 const apiGatewayTarget = process.env.VITE_API_GATEWAY_TARGET ?? 'https://127.0.0.1'
 
@@ -27,7 +28,7 @@ export default defineConfig(async () => {
   ])
 
   return {
-    plugins: [vue(), tailwindcss()],
+    plugins: [vue(), tailwindcss(), blogPlugin()],
     server: {
       proxy: {
         '/api/market': {
