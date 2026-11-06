@@ -103,10 +103,5 @@ jobs:
         run: |
           tailscale ssh "root@$DEPLOY_HOST" "cat > /tmp/btcusd-release-$GITHUB_SHA.tar.gz" < /tmp/release.tar.gz
       - name: Deploy and verify
-        run: |
-          tailscale ssh "root@$DEPLOY_HOST" "tar -xOf '/tmp/btcusd-release-$GITHUB_SHA.tar.gz' deployment/deploy-release.sh > '/tmp/btcusd-deploy-$GITHUB_SHA.sh' && bash '/tmp/btcusd-deploy-$GITHUB_SHA.sh' '$GITHUB_SHA'" </dev/null
-          deployed_revision=$(tailscale ssh "root@$DEPLOY_HOST" 'cat /opt/btcusd-tester/.deployed-revision' </dev/null)
-          if [ "$deployed_revision" != "$GITHUB_SHA" ]; then
-            printf 'Deployment revision mismatch: expected %s, got %s\n' "$GITHUB_SHA" "$deployed_revision" >&2
-            exit 1
-          fi
+        timeout-minutes: 35
+        run: bash deployment/deploy-ci.sh
