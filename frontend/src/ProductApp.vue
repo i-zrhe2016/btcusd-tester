@@ -202,6 +202,7 @@ async function startCheckout() {
       <section class="wrap hero">
         <div class="hero-head">
           <h1 class="hero-title" :class="{ 'is-en': locale === 'en' }">
+            <span class="hero-kicker">{{ t('product.heroKicker') }}</span>
             <span v-for="line in heroLines" :key="line">{{ line }}</span>
           </h1>
           <div class="hero-rail">
