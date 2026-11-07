@@ -94,25 +94,6 @@ describe('market snapshot reuse', () => {
     expect(await getMarketSnapshot({ ...params, from: 60 })).toEqual(snapshot)
   })
 
-  it('bypasses cached snapshots and metadata for live polls', async () => {
-    const { getMarketSnapshot, getMarketMetadata } = await import('./api')
-    await getMarketSnapshot(params)
-    const changed = { ...snapshot, candles: [{ ...snapshot.candles[0]!, close: 25 }] }
-    vi.mocked(fetch).mockResolvedValueOnce(response(changed) as Response)
-    expect(await getMarketSnapshot({ ...params, fresh: true })).toEqual(changed)
-    expect(fetch).toHaveBeenCalledTimes(2)
-    // The fresh response also refreshes the cache for ordinary reads.
-    expect(await getMarketSnapshot(params)).toEqual(changed)
-    expect(fetch).toHaveBeenCalledTimes(2)
-    const metadata = {
-      symbol: 'BTCUSD', base_timeframe: '1m', source: 'Parquet', candle_count: 1,
-      first_timestamp: 0, last_timestamp: 60, supported_timeframes: ['1m'],
-    }
-    vi.mocked(fetch).mockResolvedValueOnce(response(metadata) as Response)
-    await getMarketMetadata('BTCUSD', { fresh: true })
-    expect(fetch).toHaveBeenLastCalledWith('/api/market/meta?symbol=BTCUSD', expect.objectContaining({ cache: 'no-store' }))
-  })
-
   it('evicts the least recently used snapshot at capacity', async () => {
     const { getMarketSnapshot } = await import('./api')
     for (let from = 0; from < 24; from++) await getMarketSnapshot({ ...params, from })

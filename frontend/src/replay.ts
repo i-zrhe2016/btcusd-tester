@@ -318,43 +318,6 @@ export function timeframeStepSeconds(timeframe: string): number {
   }
 }
 
-/**
- * Exclusive end of the range covered by completed candles only. Kraken (and
- * therefore the live window) publishes whole minutes; the replay clock never
- * rests on the candle that is still forming.
- */
-export function latestCompletedEnd(
-  market: Pick<MarketMetadata, 'last_timestamp' | 'base_timeframe'>,
-  timeframe: string,
-): number {
-  const completedThrough = market.last_timestamp + timeframeStepSeconds(market.base_timeframe)
-  if (!Number.isFinite(completedThrough)) return 0
-  if (timeframe === '1M') {
-    const lastCompleted = new Date((completedThrough - 1) * 1000)
-    return Date.UTC(lastCompleted.getUTCFullYear(), lastCompleted.getUTCMonth(), 1) / 1000
-  }
-  if (timeframe === '1w') {
-    const mondayOffset = 3 * 24 * 60 * 60
-    const week = 7 * 24 * 60 * 60
-    return Math.floor((completedThrough + mondayOffset) / week) * week - mondayOffset
-  }
-  const step = timeframeStepSeconds(timeframe)
-  return Math.floor(completedThrough / step) * step
-}
-
-/** Open time of the newest closed candle ending at `latestCompletedEnd`. */
-export function latestCompletedCandleStart(
-  market: Pick<MarketMetadata, 'last_timestamp' | 'base_timeframe'>,
-  timeframe: string,
-): number {
-  const end = latestCompletedEnd(market, timeframe)
-  if (timeframe === '1M') {
-    const monthStart = new Date(end * 1000)
-    return Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() - 1, 1) / 1000
-  }
-  return end - timeframeStepSeconds(timeframe)
-}
-
 export function replayWindowEnd(from: number, to: number, timeframe: string): number {
   return Math.min(to, from + (timeframeStepSeconds(timeframe) * REPLAY_PAGE_SIZE))
 }

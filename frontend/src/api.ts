@@ -89,12 +89,9 @@ export function createCheckout(): Promise<{ checkoutUrl: string }> {
   return requestJson('/api/payments/checkout', { method: 'POST' })
 }
 
-export function getMarketMetadata(symbol = 'BTCUSD', options: { fresh?: boolean } = {}): Promise<MarketMetadata> {
+export function getMarketMetadata(symbol = 'BTCUSD'): Promise<MarketMetadata> {
   const normalized = normalizeSymbol(symbol)
-  return requestJson<MarketMetadata>(
-    `/api/market/meta?${new URLSearchParams({ symbol: normalized })}`,
-    options.fresh ? { cache: 'no-store' } : undefined,
-  )
+  return requestJson<MarketMetadata>(`/api/market/meta?${new URLSearchParams({ symbol: normalized })}`)
     .then((metadata) => {
       if (normalizeSymbol(metadata.symbol) !== normalized) {
         throw new Error(`Market metadata symbol mismatch: expected ${normalized}, received ${metadata.symbol}`)
@@ -115,7 +112,6 @@ export function getMarketSnapshot(params: {
   to: number
   limit?: number
   lengths: [number, number, number]
-  fresh?: boolean
 }): Promise<MarketSnapshot> {
   const query = new URLSearchParams({
     symbol: normalizeSymbol(params.symbol ?? 'BTCUSD'),
@@ -126,17 +122,15 @@ export function getMarketSnapshot(params: {
     lengths: params.lengths.join(','),
   })
   const key = query.toString()
-  if (!params.fresh) {
-    const cached = snapshotCache.get(key)
-    if (cached && cached.expiresAt > Date.now()) {
-      snapshotCache.delete(key)
-      snapshotCache.set(key, cached)
-      return Promise.resolve(cached.snapshot)
-    }
-    const pending = pendingSnapshots.get(key)
-    if (pending) return pending
+  const cached = snapshotCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) {
+    snapshotCache.delete(key)
+    snapshotCache.set(key, cached)
+    return Promise.resolve(cached.snapshot)
   }
   snapshotCache.delete(key)
+  const pending = pendingSnapshots.get(key)
+  if (pending) return pending
 
   const request = requestJson<MarketSnapshot>(`/api/market/snapshot?${query}`)
     .then((snapshot) => {
