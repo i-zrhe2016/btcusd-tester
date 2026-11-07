@@ -17,8 +17,8 @@ def verify(directory, symbol):
     data = Path(directory) / f'{stem}_1m.parquet'
     manifest = json.loads((Path(directory) / f'{stem}_1m.manifest.json').read_text(encoding='utf-8'))
     errors = []
-    if manifest.get('symbol') != symbol or manifest.get('quote') != 'USD':
-        errors.append('manifest identity is not a USD market')
+    if manifest.get('symbol') != symbol or manifest.get('quote') not in ('USD', 'USDT'):
+        errors.append('manifest identity is not a USD or USDT market')
     file = pq.ParquetFile(data)
     if file.schema_arrow.names != COLUMNS or not all(str(file.schema_arrow.field(i).type) in ('int64', 'double') for i in range(6)):
         errors.append(f'unexpected schema {file.schema_arrow}')
@@ -63,5 +63,5 @@ if __name__ == '__main__':
             failed = True
             print(json.dumps({'symbol': symbol, 'result': 'fail', 'errors': errors}, ensure_ascii=False), flush=True)
         else:
-            print(json.dumps({'symbol': symbol, 'result': 'pass', 'candles': manifest['candle_count'], 'first': manifest['first_timestamp'], 'last': manifest['last_timestamp'], 'verified_through': manifest['verified_through_exclusive'], 'missing_minutes': manifest['missing_minutes']}, ensure_ascii=False), flush=True)
+            print(json.dumps({'symbol': symbol, 'result': 'pass', 'source': manifest.get('source'), 'quote': manifest.get('quote'), 'candles': manifest['candle_count'], 'first': manifest['first_timestamp'], 'last': manifest['last_timestamp'], 'verified_through': manifest['verified_through_exclusive'], 'missing_minutes': manifest['missing_minutes']}, ensure_ascii=False), flush=True)
     sys.exit(1 if failed else 0)
