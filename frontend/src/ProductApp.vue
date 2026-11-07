@@ -6,6 +6,7 @@ import { locale, t } from './i18n'
 import { createCheckout, getPaymentStatus } from './api'
 import BrandMark from './components/BrandMark.vue'
 import LanguageSwitcher from './components/LanguageSwitcher.vue'
+import SupportContact from './components/SupportContact.vue'
 import PanePreview from './components/PanePreview.vue'
 import ReplayPreview from './components/ReplayPreview.vue'
 const Workspace = defineAsyncComponent(() => import('./App.vue'))
@@ -362,7 +363,10 @@ async function startCheckout() {
           <a href="/privacy">{{ t('product.privacy') }}</a>
           <a href="#workspace" @click.prevent="enterWorkspace">{{ t('product.enterWorkspace') }}</a>
         </div>
-        <p class="footer-note">{{ t('product.footerDisclaimer') }}</p>
+        <div class="footer-meta">
+          <SupportContact :label="t('product.contactLabel')" />
+          <p class="footer-note">{{ t('product.footerDisclaimer') }}</p>
+        </div>
       </div>
     </footer>
   </div>

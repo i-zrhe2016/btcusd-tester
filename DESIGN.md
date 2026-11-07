@@ -203,6 +203,12 @@ The brand mark is the grailab wave: one thick rounded line that rises, dips and 
 - **Header:** brand at 21px/700; links at 13.5px, soft coffee, 44px targets; account login is a text button and signup is the small primary.
 - **Mobile:** the navigation becomes a second full-width row under the brand, justified across the container; the hairline above it is the only divider.
 
+### Footer Contact
+- **Affordance:** a 15px mail icon in #9E4E33 followed by the plain address in ink at 13px/600, with a 44px target and no container.
+- **Placement:** in the landing footer's meta row beside the disclaimer; inside the footer link group on Terms, Privacy and Articles. Never behind a contact form or only inside legal copy.
+- **Hover / Focus:** the address turns #9E4E33 and takes a 1px underline at 4px offset; focus uses the terracotta ring.
+- **Copy:** the support address is visible text on every public page; the visible address is the label, and an aria-label names the channel.
+
 ### Gate
 - **Layout:** centred 440px card on the paper field, 40px ink wave mark, 25px headline, 13.5px body.
 - **Actions:** ghost login plus primary signup; the payment-return state swaps the pair for a single primary action.

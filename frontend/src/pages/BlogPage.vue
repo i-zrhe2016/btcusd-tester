@@ -5,6 +5,7 @@ import articles from 'virtual:blog'
 import BrandMark from '../components/BrandMark.vue'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import { locale } from '../i18n'
+import SupportContact from '../components/SupportContact.vue'
 import '../blog.css'
 
 const english = computed(() => locale.value === 'en')
@@ -88,6 +89,7 @@ watchEffect(() => {
         <a href="/">grailab</a>
         <a href="/terms" class="blog-footer-link">{{ english ? 'Terms' : '服务条款' }}</a>
         <a href="/privacy" class="blog-footer-link">{{ english ? 'Privacy' : '隐私政策' }}</a>
+        <SupportContact :label="english ? 'Support email' : '客服邮箱'" />
       </div>
       <p>{{ english ? 'Historical market replay & trading practice' : '历史行情回放与交易训练' }}</p>
     </footer>

@@ -910,7 +910,8 @@
   }
   .footer-links {
     display: flex;
-    gap: 22px;
+    flex-wrap: wrap;
+    gap: 4px 22px;
     margin-left: auto;
   }
   .footer-links a {
@@ -931,6 +932,53 @@
     color: var(--ink-dim);
     font-size: 11.5px;
     line-height: 1.7;
+  }
+  .footer-meta {
+    flex-basis: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0 32px;
+  }
+  .footer-meta .footer-note {
+    flex-basis: auto;
+    margin-left: auto;
+    text-align: right;
+  }
+  .landing .footer-contact {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 44px;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.18s ease;
+  }
+  .landing .footer-contact svg {
+    flex: none;
+    color: var(--accent-deep);
+  }
+  .landing .footer-contact:hover {
+    color: var(--accent-deep);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .landing .footer-contact { transition: none; }
+  }
+  @media (max-width: 720px) {
+    .footer-meta {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+    }
+    .footer-meta .footer-note {
+      margin-left: 0;
+      text-align: left;
+    }
   }
 
   /* Account gate and payment return */

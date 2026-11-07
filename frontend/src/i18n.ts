@@ -99,6 +99,7 @@ const zh = {
   'payment.retry': '重新确认',
   'product.terms': '服务条款',
   'product.privacy': '隐私政策',
+  'product.contactLabel': '客服邮箱 support@grailab.top',
   'product.footerDisclaimer': '仅用于模拟交易训练，不构成投资建议。',
 
   // Account dialog
@@ -610,6 +611,7 @@ const en: Record<MessageKey, Message> = {
   'payment.retry': 'Check again',
   'product.terms': 'Terms',
   'product.privacy': 'Privacy',
+  'product.contactLabel': 'Support email support@grailab.top',
   'product.footerDisclaimer': 'For simulated trading practice only. Not investment advice.',
 
   'auth.close': 'Close',
