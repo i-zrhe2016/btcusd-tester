@@ -69,7 +69,7 @@ export const termsSections: TermsSection[] = [
     blocks: [
       { kind: 'h3', text: '2.1 我们提供的服务' },
       { kind: 'p', text: 'grailab 是一个历史行情回放与手动交易训练工具。你可以选择交易品种、UTC 历史时间区间和 K 线周期，以 0.25× 至 8× 的可调速度回放行情，并在图表上模拟买入、卖出和平仓，查看交易记录与盈亏。本服务还提供 1–4 屏多周期分屏、Stoch 与经典技术指标、绘图工具和训练项目管理。' },
-      { kind: 'p', text: '当前支持的周期为 1m、5m、15m、30m、1h、2h、3h、4h、1d、1w、1M。当前支持的品种为 Kraken 以美元计价的现货交易对：BTCUSD、ETHUSD、BNBUSD、XRPUSD、SOLUSD、TRXUSD、ZECUSD、HYPEUSD、DOGEUSD、XMRUSD。我们可能调整支持的品种、周期、数据范围和功能，具体以网站和产品界面展示为准。' },
+      { kind: 'p', text: '当前支持的周期为 1m、5m、15m、30m、1h、2h、3h、4h、1d、1w、1M。当前支持的品种为 Kraken 以美元计价的现货交易对：BTCUSD、ETHUSD、BNBUSD、XRPUSD、SOLUSD、TRXUSD、ZECUSD、HYPEUSD、DOGEUSD、XMRUSD。外汇与期货目前尚未提供，属于计划中即将推出的品种，上线时以网站公告和产品界面展示为准。我们可能调整支持的品种、周期、数据范围和功能，具体以网站和产品界面展示为准。' },
       { kind: 'p', text: '本服务不提供真实下单、资金托管、出入金、杠杆、保证金、融资融券、交易信号、策略代管或任何形式的投资顾问服务。你在本服务中进行的全部交易均为模拟交易，不涉及真实资金，也不会在交易所或任何第三方处形成真实订单。' },
       { kind: 'h3', text: '2.2 服务性质' },
       { kind: 'p', text: '本服务是通过互联网提供的数字软件即服务（SaaS）产品，属于数字无形产品。付款确认后，我们将为你开通相应访问权限。由于数字服务的即时交付性质，退款适用第 7 条的限制。' },
