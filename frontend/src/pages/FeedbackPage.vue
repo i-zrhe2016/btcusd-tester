@@ -286,7 +286,7 @@ onBeforeUnmount(() => {
   <div v-if="isLoaded && !isSignedIn" class="gate">
     <div class="fb-gate-lang"><LanguageSwitcher /></div>
     <main id="main-content" class="gate-card">
-      <span class="gate-mark" aria-hidden="true"></span>
+      <BrandMark class="gate-mark" />
       <h1>{{ t('feedback.gateTitle') }}</h1>
       <p>{{ t('feedback.gateBody') }}</p>
       <div class="gate-actions">
@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
 
   <div v-else-if="!isLoaded" class="gate">
     <main id="main-content" class="gate-card" aria-live="polite">
-      <span class="gate-mark" aria-hidden="true"></span>
+      <BrandMark class="gate-mark" />
       <h1>{{ t('feedback.pageTitle') }}</h1>
       <p>{{ t('feedback.gateLoading') }}</p>
     </main>
