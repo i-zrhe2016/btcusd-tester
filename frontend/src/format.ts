@@ -40,6 +40,11 @@ export function formatUtc(timestamp: number): string {
   }).format(new Date(timestamp * 1000))
 }
 
+// Compact UTC month for coverage labels; width stays stable across values.
+export function formatUtcMonth(timestamp: number): string {
+  return new Date(timestamp * 1000).toISOString().slice(0, 7)
+}
+
 export function formatDuration(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds))
   const days = Math.floor(total / 86400)

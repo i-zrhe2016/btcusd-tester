@@ -109,6 +109,23 @@ describe('multi-asset replay', () => {
     const radios = wrapper.findAll('input[name="project-symbol"]')
     expect(radios.map((radio) => radio.attributes('value'))).toEqual(['BTCUSD', 'ETHUSD', 'BNBUSD', 'XRPUSD', 'SOLUSD', 'TRXUSD', 'ZECUSD', 'HYPEUSD', 'DOGEUSD', 'XMRUSD'])
   })
+
+  it('labels every symbol with its available history range', async () => {
+    vi.mocked(getMarketMetadata).mockImplementation(async (symbol = 'BTCUSD') => {
+      if (symbol === 'ZECUSD') throw new Error('market data unavailable')
+      return { ...market, symbol }
+    })
+    wrapper = mount(App)
+    await flushPromises()
+    await flushPromises()
+    const options = wrapper.findAll('.symbol-option')
+    expect(options).toHaveLength(10)
+    expect(options[0]!.find('.symbol-range').text()).toBe('2023-11 – 2023-11')
+    expect(options[0]!.attributes('title')).toContain('2023')
+    expect(options[0]!.attributes('title')).toContain('UTC')
+    expect(options[6]!.find('.symbol-range').text()).toBe('数据不可用')
+    expect(options[6]!.attributes('title')).toBeUndefined()
+  })
 })
 
 describe('multi-timeframe replay synchronization', () => {
