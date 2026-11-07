@@ -1,4 +1,5 @@
 .git
+.pr-*
 .env*
 **/.env*
 AGENTS.md
@@ -7,10 +8,17 @@ target
 build
 data
 projects
+node_modules
 frontend/node_modules
 services/payments/node_modules
 frontend/dist
 .verification
+.venv-market-sync
+docs
+.github
+ops
+**/*.log
+*.tar.gz
 
 **/.clerk
 **/.agents

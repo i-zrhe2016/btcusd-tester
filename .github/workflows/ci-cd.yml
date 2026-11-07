@@ -6,23 +6,103 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      connection_test:
-        description: Test Tailscale SSH without deploying
-        type: boolean
-        default: true
+      mode:
+        description: Run checks only, deploy main, or test the production connection
+        type: choice
+        options: [checks, deploy, connection-test]
+        default: checks
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  frontend:
+  changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      payments: ${{ steps.filter.outputs.payments }}
+      backend: ${{ steps.filter.outputs.backend }}
+      docker: ${{ steps.filter.outputs.docker }}
+      deploy: ${{ steps.filter.outputs.deploy }}
+      images: ${{ steps.images.outputs.images }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - 'deployment/nginx/**'
+              - 'docker-compose*.yml'
+              - '.dockerignore'
+            payments:
+              - 'services/payments/**'
+              - 'docker-compose*.yml'
+              - '.dockerignore'
+            backend:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'services/**'
+              - 'scripts/**'
+              - 'deployment/**'
+              - 'docker-compose*.yml'
+              - '.dockerignore'
+            docker:
+              - 'frontend/**'
+              - 'services/**'
+              - 'deployment/nginx/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '**/Dockerfile'
+              - 'docker-compose*.yml'
+              - '.dockerignore'
+            deploy:
+              - 'frontend/**'
+              - 'services/**'
+              - 'deployment/**'
+              - 'scripts/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'docker-compose*.yml'
+              - '.dockerignore'
+      - name: Select images affected by this change
+        id: images
+        env:
+          FRONTEND: ${{ steps.filter.outputs.frontend }}
+          BACKEND: ${{ steps.filter.outputs.backend }}
+          PAYMENTS: ${{ steps.filter.outputs.payments }}
+          DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          images=()
+          if [ "$DISPATCH" = true ] || [ "$FRONTEND" = true ]; then images+=(web); fi
+          if [ "$DISPATCH" = true ] || [ "$BACKEND" = true ]; then images+=(market-data backtest); fi
+          if [ "$DISPATCH" = true ] || [ "$PAYMENTS" = true ]; then images+=(payments); fi
+          if ((${#images[@]})); then
+            json=$(printf '%s\n' "${images[@]}" | jq -R . | jq -s -c .)
+          else
+            json='[]'
+          fi
+          printf 'images=%s\n' "$json" >> "$GITHUB_OUTPUT"
+
+  frontend:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node-project
         with:
           node-version: '24'
-          cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
@@ -32,13 +112,15 @@ jobs:
         working-directory: frontend
 
   payments:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.payments == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: ./.github/actions/setup-node-project
         with:
           node-version: '22'
-          cache: npm
           cache-dependency-path: services/payments/package-lock.json
       - run: npm ci
         working-directory: services/payments
@@ -46,41 +128,74 @@ jobs:
         working-directory: services/payments
 
   backend:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-rust
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: POSTGRES_PASSWORD=ci-only docker compose config --quiet
       - name: Deployment regression tests
         run: python3 -I deployment/test_deploy_release.py
+      - name: History sync unit tests
+        run: |
+          python3 -I scripts/test_sync_live_market.py
+          python3 -I scripts/test_sync_crypto_history.py
+
+  docker:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.result == 'success' && needs.changes.outputs.images != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.changes.outputs.images) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ${{ matrix.image }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.image == 'web' && 'frontend/Dockerfile' || matrix.image == 'payments' && 'services/payments/Dockerfile' || format('services/{0}/Dockerfile', matrix.image) }}
+          push: false
+          build-args: ${{ matrix.image == 'web' && format('VITE_CLERK_PUBLISHABLE_KEY={0}', vars.VITE_CLERK_PUBLISHABLE_KEY) || '' }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
   connection-test:
-    if: github.event_name == 'workflow_dispatch' && inputs.connection_test
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'connection-test'
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 5
     env:
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST || 'deploy.taile2c45c.ts.net' }}
     steps:
-      - uses: tailscale/github-action@v3
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/tailscale-connect
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-      - name: Verify Tailscale login
-        run: |
-          tailscale status --json | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s.get("BackendState") == "Running", "Tailscale login failed: check OAuth tag:ci permission and tailnet policy"'
       - name: Verify SSH and production health
         run: |
           timeout 60 tailscale ssh "root@$DEPLOY_HOST" 'set -eu; cd /opt/btcusd-tester; docker compose ps; curl -fsS --max-time 15 http://localhost:8083/healthz; curl -fsS --max-time 30 http://localhost:8083/api/market/meta > /dev/null'
 
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !inputs.connection_test
-    needs: [frontend, backend, payments]
+    if: >-
+      always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      && needs.changes.result == 'success'
+      && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.deploy == 'true')
+      && (github.event_name != 'workflow_dispatch' || inputs.mode == 'deploy')
+      && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    needs: [changes, frontend, backend, payments, docker]
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 40
     concurrency:
       group: production-deployment
       cancel-in-progress: false
@@ -88,15 +203,24 @@ jobs:
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST || 'deploy.taile2c45c.ts.net' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Connect to deployment network
-        uses: tailscale/github-action@v3
+      - uses: ./.github/actions/tailscale-connect
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-      - name: Verify Tailscale login
+      - name: Select services to rebuild
+        id: services
+        env:
+          FRONTEND: ${{ needs.changes.outputs.frontend }}
+          BACKEND: ${{ needs.changes.outputs.backend }}
+          PAYMENTS: ${{ needs.changes.outputs.payments }}
+          DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          tailscale status --json | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s.get("BackendState") == "Running", "Tailscale login failed: check OAuth tag:ci permission and tailnet policy"'
+          set -euo pipefail
+          services=()
+          if [ "$DISPATCH" = true ] || [ "$FRONTEND" = true ]; then services+=(web); fi
+          if [ "$DISPATCH" = true ] || [ "$BACKEND" = true ]; then services+=(market-data backtest); fi
+          if [ "$DISPATCH" = true ] || [ "$PAYMENTS" = true ]; then services+=(payments); fi
+          printf 'list=%s\n' "${services[*]}" >> "$GITHUB_OUTPUT"
       - name: Package tracked source
         run: git archive --format=tar.gz -o /tmp/release.tar.gz HEAD
       - name: Upload release
@@ -104,4 +228,6 @@ jobs:
           tailscale ssh "root@$DEPLOY_HOST" "cat > /tmp/btcusd-release-$GITHUB_SHA.tar.gz" < /tmp/release.tar.gz
       - name: Deploy and verify
         timeout-minutes: 35
+        env:
+          BUILD_SERVICES: ${{ steps.services.outputs.list }}
         run: bash deployment/deploy-ci.sh

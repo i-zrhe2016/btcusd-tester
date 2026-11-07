@@ -1,0 +1,23 @@
+name: Connect to Tailscale
+description: Join the tailnet with the CI OAuth client and verify the connection.
+
+inputs:
+  oauth-client-id:
+    description: Tailscale OAuth client ID
+    required: true
+  oauth-secret:
+    description: Tailscale OAuth client secret
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: tailscale/github-action@v3
+      with:
+        oauth-client-id: ${{ inputs.oauth-client-id }}
+        oauth-secret: ${{ inputs.oauth-secret }}
+        tags: tag:ci
+    - name: Verify Tailscale login
+      shell: bash
+      run: |
+        tailscale status --json | python3 -c 'import json,sys; s=json.load(sys.stdin); assert s.get("BackendState") == "Running", "Tailscale login failed: check OAuth tag:ci permission and tailnet policy"'
