@@ -54,8 +54,8 @@
   .blog-article-end { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); }
   .blog-missing { max-width: 720px; padding-block: 24px 56px; }
   .blog-footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-block: 24px; border-top: 1px solid var(--line); color: var(--ink-dim); font-size: 13px; }
-  .blog-footer a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); text-decoration: none; font-weight: 650; }
-  .blog-footer-brand { display: flex; align-items: center; gap: 20px; }
+  .blog-footer a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ink); text-decoration: none; font-weight: 650; white-space: nowrap; }
+  .blog-footer-brand { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }
   .blog-footer .blog-footer-link { color: var(--ink-dim); font-weight: 500; }
   .blog-footer .blog-footer-link:hover { color: var(--ink); }
   .blog-footer p { margin: 0; line-height: 1.8; }

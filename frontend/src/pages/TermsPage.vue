@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import { ArrowUp, ChevronDown } from '@lucide/vue'
 import BrandMark from '../components/BrandMark.vue'
+import SupportContact from '../components/SupportContact.vue'
 import { TERMS_EMAIL, TERMS_UPDATED, TERMS_URL, termsCopy, termsSections } from '../legal/terms'
 import '../privacy.css'
 
@@ -201,7 +202,7 @@ onBeforeUnmount(() => {
           <a href="/blog">{{ copy.footer.articles }}</a>
           <a href="/terms" aria-current="page">{{ copy.footer.terms }}</a>
           <a href="/privacy">{{ copy.footer.privacy }}</a>
-          <a :href="`mailto:${TERMS_EMAIL}`">{{ copy.footer.contact }}</a>
+          <SupportContact :label="copy.footer.contact" />
         </div>
         <p class="footer-note">{{ copy.footer.disclaimer }}</p>
       </div>

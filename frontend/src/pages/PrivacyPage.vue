@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import { ArrowUp, ChevronDown } from '@lucide/vue'
 import BrandMark from '../components/BrandMark.vue'
+import SupportContact from '../components/SupportContact.vue'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
 import { locale } from '../i18n'
 import { policy, PRIVACY_EMAIL, PRIVACY_UPDATED, PRIVACY_URL } from '../privacy/policy'
@@ -215,7 +216,7 @@ onBeforeUnmount(() => {
           <a href="/blog">{{ copy.footer.articles }}</a>
           <a href="/terms">{{ locale === 'zh' ? '服务条款' : 'Terms' }}</a>
           <a href="/privacy" aria-current="page">{{ copy.footer.privacy }}</a>
-          <a :href="`mailto:${PRIVACY_EMAIL}`">{{ copy.footer.contact }}</a>
+          <SupportContact :label="copy.footer.contact" />
         </div>
         <p class="footer-note">{{ copy.footer.disclaimer }}</p>
       </div>
