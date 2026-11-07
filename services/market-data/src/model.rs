@@ -111,4 +111,3 @@ pub struct MarketSnapshot {
     pub candles: Vec<Candle>,
     pub stochastic: Vec<StochasticPoint>,
 }
-

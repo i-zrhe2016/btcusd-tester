@@ -62,7 +62,11 @@ pub async fn fail_backtest(pool: &PgPool, user_id: Uuid, id: Uuid, message: &str
     }
 }
 
-pub async fn list_backtests(pool: &PgPool, user_id: Uuid, limit: i64) -> Result<Vec<BacktestRecord>, sqlx::Error> {
+pub async fn list_backtests(
+    pool: &PgPool,
+    user_id: Uuid,
+    limit: i64,
+) -> Result<Vec<BacktestRecord>, sqlx::Error> {
     sqlx::query_as::<_, BacktestRecord>(
         r#"
         SELECT id, user_id, name, status, config, result, error_message, created_at, completed_at
@@ -78,7 +82,11 @@ pub async fn list_backtests(pool: &PgPool, user_id: Uuid, limit: i64) -> Result<
     .await
 }
 
-pub async fn find_backtest(pool: &PgPool, user_id: Uuid, id: Uuid) -> Result<Option<BacktestRecord>, sqlx::Error> {
+pub async fn find_backtest(
+    pool: &PgPool,
+    user_id: Uuid,
+    id: Uuid,
+) -> Result<Option<BacktestRecord>, sqlx::Error> {
     sqlx::query_as::<_, BacktestRecord>(
         r#"
         SELECT id, user_id, name, status, config, result, error_message, created_at, completed_at
@@ -92,7 +100,10 @@ pub async fn find_backtest(pool: &PgPool, user_id: Uuid, id: Uuid) -> Result<Opt
     .await
 }
 
-pub async fn list_configs(pool: &PgPool, user_id: Uuid) -> Result<Vec<StrategyConfigRecord>, sqlx::Error> {
+pub async fn list_configs(
+    pool: &PgPool,
+    user_id: Uuid,
+) -> Result<Vec<StrategyConfigRecord>, sqlx::Error> {
     sqlx::query_as::<_, StrategyConfigRecord>(
         r#"
         SELECT id, user_id, name, parameters, created_at, updated_at
@@ -125,7 +136,6 @@ pub async fn create_config(
     .fetch_one(pool)
     .await
 }
-
 
 pub async fn list_replay_projects(
     pool: &PgPool,
@@ -286,13 +296,11 @@ async fn find_feedback_thread_in<'e, E>(
 where
     E: sqlx::PgExecutor<'e>,
 {
-    sqlx::query_as::<_, FeedbackThreadRecord>(&format!(
-        "{FEEDBACK_THREAD_SELECT} WHERE t.id = $2"
-    ))
-    .bind(viewer_id)
-    .bind(thread_id)
-    .fetch_optional(executor)
-    .await
+    sqlx::query_as::<_, FeedbackThreadRecord>(&format!("{FEEDBACK_THREAD_SELECT} WHERE t.id = $2"))
+        .bind(viewer_id)
+        .bind(thread_id)
+        .fetch_optional(executor)
+        .await
 }
 
 pub async fn find_feedback_thread(
@@ -388,7 +396,7 @@ pub async fn resolve_clerk_user(pool: &PgPool, clerk_user_id: &str) -> Result<Uu
         "INSERT INTO users (clerk_user_id, email, display_name) VALUES ($1, $2, 'Clerk user') ON CONFLICT (clerk_user_id) DO UPDATE SET clerk_user_id = EXCLUDED.clerk_user_id RETURNING id",
     )
     .bind(clerk_user_id)
-    .bind(format!("{}@clerk.local.invalid", clerk_user_id))
+    .bind(format!("{clerk_user_id}@clerk.local.invalid"))
     .fetch_one(pool)
     .await
 }

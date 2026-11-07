@@ -69,4 +69,3 @@ fn column<'a, T: 'static>(
         .downcast_ref::<T>()
         .with_context(|| format!("Parquet column {name} has an invalid type"))
 }
-

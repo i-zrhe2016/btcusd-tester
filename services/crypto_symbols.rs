@@ -1,6 +1,6 @@
 pub const SYMBOLS: [&str; 10] = [
-    "BTCUSD", "ETHUSD", "BNBUSD", "XRPUSD", "SOLUSD", "TRXUSD", "ZECUSD",
-    "HYPEUSD", "DOGEUSD", "XMRUSD",
+    "BTCUSD", "ETHUSD", "BNBUSD", "XRPUSD", "SOLUSD", "TRXUSD", "ZECUSD", "HYPEUSD", "DOGEUSD",
+    "XMRUSD",
 ];
 
 pub fn normalize(value: &str) -> Option<&'static str> {

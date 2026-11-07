@@ -134,8 +134,18 @@ mod tests {
             },
         };
         let market = MarketSnapshot {
-            candles: vec![candle(0, 10.0), candle(60, 10.0), candle(120, 12.0), candle(180, 15.0)],
-            stochastic: vec![point(0, 20.0, 21.0), point(60, 22.0, 21.0), point(120, 80.0, 79.0), point(180, 78.0, 79.0)],
+            candles: vec![
+                candle(0, 10.0),
+                candle(60, 10.0),
+                candle(120, 12.0),
+                candle(180, 15.0),
+            ],
+            stochastic: vec![
+                point(0, 20.0, 21.0),
+                point(60, 22.0, 21.0),
+                point(120, 80.0, 79.0),
+                point(180, 78.0, 79.0),
+            ],
         };
         let result = run(&request, &market).unwrap();
         assert_eq!(result.completed_trades, 1);
@@ -144,4 +154,3 @@ mod tests {
         assert_eq!(result.win_rate_pct, 100.0);
     }
 }
-

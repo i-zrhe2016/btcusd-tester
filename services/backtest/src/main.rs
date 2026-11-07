@@ -1,11 +1,11 @@
-#[path = "../../crypto_symbols.rs"]
-mod symbols;
 mod auth;
 mod config;
 mod db;
 mod engine;
 mod error;
 mod model;
+#[path = "../../crypto_symbols.rs"]
+mod symbols;
 
 use axum::{
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -83,12 +83,18 @@ fn router(state: AppState) -> Router {
         .route("/api/backtests/{id}", get(get_backtest))
         .route("/api/configs", get(list_configs).post(create_config))
         .route("/api/projects", get(list_projects))
-        .route("/api/projects/{id}", put(upsert_project).delete(delete_project))
+        .route(
+            "/api/projects/{id}",
+            put(upsert_project).delete(delete_project),
+        )
         .route("/api/feedback", get(list_feedback).post(create_feedback))
         .route("/api/feedback/{id}", get(get_feedback))
         .route("/api/feedback/{id}/messages", post(reply_feedback))
         .layer(DefaultBodyLimit::max(1024 * 1024))
-        .route_layer(axum::middleware::from_fn_with_state(state.clone(), auth::authenticate));
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            auth::authenticate,
+        ));
     Router::new()
         .route("/health", get(health))
         .merge(protected)
@@ -99,7 +105,9 @@ fn router(state: AppState) -> Router {
 
 async fn health(State(state): State<AppState>) -> Result<Json<serde_json::Value>, ApiError> {
     sqlx::query("SELECT 1").execute(&state.pool).await?;
-    Ok(Json(serde_json::json!({"status": "ok", "service": "backtest"})))
+    Ok(Json(
+        serde_json::json!({"status": "ok", "service": "backtest"}),
+    ))
 }
 
 async fn create_backtest(
@@ -108,8 +116,8 @@ async fn create_backtest(
     Json(request): Json<BacktestRequest>,
 ) -> Result<Json<BacktestRecord>, ApiError> {
     request.validate().map_err(ApiError::BadRequest)?;
-    let config = serde_json::to_value(&request)
-        .map_err(|error| ApiError::Internal(error.to_string()))?;
+    let config =
+        serde_json::to_value(&request).map_err(|error| ApiError::Internal(error.to_string()))?;
     let running = db::insert_backtest(&state.pool, user_id, request.name.trim(), config).await?;
 
     let response = state
@@ -149,8 +157,8 @@ async fn create_backtest(
             return Err(error);
         }
     };
-    let result = serde_json::to_value(result)
-        .map_err(|error| ApiError::Internal(error.to_string()))?;
+    let result =
+        serde_json::to_value(result).map_err(|error| ApiError::Internal(error.to_string()))?;
     Ok(Json(
         db::complete_backtest(&state.pool, user_id, running.id, result).await?,
     ))
