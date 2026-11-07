@@ -24,13 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
+      web: ${{ steps.filter.outputs.web }}
       payments: ${{ steps.filter.outputs.payments }}
-      backend: ${{ steps.filter.outputs.backend }}
-      python: ${{ steps.filter.outputs.python }}
-      docker: ${{ steps.filter.outputs.docker }}
+      market_data: ${{ steps.filter.outputs.market_data }}
+      backtest: ${{ steps.filter.outputs.backtest }}
+      rust_shared: ${{ steps.filter.outputs.rust_shared }}
       deploy: ${{ steps.filter.outputs.deploy }}
-      images: ${{ steps.images.outputs.images }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,33 +38,19 @@ jobs:
         id: filter
         with:
           filters: |
-            frontend:
+            web:
               - 'frontend/**'
               - 'deployment/nginx/**'
-              - 'docker-compose*.yml'
-              - '.dockerignore'
             payments:
               - 'services/payments/**'
-              - 'docker-compose*.yml'
-              - '.dockerignore'
-            backend:
+            market_data:
+              - 'services/market-data/**'
+            backtest:
+              - 'services/backtest/**'
+            rust_shared:
               - 'Cargo.toml'
               - 'Cargo.lock'
-              - 'services/**'
-              - 'docker-compose*.yml'
-              - '.dockerignore'
-            python:
-              - 'scripts/**'
-              - 'deployment/**'
-            docker:
-              - 'frontend/**'
-              - 'services/**'
-              - 'deployment/nginx/**'
-              - 'Cargo.toml'
-              - 'Cargo.lock'
-              - '**/Dockerfile'
-              - 'docker-compose*.yml'
-              - '.dockerignore'
+              - 'services/crypto_symbols.rs'
             deploy:
               - 'frontend/**'
               - 'services/**'
@@ -75,29 +60,10 @@ jobs:
               - 'Cargo.lock'
               - 'docker-compose*.yml'
               - '.dockerignore'
-      - name: Select images affected by this change
-        id: images
-        env:
-          FRONTEND: ${{ steps.filter.outputs.frontend }}
-          BACKEND: ${{ steps.filter.outputs.backend }}
-          PAYMENTS: ${{ steps.filter.outputs.payments }}
-          DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
-        run: |
-          set -euo pipefail
-          images=()
-          if [ "$DISPATCH" = true ] || [ "$FRONTEND" = true ]; then images+=(web); fi
-          if [ "$DISPATCH" = true ] || [ "$BACKEND" = true ]; then images+=(market-data backtest); fi
-          if [ "$DISPATCH" = true ] || [ "$PAYMENTS" = true ]; then images+=(payments); fi
-          if ((${#images[@]})); then
-            json=$(printf '%s\n' "${images[@]}" | jq -R . | jq -s -c .)
-          else
-            json='[]'
-          fi
-          printf 'images=%s\n' "$json" >> "$GITHUB_OUTPUT"
 
-  frontend:
+  test-web:
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -113,7 +79,7 @@ jobs:
       - run: npm run build
         working-directory: frontend
 
-  payments:
+  test-payments:
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.payments == 'true'
     runs-on: ubuntu-latest
@@ -129,9 +95,13 @@ jobs:
       - run: npm test
         working-directory: services/payments
 
-  backend:
+  lint-rust:
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.python == 'true'
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || needs.changes.outputs.market_data == 'true'
+      || needs.changes.outputs.backtest == 'true'
+      || needs.changes.outputs.rust_shared == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -139,7 +109,40 @@ jobs:
       - uses: ./.github/actions/setup-rust
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked
+
+  test-market-data:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || needs.changes.outputs.market_data == 'true'
+      || needs.changes.outputs.rust_shared == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust
+      - run: cargo test -p market-data-service --locked
+
+  test-backtest:
+    needs: changes
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || needs.changes.outputs.backtest == 'true'
+      || needs.changes.outputs.rust_shared == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust
+      - run: cargo test -p backtest-service --locked
+
+  deploy-checks:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
       - run: POSTGRES_PASSWORD=ci-only docker compose config --quiet
       - uses: actions/setup-python@v5
         with:
@@ -155,27 +158,90 @@ jobs:
           python3 -I scripts/test_sync_live_market.py
           python3 -I scripts/test_sync_crypto_history.py
 
-  docker:
+  build-web:
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.result == 'success' && needs.changes.outputs.docker == 'true' && needs.changes.outputs.images != '[]'
+    if: >-
+      always() && needs.changes.result == 'success'
+      && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+      && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        image: ${{ fromJSON(needs.changes.outputs.images) }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Build ${{ matrix.image }} image
+      - name: Build web image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.image == 'web' && 'frontend/Dockerfile' || matrix.image == 'payments' && 'services/payments/Dockerfile' || format('services/{0}/Dockerfile', matrix.image) }}
+          file: frontend/Dockerfile
           push: false
-          build-args: ${{ matrix.image == 'web' && format('VITE_CLERK_PUBLISHABLE_KEY={0}', vars.VITE_CLERK_PUBLISHABLE_KEY) || '' }}
-          cache-from: type=gha,scope=${{ matrix.image }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          build-args: VITE_CLERK_PUBLISHABLE_KEY=${{ vars.VITE_CLERK_PUBLISHABLE_KEY }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  build-payments:
+    needs: changes
+    if: >-
+      always() && needs.changes.result == 'success'
+      && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+      && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.payments == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build payments image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/payments/Dockerfile
+          push: false
+          cache-from: type=gha,scope=payments
+          cache-to: type=gha,mode=max,scope=payments
+
+  build-market-data:
+    needs: changes
+    if: >-
+      always() && needs.changes.result == 'success'
+      && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+      && (github.event_name == 'workflow_dispatch'
+      || needs.changes.outputs.market_data == 'true'
+      || needs.changes.outputs.rust_shared == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build market-data image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/market-data/Dockerfile
+          push: false
+          cache-from: type=gha,scope=market-data
+          cache-to: type=gha,mode=max,scope=market-data
+
+  build-backtest:
+    needs: changes
+    if: >-
+      always() && needs.changes.result == 'success'
+      && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+      && (github.event_name == 'workflow_dispatch'
+      || needs.changes.outputs.backtest == 'true'
+      || needs.changes.outputs.rust_shared == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build backtest image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/backtest/Dockerfile
+          push: false
+          cache-from: type=gha,scope=backtest
+          cache-to: type=gha,mode=max,scope=backtest
 
   connection-test:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'connection-test'
@@ -201,7 +267,18 @@ jobs:
       && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.deploy == 'true')
       && (github.event_name != 'workflow_dispatch' || inputs.mode == 'deploy')
       && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
-    needs: [changes, frontend, backend, payments, docker]
+    needs:
+      - changes
+      - test-web
+      - test-payments
+      - lint-rust
+      - test-market-data
+      - test-backtest
+      - deploy-checks
+      - build-web
+      - build-payments
+      - build-market-data
+      - build-backtest
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 40
@@ -219,16 +296,19 @@ jobs:
       - name: Select services to rebuild
         id: services
         env:
-          FRONTEND: ${{ needs.changes.outputs.frontend }}
-          BACKEND: ${{ needs.changes.outputs.backend }}
+          WEB: ${{ needs.changes.outputs.web }}
           PAYMENTS: ${{ needs.changes.outputs.payments }}
+          MARKET_DATA: ${{ needs.changes.outputs.market_data }}
+          BACKTEST: ${{ needs.changes.outputs.backtest }}
+          RUST_SHARED: ${{ needs.changes.outputs.rust_shared }}
           DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           set -euo pipefail
           services=()
-          if [ "$DISPATCH" = true ] || [ "$FRONTEND" = true ]; then services+=(web); fi
-          if [ "$DISPATCH" = true ] || [ "$BACKEND" = true ]; then services+=(market-data backtest); fi
+          if [ "$DISPATCH" = true ] || [ "$WEB" = true ]; then services+=(web); fi
           if [ "$DISPATCH" = true ] || [ "$PAYMENTS" = true ]; then services+=(payments); fi
+          if [ "$DISPATCH" = true ] || [ "$MARKET_DATA" = true ] || [ "$RUST_SHARED" = true ]; then services+=(market-data); fi
+          if [ "$DISPATCH" = true ] || [ "$BACKTEST" = true ] || [ "$RUST_SHARED" = true ]; then services+=(backtest); fi
           printf 'list=%s\n' "${services[*]}" >> "$GITHUB_OUTPUT"
       - name: Package tracked source
         run: git archive --format=tar.gz -o /tmp/release.tar.gz HEAD

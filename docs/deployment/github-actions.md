@@ -6,13 +6,29 @@
 
 | Job | 何时运行 | 内容 |
 | --- | --- | --- |
-| `changes` | 总是 | `dorny/paths-filter` 计算 frontend/payments/backend/docker/deploy 及受影响镜像列表 |
-| `frontend` | 前端或 Nginx 配置变化 | Node 24：`npm ci`、`npm test`、`npm run build`（含 `vue-tsc`） |
-| `payments` | payments 变化 | Node 22：`npm ci`、`npm test` |
-| `backend` | Rust/Compose/部署脚本变化 | 固定 Rust 1.88：`cargo fmt --check`、`cargo clippy -D warnings`、`cargo test`、Compose 校验、部署回归测试、Python 同步脚本测试 |
-| `docker` | 仅 PR 且相关路径变化 | 用 buildx 构建受影响镜像（`push: false`），GHA 层缓存；提前暴露 Dockerfile 错误 |
+| `changes` | 总是 | `dorny/paths-filter` 计算 `web`/`payments`/`market_data`/`backtest`/`rust_shared`/`deploy` 六个标志 |
+| `test-web` | `web` 变化 | Node 24：`npm ci`、`npm test`、`npm run build`（含 `vue-tsc`） |
+| `test-payments` | `payments` 变化 | Node 22：`npm ci`、`npm test` |
+| `lint-rust` | 任一 Rust 服务或 `rust_shared` 变化 | 固定 Rust 1.88：`cargo fmt --check`、`cargo clippy --workspace -D warnings` |
+| `test-market-data` | `market_data` 或 `rust_shared` 变化 | `cargo test -p market-data-service --locked` |
+| `test-backtest` | `backtest` 或 `rust_shared` 变化 | `cargo test -p backtest-service --locked` |
+| `deploy-checks` | `deploy` 变化 | Compose 校验、部署回归测试、Python 同步脚本测试 |
+| `build-web` / `build-payments` / `build-market-data` / `build-backtest` | 对应服务变化，且为 PR 或手动运行 | buildx 构建该服务镜像（`push: false`），独立 GHA 层缓存；提前暴露 Dockerfile 错误 |
 | `connection-test` | 手动 `mode=connection-test` | 加入 tailnet，检查 SSH、容器与生产健康 |
 | `deploy` | `main` push 且运行产物变化，或手动 `mode=deploy` | 上传 `git archive`，在主机上增量构建并部署 |
+
+## 变更标志
+
+| 标志 | 路径 | 影响 |
+| --- | --- | --- |
+| `web` | `frontend/**`、`deployment/nginx/**` | `test-web`、`build-web`、部署 `web` |
+| `payments` | `services/payments/**` | `test-payments`、`build-payments`、部署 `payments` |
+| `market_data` | `services/market-data/**` | `lint-rust`、`test-market-data`、`build-market-data`、部署 `market-data` |
+| `backtest` | `services/backtest/**` | `lint-rust`、`test-backtest`、`build-backtest`、部署 `backtest` |
+| `rust_shared` | `Cargo.toml`、`Cargo.lock`、`services/crypto_symbols.rs` | 两个 Rust 服务全部测试、构建与部署 |
+| `deploy` | 上述路径加 `scripts/**`、`docker-compose*.yml`、`.dockerignore` | 是否执行部署；`docker-compose*.yml` / `.dockerignore` 不触发镜像构建 |
+
+PR 上只运行受影响的检查与构建，不推送镜像、不部署。`main` 上不重复构建镜像，仍由生产机按变更服务增量 `docker compose build`。
 
 PR 使用 concurrency 自动取消旧 run；所有 job 都有 `timeout-minutes`。本地文档、截图等不影响运行产物的 push 仍会产生绿色 run，但不会部署。
 
@@ -45,7 +61,7 @@ CI 只在 `main` 上计算受影响服务（`web`、`market-data`、`backtest`�
 5. `docker compose up -d --no-build --wait` 后检查 Nginx 健康、行情元数据与 payments 健康；
 6. 写入 `.deployed-revision`，保留最近 5 次回滚镜像和备份，清理 dangling 镜像。
 
-构建缓存由 Dockerfile 的 BuildKit cache mount 提供：两个 Rust 镜像共享 `rust-target` 缓存，前端复用 npm 缓存。PR 的 `docker` job 使用 GHA 缓存，因此合并前即可发现构建问题，而 `main` 上不会与主机重复构建。
+构建缓存由 Dockerfile 的 BuildKit cache mount 提供：两个 Rust 镜像共享 `rust-target` 缓存，前端复用 npm 缓存。PR 的四个 `build-*` job 各自使用独立的 GHA 缓存，因此合并前即可发现构建问题，而 `main` 上不会与主机重复构建。
 
 ## 发布与恢复
 
