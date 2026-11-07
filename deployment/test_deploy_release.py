@@ -99,6 +99,14 @@ class DeploymentTests(unittest.TestCase):
         self.assertNotIn("compose build web market-data", commands)
         self.assertIn("rebuilt: web", result.stdout)
 
+    def test_no_rebuild_flag_skips_image_builds(self):
+        result = self.deploy(REVISION, "--no-rebuild")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = (self.root / "commands").read_text()
+        self.assertNotIn("compose build", commands)
+        self.assertIn("rebuilt: none", result.stdout)
+        self.assertEqual((self.app / ".deployed-revision").read_text().strip(), REVISION)
+
     def test_invalid_service_is_rejected_before_docker(self):
         result = self.deploy(REVISION, "database")
         self.assertNotEqual(result.returncode, 0)
@@ -276,7 +284,14 @@ class DeploymentTests(unittest.TestCase):
         self.env["BUILD_SERVICES"] = "web payments"
         result = self.run_ci("success")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn(f'"{REVISION}" web payments', (self.root / "commands").read_text())
+        commands = (self.root / "commands").read_text()
+        self.assertIn(f'"{REVISION}" web payments', commands)
+        self.assertNotIn("--no-rebuild", commands)
+
+    def test_ci_requests_no_rebuild_when_service_list_is_empty(self):
+        result = self.run_ci("success")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("--no-rebuild", (self.root / "commands").read_text())
 
 
 if __name__ == "__main__":

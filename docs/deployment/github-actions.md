@@ -41,7 +41,7 @@ CI 只在 `main` 上计算受影响服务（`web`、`market-data`、`backtest`�
 1. 取独占锁，校验服务名白名单；
 2. 备份 PostgreSQL、源码（含 `scripts/`）到 `/opt/btcusd-tester-backups/<sha>`；
 3. 记录四个服务当前镜像引用，并打 `btcusd-rollback-<service>:<sha>` 标签；
-4. 只构建传入的服务，未变服务继续使用现有镜像；镜像缺失时自动全量构建；
+4. 只构建传入的服务，未变服务继续使用现有镜像；列表为空时传 `--no-rebuild`，不构建任何镜像；
 5. `docker compose up -d --no-build --wait` 后检查 Nginx 健康、行情元数据与 payments 健康；
 6. 写入 `.deployed-revision`，保留最近 5 次回滚镜像和备份，清理 dangling 镜像。
 

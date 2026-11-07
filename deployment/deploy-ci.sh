@@ -11,7 +11,12 @@ for service in "${requested[@]}"; do
   [[ "$allowed" == *" $service "* ]] || { printf 'Invalid service: %s\n' "$service" >&2; exit 1; }
 done
 service_args=""
-if ((${#requested[@]})); then service_args=" ${requested[*]}"; fi
+if ((${#requested[@]})); then
+  service_args=" ${requested[*]}"
+else
+  # An empty list means no runtime files changed; do not fall back to a full build.
+  service_args=" --no-rebuild"
+fi
 unit="btcusd-deploy-$run"
 state="/var/log/btcusd-deploy/$run"
 remote() {
