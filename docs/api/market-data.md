@@ -11,7 +11,7 @@
 - BTC 文件仍为启动必需；缺失的其他币种不会回退到 BTC，而是返回 HTTP 503、`code: market_data_unavailable` 和包含待安装文件名的 `message`。安装真实 USD 历史文件后重启行情服务。切勿把 USDT 行情文件重命名为 USD。
 - 支持周期：`1m, 5m, 15m, 30m, 1h, 2h, 3h, 4h, 1d, 1w, 1M`。
 - 服务把 `MARKET_DATA_LIVE_DIR` 下的实时尾窗（见 [实时行情尾窗](../data/live-market.md)）叠加到完整 Parquet 历史之上：同 timestamp 以尾窗为准，尾窗缺失的完整历史分钟保留。文件变化会在 `MARKET_DATA_RELOAD_SECONDS`（默认 5 秒）内自动热加载，不需要重启服务。
-- 复盘页轮询 `/api/market/meta` 判断最新已收盘分钟，因此响应不应被代理或浏览器缓存；前端实时轮询使用 `cache: 'no-store'` 读取元数据，并跳过本地快照缓存。
+- 复盘项目通过元数据的 `last_timestamp` 选择时间范围；页面不轮询、不自动跟随最新分钟。
 
 错误格式：
 
