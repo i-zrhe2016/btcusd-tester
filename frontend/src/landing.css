@@ -905,8 +905,8 @@
     font-size: 16px;
   }
   .footer-inner .grailab-mark {
-    width: 18px;
-    height: 20.25px;
+    --mark-width: 20px;
+    --mark-height: 15.21px;
   }
   .footer-links {
     display: flex;
@@ -946,11 +946,11 @@
     text-align: center;
   }
   .gate-mark {
-    display: inline-block;
-    width: 30px;
-    height: 28px;
-    background: var(--accent);
-    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    display: block;
+    margin-inline: auto;
+    --mark-width: 40px;
+    --mark-height: 30.41px;
+    color: var(--ink);
   }
   .gate-card h1 {
     margin: 20px 0 10px;

@@ -104,7 +104,7 @@ The surface rejects the cold-fintech register (blue-black fields, neon data line
 A warm neutral field carrying a single terracotta signal, interrupted once by the near-black chart and once by a coffee statement band.
 
 ### Primary
-- **Terracotta Signal** (#C46F50): the brand mark, replay frontier, progress fill, sell marker, step rules, feature ticks, plan checks and focus rings. It marks action and “now”, never large backgrounds.
+- **Terracotta Signal** (#C46F50): the replay frontier, progress fill, sell marker, step rules, feature ticks, plan checks and focus rings. It marks action and “now”, never large backgrounds.
 - **Terracotta Fill** (#AD5A3D): the fill for primary buttons that carry white text. It is the accessible sibling of the signal; white on #C46F50 only reaches 3.7:1.
 - **Terracotta Deep** (#9E4E33): hover and pressed states for filled controls and hover for accent text links.
 
@@ -176,7 +176,7 @@ Depth is shadow-only on the paper side and tonal on the chart side. A surface de
 
 Panels and cards use a 16px radius; buttons 11px; the segmented speed control and small chips 9px; status dots and the progress track are the only full pills. Borders are 1px and always low-contrast ink, except the dark chart's 9% cream hairlines. There is no decorative geometry, no glass, no gradient mesh, no illustration.
 
-The brand mark is the incumbent terracotta triangle, preserved in shape and recoloured from black to the signal. It is the only polygon on the page.
+The brand mark is the grailab wave: one thick rounded line that rises, dips and lifts again, drawn in Deep Coffee Ink at its supplied black weight. It is the only free-form line on the page, and the favicon, touch icon and workspace mark all carry the same silhouette (ink on warm paper).
 
 ## Components
 
@@ -204,7 +204,7 @@ The brand mark is the incumbent terracotta triangle, preserved in shape and reco
 - **Mobile:** the navigation becomes a second full-width row under the brand, justified across the container; the hairline above it is the only divider.
 
 ### Gate
-- **Layout:** centred 440px card on the paper field, 30px terracotta mark, 25px headline, 13.5px body.
+- **Layout:** centred 440px card on the paper field, 40px ink wave mark, 25px headline, 13.5px body.
 - **Actions:** ghost login plus primary signup; the payment-return state swaps the pair for a single primary action.
 
 ## Do's and Don'ts

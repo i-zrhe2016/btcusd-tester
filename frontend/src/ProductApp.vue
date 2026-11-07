@@ -148,7 +148,7 @@ async function startCheckout() {
   <div v-if="isPaymentReturn || (inWorkspace && !canUseWorkspace)" style="position: fixed; top: 16px; right: 16px; z-index: 201"><LanguageSwitcher /></div>
   <div v-if="isPaymentReturn" class="gate">
     <main class="gate-card" aria-live="polite">
-      <span class="gate-mark" aria-hidden="true"></span>
+      <BrandMark class="gate-mark" />
       <h1>{{ paymentStatus === 'paid' ? t('payment.success') : paymentStatus === 'error' ? t('payment.errorTitle') : t('payment.checking') }}</h1>
       <p>{{ !isLoaded ? t('workspace.gateLoading') : !isSignedIn ? t('payment.signIn') : paymentStatus === 'paid' ? t('payment.successBody') : paymentStatus === 'error' ? t('payment.error') : t('payment.pending') }}</p>
       <div class="gate-actions">
@@ -167,7 +167,7 @@ async function startCheckout() {
     </template>
     <div v-else class="gate">
       <section class="gate-card">
-        <span class="gate-mark" aria-hidden="true"></span>
+        <BrandMark class="gate-mark" />
         <h1>{{ t('workspace.gateTitle') }}</h1>
         <p>{{ isLoaded ? t('workspace.gateBody') : t('workspace.gateLoading') }}</p>
         <div v-if="isLoaded" class="gate-actions">
