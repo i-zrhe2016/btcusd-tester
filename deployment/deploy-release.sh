@@ -7,11 +7,18 @@ shift
 
 all_services=(web market-data backtest payments)
 allowed=" ${all_services[*]} "
+no_rebuild=false
+if [ "${1:-}" = "--no-rebuild" ]; then
+  no_rebuild=true
+  shift
+fi
 requested=("$@")
 for service in "${requested[@]}"; do
   [[ "$allowed" == *" $service "* ]] || { printf 'Invalid service: %s\n' "$service" >&2; exit 1; }
 done
-if ((${#requested[@]})); then
+if [ "$no_rebuild" = true ]; then
+  build_services=()
+elif ((${#requested[@]})); then
   build_services=("${requested[@]}")
 else
   build_services=("${all_services[@]}")
@@ -56,7 +63,9 @@ rollback() {
 trap rollback ERR
 # git archive excludes production .env, Compose overrides, data and certificates.
 tar -xzf "$archive"
-docker compose build "${build_services[@]}"
+if ((${#build_services[@]})); then
+  docker compose build "${build_services[@]}"
+fi
 docker compose up -d --no-build --wait --wait-timeout 180
 
 # payments has no Docker healthcheck; probe its HTTP endpoint from inside the
@@ -85,4 +94,6 @@ if ((${#history_revisions[@]} > 5)); then
 fi
 docker image prune -f >/dev/null 2>&1 || true
 
-printf 'Deployed %s (rebuilt: %s)\n' "$revision" "${build_services[*]}"
+rebuilt="${build_services[*]:-}"
+[ -n "$rebuilt" ] || rebuilt=none
+printf 'Deployed %s (rebuilt: %s)\n' "$revision" "$rebuilt"

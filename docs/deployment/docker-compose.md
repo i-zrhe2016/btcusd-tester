@@ -89,7 +89,7 @@ curl -k https://localhost/healthz
 
 1. PR 按改动路径只运行相关检查：前端、支付、Rust（含 `cargo fmt --check`、`cargo clippy -D warnings`、测试、Compose 校验、部署脚本与 Python 同步脚本测试）。PR 还会构建受影响的 Docker 镜像作为校验，但不推送镜像仓库。
 2. 合并到 `main` 后，路径过滤决定是否部署；纯文档或其他不影响运行产物的改动会跳过部署。
-3. CI 把受影响的服务列表传给主机；主机只重建这些服务，未变服务沿用现有镜像。若服务镜像缺失，脚本自动回退到全量构建。
+3. CI 把受影响的服务列表传给主机；主机只重建这些服务，未变服务沿用现有镜像。列表为空时传 `--no-rebuild`，不构建任何镜像。
 4. 主机备份 PostgreSQL 和源码，并把当前四个服务的镜像打上 `btcusd-rollback-<service>:<sha>` 标签。
 5. 构建只使用 BuildKit 缓存挂载（Cargo registry/target、npm cache），跨次部署复用依赖编译结果；无需镜像仓库。
 6. 启动后检查容器健康、Nginx `/healthz`、行情元数据与 payments 健康状态；失败自动恢复上一版源码和镜像。
