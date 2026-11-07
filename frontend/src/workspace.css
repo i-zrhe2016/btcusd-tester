@@ -631,6 +631,26 @@ select {
 .symbol-option.selected .symbol-name {
   color: rgba(255, 255, 255, 0.7);
 }
+.symbol-range {
+  @apply overflow-hidden text-ellipsis whitespace-nowrap text-[color:var(--text-dim)]
+    [font:500_9.5px/1.35_"Fira_Code",_ui-monospace,_SFMono-Regular,_Consolas,_monospace]
+    [font-variant-numeric:tabular-nums];
+  letter-spacing: 0;
+}
+.symbol-option.selected .symbol-range {
+  color: rgba(255, 255, 255, 0.62);
+}
+.symbol-range-skeleton {
+  @apply my-[2px] block h-[6px] w-[74px] rounded-full [background:var(--border)];
+  animation: symbol-range-pulse 1.4s ease-in-out infinite;
+}
+.symbol-option.selected .symbol-range-skeleton {
+  background: rgba(255, 255, 255, 0.3);
+}
+@keyframes symbol-range-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.95; }
+}
 .symbol-check {
   @apply ml-auto flex-none opacity-0;
   transition: opacity 160ms ease;
@@ -653,6 +673,10 @@ select {
   .symbol-option,
   .symbol-check {
     transition: none;
+  }
+  .symbol-range-skeleton {
+    animation: none;
+    opacity: 0.6;
   }
 }
 .field-grid.two {

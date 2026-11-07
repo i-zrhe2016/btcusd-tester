@@ -64,7 +64,7 @@ const MarketChart = defineAsyncComponent({
 })
 import { deleteProject as deleteRemoteProject, getMarketMetadata, getMarketSnapshot, listProjects, saveProject } from './api'
 import { CRYPTO_MARKETS, normalizeSymbol } from './symbols'
-import { fromUtcInput, formatDuration, formatNumber, formatUtc, toUtcInput } from './format'
+import { fromUtcInput, formatDuration, formatNumber, formatUtc, formatUtcMonth, toUtcInput } from './format'
 import {
   applyManualTrade,
   clampReplayCursor,
@@ -161,6 +161,14 @@ const playbackPlaying = ref(false)
 const isReplayFullscreen = ref(false)
 
 const projectDraft = reactive<ReplayProjectDraft>(createReplayDraft(null))
+// History coverage shown on every symbol card in the new-project form.
+interface SymbolRangeState {
+  status: 'loading' | 'ready' | 'unavailable'
+  first: number
+  last: number
+}
+const symbolRanges = reactive<Record<string, SymbolRangeState>>({})
+const symbolRangePending = new Set<string>()
 const marketChartRef = ref<{ activateTrendLine: () => void } | null>(null)
 
 let snapshotRequestId = 0
@@ -241,6 +249,52 @@ const projectRangeDuration = computed(() => {
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return ''
   return t('app.rangeDuration', { duration: formatDuration(to - from) })
 })
+function symbolRangeLabel(symbol: string): string {
+  const range = symbolRanges[symbol]
+  if (range?.status === 'ready') return `${formatUtcMonth(range.first)} – ${formatUtcMonth(range.last)}`
+  if (range?.status === 'unavailable') return t('app.rangeUnavailable')
+  return ''
+}
+
+function symbolRangeTitle(symbol: string): string {
+  const range = symbolRanges[symbol]
+  if (range?.status !== 'ready') return ''
+  return t('app.rangeAvailable', { from: formatUtc(range.first), to: formatUtc(range.last) })
+}
+
+function seedSymbolRange(market: MarketMetadata) {
+  if (market.first_timestamp <= 0 || market.last_timestamp < market.first_timestamp) return
+  symbolRanges[normalizeSymbol(market.symbol)] = {
+    status: 'ready',
+    first: market.first_timestamp,
+    last: market.last_timestamp,
+  }
+}
+
+// The picker needs the range of every market, not just the open project's.
+// Requests are per symbol so one missing dataset never blocks the others.
+function loadSymbolRanges() {
+  if (disposed) return
+  if (metadata.value) seedSymbolRange(metadata.value)
+  for (const { symbol } of CRYPTO_MARKETS) {
+    if (symbolRanges[symbol]?.status === 'ready' || symbolRangePending.has(symbol)) continue
+    symbolRangePending.add(symbol)
+    symbolRanges[symbol] = { status: 'loading', first: 0, last: 0 }
+    getMarketMetadata(symbol)
+      .then((market) => {
+        if (disposed) return
+        seedSymbolRange(market)
+        if (symbolRanges[symbol]?.status !== 'ready') {
+          symbolRanges[symbol] = { status: 'unavailable', first: 0, last: 0 }
+        }
+      })
+      .catch(() => {
+        if (!disposed) symbolRanges[symbol] = { status: 'unavailable', first: 0, last: 0 }
+      })
+      .finally(() => symbolRangePending.delete(symbol))
+  }
+}
+
 const currentCandleInput = computed(() => (currentCandle.value ? toUtcInput(currentCandle.value.timestamp) : ''))
 const projectActionLabel = computed(() => activeProject.value ? t('app.saveAndOpen') : t('app.createAndOpen'))
 
@@ -1333,6 +1387,7 @@ async function initialize() {
   } finally {
     if (!disposed && requestId === initializationId) {
       metadataPending = false
+      if (activeView.value === 'projects') loadSymbolRanges()
       if (!snapshotProjectKey) replayLoading.value = false
       ensureReplaySnapshot(Boolean(replayError.value))
     }
@@ -1359,6 +1414,8 @@ watch(activeView, (value) => {
   if (value !== 'replay') {
     playbackPlaying.value = false
   }
+  // Coverage labels are only useful in the library; load them on first visit.
+  if (value === 'projects' && !metadataPending) loadSymbolRanges()
 })
 
 watch([playbackPlaying, () => activeProject.value?.speed, () => activeProjectId.value, () => totalReplayCandles.value], () => {
@@ -1614,6 +1671,7 @@ onBeforeUnmount(() => {
                     :key="market.symbol"
                     class="symbol-option"
                     :class="{ selected: projectDraft.symbol === market.symbol }"
+                    :title="symbolRangeTitle(market.symbol) || undefined"
                   >
                     <input
                       v-model="projectDraft.symbol"
@@ -1625,6 +1683,11 @@ onBeforeUnmount(() => {
                     <span class="symbol-copy">
                       <span class="symbol-base">{{ market.symbol.replace('USD', '') }}</span>
                       <span class="symbol-name">{{ market.name }}</span>
+                      <span
+                        v-if="symbolRanges[market.symbol]?.status === 'ready' || symbolRanges[market.symbol]?.status === 'unavailable'"
+                        class="symbol-range"
+                      >{{ symbolRangeLabel(market.symbol) }}</span>
+                      <span v-else class="symbol-range-skeleton" aria-hidden="true"></span>
                     </span>
                     <Check class="symbol-check" :size="14" :stroke-width="2.6" aria-hidden="true" />
                   </label>
