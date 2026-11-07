@@ -4,6 +4,14 @@ set -euo pipefail
 revision=${GITHUB_SHA:?}
 run=${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}
 [[ "$revision" =~ ^[0-9a-f]{40}$ && "$run" =~ ^[0-9]+-[0-9]+$ ]] || exit 1
+allowed=" web market-data backtest payments "
+requested=()
+if [ -n "${BUILD_SERVICES:-}" ]; then read -r -a requested <<< "$BUILD_SERVICES"; fi
+for service in "${requested[@]}"; do
+  [[ "$allowed" == *" $service "* ]] || { printf 'Invalid service: %s\n' "$service" >&2; exit 1; }
+done
+service_args=""
+if ((${#requested[@]})); then service_args=" ${requested[*]}"; fi
 unit="btcusd-deploy-$run"
 state="/var/log/btcusd-deploy/$run"
 remote() {
@@ -11,7 +19,7 @@ remote() {
 }
 # The same unit name makes a retried start idempotent, including when the
 # connection was lost after systemd accepted the original request.
-start="set -eu; mkdir -p '$state'; chmod 700 '$state'; if ! systemctl show '$unit.service' --property=LoadState --value | grep -qx loaded; then tar -xOf '/tmp/btcusd-release-$revision.tar.gz' deployment/deploy-release.sh > '$state/deploy.sh'; systemd-run --unit='$unit' --property=RemainAfterExit=yes /bin/bash -c 'set +e; bash \"$state/deploy.sh\" \"$revision\" > \"$state/output.log\" 2>&1; code=\$?; printf \"%s\\n\" \"\$code\" > \"$state/exit-code.tmp\"; mv \"$state/exit-code.tmp\" \"$state/exit-code\"; exit \"\$code\"'; fi"
+start="set -eu; mkdir -p '$state'; chmod 700 '$state'; if ! systemctl show '$unit.service' --property=LoadState --value | grep -qx loaded; then tar -xOf '/tmp/btcusd-release-$revision.tar.gz' deployment/deploy-release.sh > '$state/deploy.sh'; systemd-run --unit='$unit' --property=RemainAfterExit=yes /bin/bash -c 'set +e; bash \"$state/deploy.sh\" \"$revision\"$service_args > \"$state/output.log\" 2>&1; code=\$?; printf \"%s\\n\" \"\$code\" > \"$state/exit-code.tmp\"; mv \"$state/exit-code.tmp\" \"$state/exit-code\"; exit \"\$code\"'; fi"
 started=false
 deadline=$((SECONDS + 1800))
 while ((SECONDS < deadline)); do

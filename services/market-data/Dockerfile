@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM rust:1.88-slim-bookworm AS builder
 WORKDIR /app
 RUN apt-get update \
@@ -7,14 +8,17 @@ COPY Cargo.toml Cargo.lock ./
 COPY services/market-data services/market-data
 COPY services/backtest services/backtest
 COPY services/crypto_symbols.rs services/crypto_symbols.rs
-RUN cargo build --locked --release -p market-data-service
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/target,id=rust-target,sharing=locked \
+    CARGO_TARGET_DIR=/target cargo build --locked --release -p market-data-service \
+    && cp /target/release/market-data-service /usr/local/bin/market-data-service
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 10001 app
-COPY --from=builder /app/target/release/market-data-service /usr/local/bin/market-data-service
+COPY --from=builder /usr/local/bin/market-data-service /usr/local/bin/market-data-service
 USER app
 EXPOSE 8081
 ENTRYPOINT ["market-data-service"]

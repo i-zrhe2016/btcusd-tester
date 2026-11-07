@@ -70,7 +70,12 @@ pub fn load_live(path: &Path, expected_symbol: &str) -> anyhow::Result<LiveSnaps
         candles,
         updated_at: serde_json::from_slice::<serde_json::Value>(&bytes)
             .ok()
-            .and_then(|value| value.get("updated_at").and_then(|value| value.as_str()).map(str::to_owned)),
+            .and_then(|value| {
+                value
+                    .get("updated_at")
+                    .and_then(|value| value.as_str())
+                    .map(str::to_owned)
+            }),
     })
 }
 
@@ -141,12 +146,26 @@ mod tests {
 
     #[test]
     fn live_candles_override_matching_base_candles_and_keep_gaps() {
-        let base = vec![candle(60, 10.0), candle(120, 11.0), candle(180, 12.0), candle(360, 14.0)];
+        let base = vec![
+            candle(60, 10.0),
+            candle(120, 11.0),
+            candle(180, 12.0),
+            candle(360, 14.0),
+        ];
         let live = vec![candle(120, 21.0), candle(240, 23.0)];
         let merged = merge(&base, &live);
         assert_eq!(
-            merged.iter().map(|candle| (candle.timestamp, candle.close)).collect::<Vec<_>>(),
-            vec![(60, 10.0), (120, 21.0), (180, 12.0), (240, 23.0), (360, 14.0)]
+            merged
+                .iter()
+                .map(|candle| (candle.timestamp, candle.close))
+                .collect::<Vec<_>>(),
+            vec![
+                (60, 10.0),
+                (120, 21.0),
+                (180, 12.0),
+                (240, 23.0),
+                (360, 14.0)
+            ]
         );
     }
 
@@ -177,10 +196,18 @@ mod tests {
         assert_eq!(snapshot.candles.len(), 1);
         assert_eq!(snapshot.updated_at.as_deref(), Some("2026-11-06T00:00:00Z"));
 
-        fs::write(&path, r#"{"symbol":"ETHUSD","candles":[[60,10,11,9,10.5,1]]}"#).unwrap();
+        fs::write(
+            &path,
+            r#"{"symbol":"ETHUSD","candles":[[60,10,11,9,10.5,1]]}"#,
+        )
+        .unwrap();
         assert!(load_live(&path, "BTCUSD").is_err());
 
-        fs::write(&path, r#"{"symbol":"BTCUSD","candles":[[61,10,11,9,10.5,1]]}"#).unwrap();
+        fs::write(
+            &path,
+            r#"{"symbol":"BTCUSD","candles":[[61,10,11,9,10.5,1]]}"#,
+        )
+        .unwrap();
         assert!(load_live(&path, "BTCUSD").is_err());
 
         fs::write(

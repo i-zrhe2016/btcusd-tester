@@ -1,0 +1,11 @@
+name: Setup Rust
+description: Install the pinned Rust toolchain with formatting and lint components, then restore the build cache.
+
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: 1.88.0
+        components: rustfmt, clippy
+    - uses: Swatinem/rust-cache@v2

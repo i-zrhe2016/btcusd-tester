@@ -1,0 +1,19 @@
+name: Setup Node project
+description: Set up Node with npm caching for a single package directory.
+
+inputs:
+  node-version:
+    description: Node.js version
+    required: true
+  cache-dependency-path:
+    description: Lockfile path used for the npm cache key
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}

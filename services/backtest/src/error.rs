@@ -45,4 +45,3 @@ impl IntoResponse for ApiError {
         (status, Json(ErrorBody { code, message })).into_response()
     }
 }
-

@@ -207,6 +207,7 @@ fn fetch_chunks(
 ) -> anyhow::Result<()> {
     let raw_file = OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .open(raw_path)

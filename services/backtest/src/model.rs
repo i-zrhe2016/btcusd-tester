@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyParameters {
     pub length: usize,
@@ -84,12 +83,17 @@ impl BacktestRequest {
             || !(0.0..=100.0).contains(&self.strategy.overbought)
             || self.strategy.oversold >= self.strategy.overbought
         {
-            return Err("strategy thresholds must satisfy 0 <= oversold < overbought <= 100".to_owned());
+            return Err(
+                "strategy thresholds must satisfy 0 <= oversold < overbought <= 100".to_owned(),
+            );
         }
         Ok(())
     }
 }
 
+// The full market-data payload is deserialized here even though the backtest
+// engine only reads a subset of the OHLCV fields.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct Candle {
     pub timestamp: i64,
@@ -100,6 +104,7 @@ pub struct Candle {
     pub volume: f64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct StochasticPoint {
     pub timestamp: i64,
@@ -172,8 +177,9 @@ pub struct StrategyConfigRecord {
     pub updated_at: DateTime<Utc>,
 }
 
-pub const REPLAY_TIMEFRAMES: [&str; 11] =
-    ["1m", "5m", "15m", "30m", "1h", "2h", "3h", "4h", "1d", "1w", "1M"];
+pub const REPLAY_TIMEFRAMES: [&str; 11] = [
+    "1m", "5m", "15m", "30m", "1h", "2h", "3h", "4h", "1d", "1w", "1M",
+];
 pub const MAX_REPLAY_PANES: usize = 4;
 const MAX_PROJECT_PAYLOAD_BYTES: usize = 768 * 1024;
 const MAX_INDICATORS_PER_TIMEFRAME: usize = 8;
@@ -278,14 +284,19 @@ fn validate_indicators(indicators: &Value) -> Result<(), String> {
             for (key, value) in params {
                 if key.is_empty()
                     || key.len() > MAX_INDICATOR_PARAM_KEY_CHARS
-                    || !key.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+                    || !key
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
                 {
-                    return Err("indicator param keys must be 1-32 ASCII letters, digits or '_'".to_owned());
+                    return Err(
+                        "indicator param keys must be 1-32 ASCII letters, digits or '_'".to_owned(),
+                    );
                 }
                 match value {
                     Value::Bool(_) => {}
                     Value::Number(number) if number.as_f64().is_some_and(f64::is_finite) => {}
-                    Value::String(text) if text.chars().count() <= MAX_INDICATOR_PARAM_STRING_CHARS => {}
+                    Value::String(text)
+                        if text.chars().count() <= MAX_INDICATOR_PARAM_STRING_CHARS => {}
                     _ => {
                         return Err(
                             "indicator params must be finite numbers, booleans or short strings"
@@ -324,7 +335,11 @@ impl ReplayProjectRequest {
                 "panes must contain between 1 and {MAX_REPLAY_PANES} timeframes"
             ));
         }
-        if !self.panes.iter().all(|timeframe| REPLAY_TIMEFRAMES.contains(&timeframe.as_str())) {
+        if !self
+            .panes
+            .iter()
+            .all(|timeframe| REPLAY_TIMEFRAMES.contains(&timeframe.as_str()))
+        {
             return Err("panes contain an unsupported timeframe".to_owned());
         }
         if self.from >= self.to {
@@ -491,12 +506,16 @@ mod feedback_tests {
     fn rejects_empty_or_oversized_fields() {
         assert!(thread("   ", "body", "bug").validate().is_err());
         assert!(thread("title", " \n ", "idea").validate().is_err());
-        assert!(thread(&"t".repeat(MAX_FEEDBACK_TITLE_CHARS + 1), "body", "bug")
-            .validate()
-            .is_err());
-        assert!(thread("title", &"b".repeat(MAX_FEEDBACK_BODY_CHARS + 1), "bug")
-            .validate()
-            .is_err());
+        assert!(
+            thread(&"t".repeat(MAX_FEEDBACK_TITLE_CHARS + 1), "body", "bug")
+                .validate()
+                .is_err()
+        );
+        assert!(
+            thread("title", &"b".repeat(MAX_FEEDBACK_BODY_CHARS + 1), "bug")
+                .validate()
+                .is_err()
+        );
         assert!(thread("two\nlines", "body", "bug").validate().is_err());
     }
 
@@ -544,7 +563,10 @@ mod replay_project_tests {
         }
         let mut project = valid_project();
         project.symbol = "BTCUSDT".to_owned();
-        assert_eq!(project.validate().unwrap_err(), "unsupported USD cryptocurrency market");
+        assert_eq!(
+            project.validate().unwrap_err(),
+            "unsupported USD cryptocurrency market"
+        );
     }
 
     #[test]

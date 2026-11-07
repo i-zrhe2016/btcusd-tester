@@ -87,12 +87,13 @@ curl -k https://localhost/healthz
 
 ## 发布流程
 
-1. 在 CI 通过 Rust、前端、文档和 Compose 校验。
-2. 为应用镜像和 Parquet 文件记录不可变版本/校验和。
-3. 备份 PostgreSQL，并确认当前镜像仍可获取。
-4. 在服务器拉取指定版本并执行 `docker compose up -d --build`。
-5. 依次检查 PostgreSQL、行情服务、回测服务和 Nginx 健康。
-6. 运行一条固定参数的冒烟回测，与基准结果比较。
+1. PR 按改动路径只运行相关检查：前端、支付、Rust（含 `cargo fmt --check`、`cargo clippy -D warnings`、测试、Compose 校验、部署脚本与 Python 同步脚本测试）。PR 还会构建受影响的 Docker 镜像作为校验，但不推送镜像仓库。
+2. 合并到 `main` 后，路径过滤决定是否部署；纯文档或其他不影响运行产物的改动会跳过部署。
+3. CI 把受影响的服务列表传给主机；主机只重建这些服务，未变服务沿用现有镜像。若服务镜像缺失，脚本自动回退到全量构建。
+4. 主机备份 PostgreSQL 和源码，并把当前四个服务的镜像打上 `btcusd-rollback-<service>:<sha>` 标签。
+5. 构建只使用 BuildKit 缓存挂载（Cargo registry/target、npm cache），跨次部署复用依赖编译结果；无需镜像仓库。
+6. 启动后检查容器健康、Nginx `/healthz`、行情元数据与 payments 健康状态；失败自动恢复上一版源码和镜像。
+7. 成功后写入 `.deployed-revision`，并只保留最近 5 次发布对应的回滚镜像与备份目录，同时清理 dangling 镜像。
 
 冒烟基准（固定窗口 `2019-09-01T00:00Z`–`2019-09-02T00:00Z`，`1m`，Stoch `length=10/oversold=20/overbought=80`，初始资金 10,000，费率 0.0004）：处理 1,440 根 K 线、26 笔完成交易、最终权益 9,892.53；重复执行结果必须一致。
 

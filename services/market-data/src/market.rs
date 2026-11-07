@@ -19,7 +19,11 @@ pub fn snapshot(all_candles: &[Candle], query: SnapshotQuery) -> Result<MarketSn
             "limit must be between 1 and {MAX_CANDLES}"
         )));
     }
-    if query.from.zip(query.to).is_some_and(|(from, to)| from >= to) {
+    if query
+        .from
+        .zip(query.to)
+        .is_some_and(|(from, to)| from >= to)
+    {
         return Err(ApiError::BadRequest(
             "from must be earlier than to".to_owned(),
         ));
@@ -70,7 +74,10 @@ pub fn aggregate(candles: &[Candle], timeframe: Timeframe) -> Vec<Candle> {
     let mut result: Vec<Candle> = Vec::new();
     for candle in candles {
         let bucket = bucket_start(candle.timestamp, timeframe);
-        if let Some(current) = result.last_mut().filter(|current| current.timestamp == bucket) {
+        if let Some(current) = result
+            .last_mut()
+            .filter(|current| current.timestamp == bucket)
+        {
             current.high = current.high.max(candle.high);
             current.low = current.low.min(candle.low);
             current.close = candle.close;
@@ -152,7 +159,11 @@ mod tests {
             let timeframe = Timeframe::parse(name).unwrap();
             assert_eq!(timeframe.as_str(), name);
             let result = aggregate(
-                &[candle(0, 10.0), candle(seconds - 60, 12.0), candle(seconds, 20.0)],
+                &[
+                    candle(0, 10.0),
+                    candle(seconds - 60, 12.0),
+                    candle(seconds, 20.0),
+                ],
                 timeframe,
             );
             assert_eq!(result.len(), 2);
@@ -199,7 +210,10 @@ mod tests {
 
     #[test]
     fn indexed_snapshot_matches_scan_with_gaps_and_partial_buckets() {
-        let start = Utc.with_ymd_and_hms(2024, 1, 28, 0, 0, 0).unwrap().timestamp();
+        let start = Utc
+            .with_ymd_and_hms(2024, 1, 28, 0, 0, 0)
+            .unwrap()
+            .timestamp();
         let candles: Vec<_> = (0..12_000)
             .filter(|index| index % 7 != 0)
             .map(|index| candle(start + index * 60, (index % 97) as f64))
@@ -238,7 +252,10 @@ mod tests {
         assert_eq!(result.candles[0].open, 12.0);
         assert_eq!(result.candles[0].close, 13.0);
         assert_eq!(result.candles[0].volume, 3.0);
-        for invalid in [query("1m", Some(60), Some(60), 1), query("1m", None, None, 0)] {
+        for invalid in [
+            query("1m", Some(60), Some(60), 1),
+            query("1m", None, None, 0),
+        ] {
             assert!(snapshot(&candles, invalid).is_err());
         }
     }
@@ -258,7 +275,10 @@ mod tests {
             let request = query(timeframe, Some(from), Some(to), limit);
             let expected = reference_snapshot(&candles, &request);
             let actual = snapshot(&candles, query(timeframe, Some(from), Some(to), limit)).unwrap();
-            assert_eq!(serde_json::to_value(&actual).unwrap(), serde_json::to_value(&expected).unwrap());
+            assert_eq!(
+                serde_json::to_value(&actual).unwrap(),
+                serde_json::to_value(&expected).unwrap()
+            );
             let started = Instant::now();
             for _ in 0..20 {
                 black_box(reference_snapshot(black_box(&candles), &request));
@@ -266,9 +286,18 @@ mod tests {
             let scan = started.elapsed();
             let started = Instant::now();
             for _ in 0..20 {
-                black_box(snapshot(black_box(&candles), query(timeframe, Some(from), Some(to), limit)).unwrap());
+                black_box(
+                    snapshot(
+                        black_box(&candles),
+                        query(timeframe, Some(from), Some(to), limit),
+                    )
+                    .unwrap(),
+                );
             }
-            println!("synthetic {timeframe} limit={limit}: scan={scan:?}, indexed={:?} (20 requests)", started.elapsed());
+            println!(
+                "synthetic {timeframe} limit={limit}: scan={scan:?}, indexed={:?} (20 requests)",
+                started.elapsed()
+            );
         }
     }
 

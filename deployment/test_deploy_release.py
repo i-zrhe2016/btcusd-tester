@@ -22,7 +22,7 @@ class DeploymentTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.app = self.root / "app"
         self.app.mkdir()
-        for directory in ("frontend", "services", "deployment"):
+        for directory in ("frontend", "services", "deployment", "scripts"):
             (self.app / directory).mkdir()
         for filename in ("Cargo.toml", "Cargo.lock", "docker-compose.yml", ".dockerignore"):
             (self.app / filename).write_text("old\n")
@@ -44,7 +44,13 @@ class DeploymentTests(unittest.TestCase):
                 case "$*" in *--interactive=false*) ;; *) cat >/dev/null ;; esac
                 printf 'database backup\\n' ;;
               'compose ps '*) printf 'container\\n' ;;
-              'inspect '*) printf 'image\\n' ;;
+              'inspect '*)
+                case "$*" in
+                  *State.Health*) printf 'healthy\\n' ;;
+                  *Config.Labels*) printf 'btcusd-tester-web:latest btcusd-tester\\n' ;;
+                  *) printf 'image\\n' ;;
+                esac ;;
+              'image rm '*|'image prune '*) ;;
               'compose build '*) test "${TEST_FAIL_BUILD:-0}" != 1 ;;
             esac
         ''')
@@ -64,8 +70,8 @@ class DeploymentTests(unittest.TestCase):
         path.write_text("#!/usr/bin/env bash\nset -eu\n" + textwrap.dedent(body))
         path.chmod(0o755)
 
-    def deploy(self, revision=REVISION):
-        return subprocess.run(["bash", "-s", "--", revision], input=self.script,
+    def deploy(self, revision=REVISION, *services):
+        return subprocess.run(["bash", "-s", "--", revision, *services], input=self.script,
                               text=True, capture_output=True, env=self.env, timeout=15)
 
     def test_stdin_script_completes_and_records_verified_revision(self):
@@ -76,9 +82,39 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn(f"Deployed {REVISION}", result.stdout)
         self.assertEqual((self.root / f"backups/{REVISION}/database.sql").read_text(), "database backup\n")
         commands = (self.root / "commands").read_text()
-        self.assertIn("compose build web market-data backtest", commands)
+        self.assertIn("compose build web market-data backtest payments", commands)
+        self.assertIn("image tag btcusd-tester-web:latest btcusd-rollback-web", commands)
+        self.assertIn("image tag btcusd-tester-web:latest btcusd-rollback-payments", commands)
         self.assertIn("/healthz", commands)
         self.assertIn("/api/market/meta", commands)
+
+    def test_only_requested_services_are_rebuilt(self):
+        result = self.deploy(REVISION, "web")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = (self.root / "commands").read_text()
+        self.assertIn("compose build web\n", commands)
+        self.assertNotIn("compose build web market-data", commands)
+        self.assertIn("rebuilt: web", result.stdout)
+
+    def test_invalid_service_is_rejected_before_docker(self):
+        result = self.deploy(REVISION, "database")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Invalid service: database", result.stderr)
+        self.assertFalse((self.root / "commands").exists())
+
+    def test_old_rollback_images_and_backups_are_pruned(self):
+        old = [f"{index:040x}" for index in range(1, 6)]
+        (self.app / ".release-history").write_text("".join(f"{revision}\n" for revision in old))
+        for revision in old:
+            (self.root / f"backups/{revision}").mkdir(parents=True)
+        result = self.deploy()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = (self.root / "commands").read_text()
+        self.assertIn(f"image rm btcusd-rollback-web:{old[0]}", commands)
+        self.assertFalse((self.root / f"backups/{old[0]}").exists())
+        self.assertTrue((self.root / f"backups/{old[1]}").exists())
+        self.assertEqual((self.app / ".release-history").read_text().splitlines()[-1], REVISION)
+        self.assertEqual(len((self.app / ".release-history").read_text().splitlines()), 5)
 
     def test_build_failure_restores_source_without_success_marker(self):
         self.env["TEST_FAIL_BUILD"] = "1"
@@ -216,6 +252,20 @@ class DeploymentTests(unittest.TestCase):
         self.assertIn("remote task may still be running", result.stderr)
         self.assertIn("btcusd-deploy-123-1", result.stderr)
         self.assertIn("/var/log/btcusd-deploy/123-1/output.log", result.stderr)
+
+    def test_ci_rejects_invalid_build_service(self):
+        command = (DEPLOYMENT / "deploy-ci.sh").read_text()
+        self.env.update(GITHUB_RUN_ID="123", GITHUB_RUN_ATTEMPT="1", BUILD_SERVICES="database")
+        result = subprocess.run(["bash", "-e", "-c", command], env=self.env,
+                                capture_output=True, text=True, timeout=15)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Invalid service: database", result.stderr)
+
+    def test_ci_forwards_selected_services_to_remote_deploy(self):
+        self.env["BUILD_SERVICES"] = "web payments"
+        result = self.run_ci("success")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f'"{REVISION}" web payments', (self.root / "commands").read_text())
 
 
 if __name__ == "__main__":

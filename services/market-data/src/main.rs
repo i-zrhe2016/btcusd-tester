@@ -1,5 +1,3 @@
-#[path = "../../crypto_symbols.rs"]
-mod symbols;
 mod config;
 mod error;
 mod indicator;
@@ -7,6 +5,8 @@ mod live;
 mod market;
 mod model;
 mod parquet_store;
+#[path = "../../crypto_symbols.rs"]
+mod symbols;
 
 use std::{
     collections::HashMap,
@@ -72,7 +72,10 @@ impl Dataset {
     /// Candles for the queried range, with the live window overriding base
     /// candles that share a timestamp.
     fn window(&self, from: Option<i64>, to: Option<i64>) -> Vec<Candle> {
-        live::merge(slice_in_range(&self.base, from, to), slice_in_range(&self.live, from, to))
+        live::merge(
+            slice_in_range(&self.base, from, to),
+            slice_in_range(&self.live, from, to),
+        )
     }
 }
 
@@ -224,19 +227,18 @@ fn build_dataset(
 /// is fully loaded and validated. Only the changed side is read again: a live
 /// update never reloads the full Parquet history.
 async fn watch_datasets(config: Config, datasets: Datasets) {
-    let mut known: HashMap<&'static str, (Option<FileStamp>, Option<FileStamp>)> =
-        symbols::SYMBOLS
-            .iter()
-            .map(|symbol| {
+    let mut known: HashMap<&'static str, (Option<FileStamp>, Option<FileStamp>)> = symbols::SYMBOLS
+        .iter()
+        .map(|symbol| {
+            (
+                *symbol,
                 (
-                    *symbol,
-                    (
-                        file_stamp(&base_path(&config, symbol)),
-                        file_stamp(&live_path(&config, symbol)),
-                    ),
-                )
-            })
-            .collect();
+                    file_stamp(&base_path(&config, symbol)),
+                    file_stamp(&live_path(&config, symbol)),
+                ),
+            )
+        })
+        .collect();
     let mut ticker = interval(config.reload_interval);
     loop {
         ticker.tick().await;
@@ -337,10 +339,7 @@ fn default_market() -> String {
     "BTCUSD".to_owned()
 }
 
-fn dataset(
-    state: &AppState,
-    requested: &str,
-) -> Result<(&'static str, Arc<Dataset>), ApiError> {
+fn dataset(state: &AppState, requested: &str) -> Result<(&'static str, Arc<Dataset>), ApiError> {
     let symbol = symbols::normalize(requested)
         .ok_or_else(|| ApiError::BadRequest(format!("unsupported USD market {requested}")))?;
     let candles = state
@@ -370,7 +369,9 @@ async fn metadata(
         candle_count: market.merged_count(),
         first_timestamp: market.first_timestamp(),
         last_timestamp: market.last_timestamp(),
-        supported_timeframes: ["1m", "5m", "15m", "30m", "1h", "2h", "3h", "4h", "1d", "1w", "1M"],
+        supported_timeframes: [
+            "1m", "5m", "15m", "30m", "1h", "2h", "3h", "4h", "1d", "1w", "1M",
+        ],
     }))
 }
 
@@ -390,6 +391,28 @@ async fn snapshot(
     .await
     .map_err(|error| ApiError::Unavailable(error.to_string()))??;
     Ok(Json(snapshot))
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
 
 #[cfg(test)]
@@ -455,7 +478,8 @@ mod multi_market_tests {
         assert_eq!(dataset.first_timestamp(), 60);
         assert_eq!(dataset.last_timestamp(), 180);
         assert_eq!(
-            dataset.window(Some(60), Some(240))
+            dataset
+                .window(Some(60), Some(240))
                 .iter()
                 .map(|candle| (candle.timestamp, candle.close))
                 .collect::<Vec<_>>(),
@@ -476,27 +500,5 @@ mod multi_market_tests {
         assert_ne!(first, second);
         assert!(file_stamp(&directory.join("missing.json")).is_none());
         let _ = std::fs::remove_dir_all(directory);
-    }
-}
-
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-    #[cfg(unix)]
-    let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {},
-        _ = terminate => {},
     }
 }
