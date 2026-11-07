@@ -27,6 +27,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       payments: ${{ steps.filter.outputs.payments }}
       backend: ${{ steps.filter.outputs.backend }}
+      python: ${{ steps.filter.outputs.python }}
       docker: ${{ steps.filter.outputs.docker }}
       deploy: ${{ steps.filter.outputs.deploy }}
       images: ${{ steps.images.outputs.images }}
@@ -51,10 +52,11 @@ jobs:
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'services/**'
-              - 'scripts/**'
-              - 'deployment/**'
               - 'docker-compose*.yml'
               - '.dockerignore'
+            python:
+              - 'scripts/**'
+              - 'deployment/**'
             docker:
               - 'frontend/**'
               - 'services/**'
@@ -129,7 +131,7 @@ jobs:
 
   backend:
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true' || needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -155,7 +157,7 @@ jobs:
 
   docker:
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.result == 'success' && needs.changes.outputs.images != '[]'
+    if: github.event_name == 'pull_request' && needs.changes.result == 'success' && needs.changes.outputs.docker == 'true' && needs.changes.outputs.images != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:

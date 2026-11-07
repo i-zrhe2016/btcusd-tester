@@ -42,7 +42,10 @@ class DeploymentTests(unittest.TestCase):
             case "$*" in
               'compose exec '*)
                 case "$*" in *--interactive=false*) ;; *) cat >/dev/null ;; esac
-                printf 'database backup\\n' ;;
+                case "$*" in
+                  *payments*) test "${TEST_FAIL_PAYMENTS:-0}" != 1 ;;
+                  *) printf 'database backup\\n' ;;
+                esac ;;
               'compose ps '*) printf 'container\\n' ;;
               'inspect '*)
                 case "$*" in
@@ -127,6 +130,14 @@ class DeploymentTests(unittest.TestCase):
 
     def test_health_failure_rolls_back_without_success_marker(self):
         self.env["TEST_FAIL_HEALTH"] = "1"
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("restoring previous images and source", result.stderr)
+        self.assertEqual((self.app / "frontend/version").read_text(), "old\n")
+        self.assertFalse((self.app / ".deployed-revision").exists())
+
+    def test_payments_probe_failure_rolls_back(self):
+        self.env["TEST_FAIL_PAYMENTS"] = "1"
         result = self.deploy()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("restoring previous images and source", result.stderr)

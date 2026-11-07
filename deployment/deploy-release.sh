@@ -59,11 +59,10 @@ tar -xzf "$archive"
 docker compose build "${build_services[@]}"
 docker compose up -d --no-build --wait --wait-timeout 180
 
-payments_container=$(docker compose ps -q payments)
-if [ -n "$payments_container" ]; then
-  payments_health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$payments_container")
-  [ "$payments_health" = healthy ] || { printf 'payments is not healthy (%s)\n' "$payments_health" >&2; false; }
-fi
+# payments has no Docker healthcheck; probe its HTTP endpoint from inside the
+# container so the check does not depend on a host-published port.
+docker compose exec -T --interactive=false payments \
+  node -e 'fetch("http://127.0.0.1:8083/health").then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))'
 
 curl --fail --silent --show-error --max-time 15 http://localhost:8083/healthz
 curl --fail --silent --show-error --max-time 30 http://localhost:8083/api/market/meta > /dev/null
